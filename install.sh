@@ -81,6 +81,19 @@ deps() {
 	[ -r /etc/os-release ] && id=$(. /etc/os-release; echo "${ID_LIKE:-} ${ID:-}")
 	case $id in
 	*gentoo*)
+		# wiremix and the two browsers are only in testing (~amd64): allow
+		# just those three, in a file of our own.
+		kw=/etc/portage/package.accept_keywords
+		if [ -d "$kw" ] || [ ! -e "$kw" ]; then
+			mkdir -p "$kw"
+			kw=$kw/dotfiles
+		fi
+		arch=$(portageq envvar ARCH)
+		for atom in media-sound/wiremix www-client/icecat www-client/ungoogled-chromium; do
+			grep -qs "^$atom[[:space:]]" "$kw" && continue
+			echo "$atom ~$arch" >> "$kw"
+			say "keyword $atom ~$arch -> $kw"
+		done
 		emerge --ask --noreplace x11-libs/libX11 x11-libs/libXft \
 			x11-libs/libXinerama x11-libs/libXrandr x11-libs/libXext \
 			media-libs/fontconfig media-libs/freetype \
