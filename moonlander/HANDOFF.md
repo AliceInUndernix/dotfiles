@@ -25,9 +25,9 @@ In `canary/`, only comments differ from `keymap_87.c`, `config_87.h` and
 - **Letters:** Canary, on layer 0. Shifted letters are layer 1, which the
   `lang_shift` library switches on by itself.
 - **Base:** optozorax's Moonlander keymap and its libraries
-  (`lang_shift`, `combo`, `color`, `arbitrary_keycode`). These libraries are
-  **not included here**; get them from https://github.com/optozorax/moonlander
-  and put them next to `keymap.c`. `moonlander_leds.h` comes from the same base.
+  (`lang_shift`, `combo`, `color`, `arbitrary_keycode`). Copies are in
+  `canary/` next to `keymap.c`, with `moonlander_leds.h` and `mcuconf.h`
+  from the same base; `README.md` lists their versions.
 - **Firmware:** ZSA's QMK fork, firmware25 generation. Keyboard is the
   Moonlander rev B.
 - **Thumbs (left 1-2-3 / right 1-2-3):** Space, Red layer, Steno toggle /
@@ -95,8 +95,9 @@ suggest them again without asking:
 
 ## Open notes for the next project
 
-- Building needs the optozorax libraries in place; nothing in this archive was
-  compiled during the handoff (only comments changed).
+- Version 88 compiles with `./install.sh moonlander` (checked 2026-11-11,
+  ARM gcc 13.2, no warnings). Flashing and testing on the keyboard are still
+  Alice's to do.
 - If double letters come back, raise `DEBOUNCE` in `config.h` (15 or 20).
 - USB endpoints are used up exactly (keyboard 1 + mouse 1 + Oryx raw HID 2 +
   steno 3 = 7). Turning on NKRO, console, WebUSB or media keys needs one freed first.

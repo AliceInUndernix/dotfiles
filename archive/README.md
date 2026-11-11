@@ -38,8 +38,9 @@ folder's `sha256sums.txt`. The git snapshots were made with
   copies instead.
 - **suckless:** `tar xf suckless/dwm-6.8.tar.gz` gives the pristine
   source, to compare with `../dwm/` or start over from.
-- **Moonlander:** unpack and copy the four library folders and
-  `moonlander_leds.h` next to `keymap.c` (see `../moonlander/README.md`).
+- **Moonlander:** the libraries are already copied into
+  `moonlander/canary/`. The tarball keeps optozorax's whole keymap; its
+  library folders are git submodules and come out empty.
 
 ## Not archived
 

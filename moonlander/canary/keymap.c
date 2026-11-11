@@ -74,11 +74,11 @@
  *
  * WHERE THE LIBRARIES COME FROM
  *   arbitrary_keycode, lang_shift, combo and color are optozorax's keymap
- *   libraries (https://github.com/optozorax/moonlander). They are NOT in
- *   this folder: they must sit next to keymap.c in the QMK keymap folder,
- *   as they do in optozorax's own keymap. moonlander_leds.h (LED_1..LED_6)
- *   comes from the same base. The code targets ZSA's QMK fork (the
- *   "firmware25" generation, see the audio notes in config.h).
+ *   libraries (https://github.com/optozorax/moonlander). Copies sit next
+ *   to keymap.c in this folder, unchanged (versions in ../README.md).
+ *   moonlander_leds.h (LED_1..LED_6) and mcuconf.h come from the same base.
+ *   The code targets ZSA's QMK fork (the "firmware25" generation, see the
+ *   audio notes in config.h), with ../qmk.patch applied.
  *
  * NOTES FOR WHOEVER EDITS THIS NEXT
  *   - After changing a layer, update the picture in the comment above it.
