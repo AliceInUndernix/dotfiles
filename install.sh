@@ -37,7 +37,6 @@ USER_NAME=${INSTALL_USER:-$(stat -c %U "$DOTFILES" 2>/dev/null || stat -f %Su "$
 pw=$(getent passwd "$USER_NAME" 2>/dev/null || grep "^$USER_NAME:" /etc/passwd) ||
 	die "no such user: $USER_NAME"
 USER_GROUP=$(id -gn "$USER_NAME")
-USER_SHELL=${pw##*:}
 pw=${pw%:*}
 HOME=${pw##*:}
 [ -d "$HOME" ] || die "home folder $HOME of $USER_NAME does not exist"
@@ -189,12 +188,23 @@ install_ksh() {
 		warn "ksh is not installed (try ./install.sh --deps)"
 		return
 	fi
-	# Make ksh the user's login shell.
-	if [ "$(basename "$USER_SHELL")" != "$(basename "$ksh")" ]; then
-		grep -qx "$ksh" /etc/shells 2>/dev/null || echo "$ksh" >> /etc/shells
-		say "shell   $ksh for $USER_NAME (takes effect at next login)"
-		chsh -s "$ksh" "$USER_NAME" 2>/dev/null || usermod -s "$ksh" "$USER_NAME"
+	# Make ksh the login shell of both the user and root.
+	grep -qx "$ksh" /etc/shells 2>/dev/null || echo "$ksh" >> /etc/shells
+	login_shell "$USER_NAME" "$ksh"
+	login_shell root "$ksh"
+}
+
+# login_shell <user> <shell>: make <shell> the user's login shell.
+login_shell() {
+	now=$(getent passwd "$1" 2>/dev/null || grep "^$1:" /etc/passwd)
+	now=${now##*:}
+	if [ "$(basename "$now")" = "$(basename "$2")" ]; then
+		say "ok      shell $now for $1"
+		return
 	fi
+	chsh -s "$2" "$1" >/dev/null 2>&1 || usermod -s "$2" "$1" ||
+		{ warn "could not make $2 the shell of $1"; return; }
+	say "shell   $2 for $1 (was $now; takes effect at next login)"
 }
 
 install_xdg() {

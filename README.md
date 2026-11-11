@@ -15,7 +15,7 @@ script puts the whole configuration back after a fresh install.
 | `slock/` | slock 1.7 source (screen locker; Mod+Shift+l locks, Mod+Shift+s suspends) | `PREFIX/bin/slock` |
 | `nvim/` | Neovim config (0.11+, no plugin manager) | `~/.config/nvim` (symlink) |
 | `tmux/` | tmux config | `~/.config/tmux/tmux.conf` (symlink) |
-| `ksh/` | Korn shell: `profile` (PATH, EDITOR) and `kshrc` (prompt, vi keys, aliases) | `~/.profile`, `~/.kshrc` (symlinks); ksh becomes the login shell |
+| `ksh/` | Korn shell: `profile` (PATH, EDITOR) and `kshrc` (prompt, vi keys, aliases) | `~/.profile`, `~/.kshrc` (symlinks); ksh becomes the login shell of the user and root |
 | `flameshot/` | Screenshots: Print selects, Mod+Print copies the screen | `~/.config/flameshot/flameshot.ini` (symlink) |
 | `mpv/` | Video player: resume, Habamax OSD, vim seek keys | `~/.config/mpv` (symlink) |
 | `sioyek/` | Book/PDF reader in Habamax colours (TypeTrack's green/red too) | `~/.config/sioyek/prefs_user.config` (symlink) |
@@ -64,7 +64,7 @@ What the script does:
   `<name>.bak.<date>`, never deleted. Running it again is safe.
 - **suckless tools** are built and installed into `PREFIX`, and the build
   files are cleaned up afterwards.
-- **Login shell**: ksh becomes the user's shell (`chsh`, no password asked).
+- **Login shell**: ksh becomes the shell of both the user and root (`chsh`, no password asked; root keeps its own `/root/.profile`).
 - **Moonlander**: QMK, its Python environment, the ARM compiler and ZSA's
   QMK source go into the user's `~/.local`, then the firmware is built into
   `moonlander/` for Keymapp. See `moonlander/README.md`.
