@@ -22,5 +22,6 @@ applied in this order; dwm.c already has them, so don't apply again):
                      on every tag; comboview goes through view() so a
                      combo uses the settings of its first tag)
   movestack          dwm-movestack-20211115-a786211.diff (movestack.c only)
+  doubledeck         dwm-deck-double-6.2.diff
 Their config.def.h hunks are not applied (config.def.h stays upstream);
 the settings are in config.h.
