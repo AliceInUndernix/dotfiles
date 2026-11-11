@@ -1,8 +1,18 @@
 # Login settings, read once when you log in (linked to ~/.profile).
 
 export EDITOR=nvim VISUAL=nvim PAGER=less
+# less: searches ignore case unless they have a capital letter (-i), quit
+# when the text fits on one screen (-F), show colours, e.g. git's (-R).
+export LESS=-iFR
 export ENV=$HOME/.kshrc     # ksh reads this for every interactive shell
 
 # Your own programs (qmk, and suckless tools built with PREFIX=~/.local).
 case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) PATH=$HOME/.local/bin:$PATH ;; esac
 export PATH
+
+# Logging in on the first console (tty1) starts X; logging out of X logs
+# you out. The other consoles (Ctrl+Alt+F2...) stay text, for when X
+# breaks. Never for root.
+if [ -z "${DISPLAY:-}" ] && [ "$(id -u)" -ne 0 ] && [ "$(tty)" = /dev/tty1 ]; then
+	exec startx
+fi

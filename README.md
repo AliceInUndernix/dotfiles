@@ -64,7 +64,7 @@ What the script does:
   `<name>.bak.<date>`, never deleted. Running it again is safe.
 - **suckless tools** are built and installed into `PREFIX`, and the build
   files are cleaned up afterwards.
-- **Login shell**: ksh becomes the shell of both the user and root (`chsh`, no password asked; root keeps its own `/root/.profile`).
+- **Login shell**: ksh becomes the shell of both the user and root (`chsh`, no password asked; root gets copies of `profile` and `kshrc`, owned by root).
 - **Moonlander**: QMK, its Python environment, the ARM compiler and ZSA's
   QMK source go into the user's `~/.local`, then the firmware is built into
   `moonlander/` for Keymapp. See `moonlander/README.md`.

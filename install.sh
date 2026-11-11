@@ -198,6 +198,30 @@ install_ksh() {
 	grep -qx "$ksh" /etc/shells 2>/dev/null || echo "$ksh" >> /etc/shells
 	login_shell "$USER_NAME" "$ksh"
 	login_shell root "$ksh"
+	# root gets the same settings as copies it owns, not links: a link to
+	# the user's file would let anything running as the user change what
+	# root runs. Run ./install.sh ksh again after changing them.
+	root_home=$(getent passwd root 2>/dev/null || grep '^root:' /etc/passwd)
+	root_home=${root_home%:*}
+	root_home=${root_home##*:}
+	rootcopy "$DOTFILES/ksh/profile" "$root_home/.profile"
+	rootcopy "$DOTFILES/ksh/kshrc" "$root_home/.kshrc"
+}
+
+# rootcopy <file in repo> <target>: copy owned by root, backing up what is there.
+rootcopy() {
+	if [ -f "$2" ] && [ ! -L "$2" ] && cmp -s "$1" "$2"; then
+		say "ok      $2"
+		return
+	fi
+	if [ -e "$2" ] || [ -L "$2" ]; then
+		mv "$2" "$2.bak.$STAMP"
+		say "backup  $2 -> $2.bak.$STAMP"
+	fi
+	cp "$1" "$2"
+	chown root:"$(id -gn root)" "$2"
+	chmod 644 "$2"
+	say "copy    $1 -> $2"
 }
 
 # login_shell <user> <shell>: make <shell> the user's login shell.

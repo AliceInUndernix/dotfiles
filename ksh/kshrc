@@ -10,7 +10,8 @@ HISTFILE=$HOME/.local/state/ksh/history
 HISTSIZE=10000
 [ -d "${HISTFILE%/*}" ] || mkdir -p "${HISTFILE%/*}"
 
-# Prompt: folder (~ for home) and $, e.g. "~/dotfiles $ ".
+# Prompt: folder (~ for home), then $ for you or # for root,
+# e.g. "~/dotfiles $ " and "/etc # ".
 _pwd() {
 	case $PWD in
 	"$HOME") printf '~' ;;
@@ -18,7 +19,7 @@ _pwd() {
 	*) printf '%s' "$PWD" ;;
 	esac
 }
-PS1='$(_pwd) $ '
+if [ "$(id -u)" -eq 0 ]; then PS1='$(_pwd) # '; else PS1='$(_pwd) $ '; fi
 
 alias ls='ls -F'          # / after folders, * after programs, @ after links; no colours
 alias ll='ls -lh'
