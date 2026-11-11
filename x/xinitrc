@@ -10,8 +10,23 @@ if [ ! -d /run/systemd/system ] && command -v gentoo-pipewire-launcher >/dev/nul
 	gentoo-pipewire-launcher &
 fi
 
-# Lock with slock when the screen blanks (after 10 idle minutes, X's
-# default) and before suspend. Mod+Shift+l locks by hand.
+# Idle lock. 0 = never blank, lock or turn off the screen on its own.
+# Set a number of minutes (e.g. 10) to blank and lock after that long idle.
+# Restart X (Mod+Shift+q, then startx) for a change to take effect.
+IDLE_LOCK_MINUTES=0
+
+if [ "$IDLE_LOCK_MINUTES" -gt 0 ]; then
+	idle=$((IDLE_LOCK_MINUTES * 60))
+	xset s "$idle" "$idle"
+	xset +dpms dpms "$idle" "$idle" "$idle"
+else
+	xset s off
+	xset -dpms
+fi
+
+# xss-lock runs slock when the screen blanks (only if the idle lock above
+# is on) and always before the laptop suspends, so waking needs the
+# password. Mod+Shift+l locks by hand, Mod+Shift+s suspends.
 xss-lock -- slock &
 
 # dwm runs until you quit it (Mod+Shift+q), which ends the X session.

@@ -61,7 +61,7 @@ deps() {
 			x11-libs/libXinerama x11-libs/libXrandr x11-libs/libXext \
 			media-libs/fontconfig media-libs/freetype \
 			dev-vcs/git app-editors/neovim app-misc/tmux \
-			x11-apps/xinit x11-apps/xsetroot x11-misc/xss-lock \
+			x11-apps/xinit x11-apps/xsetroot x11-apps/xset x11-misc/xss-lock \
 			app-shells/ksh media-fonts/liberation-fonts \
 			media-gfx/flameshot media-video/mpv net-misc/yt-dlp \
 			media-video/pipewire media-video/wireplumber media-sound/wiremix \
@@ -88,19 +88,19 @@ deps() {
 	*arch*)
 		asroot pacman -S --needed base-devel libx11 libxft libxinerama \
 			libxrandr libxext fontconfig freetype2 git neovim tmux dfu-util \
-			xorg-xinit xorg-xsetroot xss-lock ttf-liberation \
+			xorg-xinit xorg-xsetroot xorg-xset xss-lock ttf-liberation \
 			flameshot mpv yt-dlp pipewire wireplumber wiremix btop ;;
 	*fedora*|*rhel*)
 		asroot dnf install gcc make pkgconf-pkg-config libX11-devel \
 			libXft-devel libXinerama-devel libXrandr-devel libXext-devel \
 			fontconfig-devel freetype-devel git neovim tmux dfu-util \
-			xorg-x11-xinit xsetroot xss-lock ksh liberation-mono-fonts \
+			xorg-x11-xinit xsetroot xset xss-lock ksh liberation-mono-fonts \
 			liberation-sans-fonts flameshot mpv yt-dlp pipewire wireplumber btop ;;
 	*void*)
 		asroot xbps-install base-devel pkg-config libX11-devel libXft-devel \
 			libXinerama-devel libXrandr-devel libXext-devel \
 			fontconfig-devel freetype-devel git neovim tmux dfu-util \
-			xinit xsetroot xss-lock mksh liberation-fonts-ttf \
+			xinit xsetroot xset xss-lock mksh liberation-fonts-ttf \
 			flameshot mpv yt-dlp pipewire wireplumber btop ;;
 	*)
 		warn "unknown distro ($id): install a C compiler, make, pkg-config,"
@@ -157,9 +157,11 @@ install_feh() {
 
 install_x() {
 	link "$DOTFILES/x/xinitrc" "$HOME/.xinitrc"
-	for tool in xsetroot xss-lock; do
+	for tool in xsetroot xset xss-lock; do
 		command -v $tool >/dev/null 2>&1 || warn "$tool is not installed (try ./install.sh --deps)"
 	done
+	command -v loginctl >/dev/null 2>&1 ||
+		warn "loginctl not found: Mod+Shift+s (suspend) needs elogind or systemd"
 }
 
 install_tmux() {

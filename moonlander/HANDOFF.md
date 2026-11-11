@@ -95,9 +95,10 @@ suggest them again without asking:
 
 ## Open notes for the next project
 
-- **To do with the next batch of layout changes:** add a key for locking
-  the screen. dwm locks on Mod+Shift+l (slock), so the key should send
-  Super+Shift+L (`LGUI(LSFT(KC_L))`) wherever it fits best.
+- **To do with the next batch of layout changes:** add keys for locking
+  and suspending. dwm locks on Mod+Shift+l (slock) and suspends on
+  Mod+Shift+s, so the keys should send Super+Shift+L (`LGUI(LSFT(KC_L))`)
+  and Super+Shift+S (`LGUI(LSFT(KC_S))`) wherever they fit best.
 
 - Version 88 compiles with `./install.sh moonlander` (checked 2026-11-11,
   ARM gcc 13.2, no warnings). Flashing and testing on the keyboard are still

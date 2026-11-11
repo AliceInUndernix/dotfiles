@@ -12,7 +12,7 @@ script puts the whole configuration back after a fresh install.
 | `dwm/` | dwm 6.8 source (window manager) | `PREFIX/bin/dwm` |
 | `st/` | st 0.9.3 source (terminal) | `PREFIX/bin/st` |
 | `dmenu/` | dmenu 5.4 source (launcher) | `PREFIX/bin/dmenu`, `dmenu_run` |
-| `slock/` | slock 1.7 source (screen locker) | `PREFIX/bin/slock` |
+| `slock/` | slock 1.7 source (screen locker; Mod+Shift+l locks, Mod+Shift+s suspends) | `PREFIX/bin/slock` |
 | `nvim/` | Neovim config (0.11+, no plugin manager) | `~/.config/nvim` (symlink) |
 | `tmux/` | tmux config | `~/.config/tmux/tmux.conf` (symlink) |
 | `ksh/` | Korn shell: `profile` (PATH, EDITOR) and `kshrc` (prompt, vi keys, aliases) | `~/.profile`, `~/.kshrc` (symlinks); ksh becomes the login shell |
@@ -23,7 +23,7 @@ script puts the whole configuration back after a fresh install.
 | `btop/` | btop with a Habamax theme and vim keys | `~/.config/btop/` files (symlinks) |
 | `xdg/` | Download, Pictures, Music etc. all set to `~` (no capitalised folders) | `~/.config/user-dirs.dirs`, `user-dirs.conf` (symlinks) |
 | `feh/` | feh shows pictures on Habamax grey | `~/.config/feh/themes` (symlink) |
-| `x/` | `xinitrc`: Habamax-grey wallpaper, PipeWire, xss-lock (slock on idle/suspend), then dwm (run `startx`) | `~/.xinitrc` (symlink) |
+| `x/` | `xinitrc`: Habamax-grey wallpaper, PipeWire, idle lock off by default (`IDLE_LOCK_MINUTES`), xss-lock (slock before suspend), then dwm (run `startx`) | `~/.xinitrc` (symlink) |
 | `moonlander/` | QMK "canary" keymap for the keyboard | built into `moonlander/*.bin`, flashed with Keymapp |
 | `archive/` | Untouched copies of everything downloaded from elsewhere | |
 | `TODO.md` | Things decided but left for later | |
