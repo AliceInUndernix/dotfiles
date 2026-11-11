@@ -2,7 +2,7 @@
  * ==========================================================================
  *  ZSA Moonlander (rev B), keymap "canary"
  *  Canary letter layout, built on optozorax's keymap libraries.
- *  Version 87 (the latest; earlier drafts were numbered 75..86).
+ *  Version 88 (the latest; earlier drafts were numbered 75..87).
  * ==========================================================================
  *
  * HOW TO READ THIS FILE
@@ -37,8 +37,8 @@
  *   3  L_RU_S   unused, reserved by lang_shift
  *   4  L_RED    HOLD left thumb 2: brackets, arrows, digits      red
  *   5  L_STENO  TAP left thumb 3 to switch on, tap again to leave goldenrod
- *   6  L_DWM    HOLD the right lower-row key next to Alt:
- *               dwm window manager shortcuts                    magenta
+ *   6  L_DWM    HOLD the right lower-row key next to Alt (Super is
+ *               held too): dwm window manager shortcuts         magenta
  *   7  L_MOUSE  HOLD the left lower-row key next to Ctrl:
  *               mouse pointer, wheel and clicks                 green
  *   8  L_RGB    TAP the far-left lower-row key to switch on, tap again
@@ -62,9 +62,9 @@
  *   - _______ = transparent (see above).  KC_NO = does nothing.
  *   The full list of EN_ names is in lang_shift/include.h.
  *
- *   Exception to the rule: the dwm shortcuts (section 3) are sent as raw
- *   KC_ shortcuts such as LGUI(KC_1), because they are shortcuts for the
- *   window manager, not characters to type.
+ *   Exception to the rule: the dwm keys (section 3) are raw KC_ keys such
+ *   as KC_1, because they are shortcuts for the window manager, not
+ *   characters to type. Super is held by the dwm layer key itself.
  *
  * FILES THAT BELONG TOGETHER
  *   keymap.c (this file), config.h (timings and library settings) and
@@ -74,11 +74,11 @@
  *
  * WHERE THE LIBRARIES COME FROM
  *   arbitrary_keycode, lang_shift, combo and color are optozorax's keymap
- *   libraries (https://github.com/optozorax/moonlander). They are NOT in
- *   this folder: they must sit next to keymap.c in the QMK keymap folder,
- *   as they do in optozorax's own keymap. moonlander_leds.h (LED_1..LED_6)
- *   comes from the same base. The code targets ZSA's QMK fork (the
- *   "firmware25" generation, see the audio notes in config.h).
+ *   libraries (https://github.com/optozorax/moonlander). Copies sit next
+ *   to keymap.c in this folder, unchanged (versions in ../README.md).
+ *   moonlander_leds.h (LED_1..LED_6) and mcuconf.h come from the same base.
+ *   The code targets ZSA's QMK fork (the "firmware25" generation, see the
+ *   audio notes in config.h), with ../qmk.patch applied.
  *
  * NOTES FOR WHOEVER EDITS THIS NEXT
  *   - After changing a layer, update the picture in the comment above it.
@@ -224,6 +224,9 @@ enum custom_keycodes {
     ACC_U,                            // up
     ACC_R,                            // right
 
+    // dwm layer key (section 3): holds Super and the dwm layer together
+    DWM_HOLD,
+
     // Sound (section 8)
     JINGLE,                           // play Jingle Bells (press again to stop)
     CLICKY,                           // clicky mode on/off: a tick on every key press
@@ -232,14 +235,24 @@ enum custom_keycodes {
 /* ========================================================================== *
  * 3. DWM SHORTCUTS
  *
- * dwm's shortcuts are MODKEY + key. Each name below sends one of them with
- * a single key on the dwm layer. The dwm build this is for uses Super
- * (LGUI) as MODKEY. If dwm is ever switched to Alt as MODKEY, change LGUI
- * to LALT in the two lines below.
+ * dwm's shortcuts are MODKEY + key, and dwm uses Super as MODKEY.
+ *
+ * Holding the dwm layer key holds a real Super for as long as the key is
+ * down, as if a Super key were held (DWM_HOLD, section 9). So the keys on
+ * the dwm layer only send the plain key: Tag2 is just KC_2.
+ *
+ * Why: before version 88 every key sent its own Super (LGUI(KC_2)). QMK
+ * drops that kind of Super as soon as any other key goes down, so when
+ * fingers overlapped dwm sometimes saw a bare "2" and the 2 got typed.
+ * A held Super can't be lost that way.
+ *
+ * If dwm is ever switched to Alt as MODKEY, change KC_LGUI to KC_LALT in
+ * DWM_HOLD_MOD below.
  * ========================================================================== */
 
-#define DWM_MOD(kc)      LGUI(kc)          // Super + key
-#define DWM_MOD_SFT(kc)  LGUI(LSFT(kc))    // Super + Shift + key
+#define DWM_HOLD_MOD     KC_LGUI           // the modifier the layer key holds
+#define DWM_MOD(kc)      (kc)              // Super (held) + key
+#define DWM_MOD_SFT(kc)  LSFT(kc)          // Super (held) + Shift + key
 
 // Tags (dwm's workspaces). Hold Shift too to MOVE the window to that tag.
 #define D_TAG1  DWM_MOD(KC_1)
@@ -309,7 +322,7 @@ const ComboWithKeycode combos[] PROGMEM = {
     IMMEDIATE_CHORD(SFT_N,     SFT_N,     /* <-! */ CMB_SFT),      // hold: Shift
     IMMEDIATE_CHORD(CTRL_0,    CTRL_0,    /* <-! */ CMB_CTL),      // hold: Ctrl
     IMMEDIATE_CHORD(ALT_0,     ALT_0,     /* <-! */ CMB_ALT),      // hold: Alt
-    IMMEDIATE_CHORD(MO(L_DWM), MO(L_DWM), /* <-! */ CMB_DWM),      // hold: dwm layer
+    IMMEDIATE_CHORD(DWM_HOLD,  DWM_HOLD,  /* <-! */ CMB_DWM),      // hold: Super + dwm layer
     CHORD(TG(L_RGB), CMB_RGB),                                     // tap: backlight layer on/off
 
     // --- Two neighbouring keys together ---
@@ -406,7 +419,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      *
      *   1Sh   one-time Shift: the next key you press is shifted
      *   RGB   tap: backlight layer on/off           Mse  hold: mouse layer
-     *   DWM   hold: dwm layer                       Red  hold: red layer
+     *   DWM   hold: Super + dwm layer               Red  hold: red layer
      *   Steno tap: steno layer on (tap again on the steno layer to leave)
      *
      * Punctuation that adds a space:
@@ -531,8 +544,8 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     /*
      * LAYER 6: dwm  (hold the right lower-row key next to Alt)
      *
-     * Every key sends Super + something (see section 3), so each dwm
-     * shortcut is one key.
+     * Holding the layer key also holds Super (see section 3), so every key
+     * here is Super + that key, and each dwm shortcut is one key.
      *
      * top      --   --   --   Mon< Mon> --   --       --   Lay  Tile Flt  Mono TFlt --
      * home     --   Tag1 Tag2 Tag3 Tag4 Tag5 --       --   --   Shrk Next Prev Grow --
@@ -906,7 +919,8 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     if (!process_moonlander_leds(keycode, record))   return false;  // LED_1..LED_6
     if (!accel_process(keycode, record))             return false;  // mouse movement
 
-    // Our own keycodes. They type when pressed; releasing them does nothing.
+    // Our own keycodes. Most type when pressed and do nothing on release;
+    // DWM_HOLD is the exception, it is held until released.
     bool down = record->event.pressed;
     switch (keycode) {
         case PAIR_PAREN:   if (down) type_pair(EN_LPRN, EN_RPRN);     return false;  // ()
@@ -923,6 +937,17 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 
         case ELLIPSIS:     if (down) type_ellipsis(true);             return false;  // "... "
         case ELLIPSIS_N:   if (down) type_ellipsis(false);            return false;  // "..."
+
+        // dwm layer key: hold Super and the dwm layer, release both together
+        case DWM_HOLD:
+            if (down) {
+                layer_on(L_DWM);
+                register_code(DWM_HOLD_MOD);
+            } else {
+                unregister_code(DWM_HOLD_MOD);
+                layer_off(L_DWM);
+            }
+            return false;
 
         case JINGLE:       if (down) jingle_press();                  return false;  // Jingle Bells
         case CLICKY:       if (down) clicky_enabled = !clicky_enabled; return false; // clicky on/off

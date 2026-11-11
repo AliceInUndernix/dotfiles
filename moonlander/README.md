@@ -8,23 +8,48 @@ that were tried and settled. Start with the comment at the top of
 
 | Path | What it is |
 |---|---|
-| `canary/` | Current layout (version 87): `keymap.c`, `config.h`, `rules.mk` |
+| `canary/` | Current layout (version 88): `keymap.c`, `config.h`, `rules.mk`, `keymap.json`, `mcuconf.h`, and the libraries it needs |
+| `qmk.patch` | Small patch to ZSA's QMK that the libraries need |
 | `knowledge/canary/` | The first working canary keymap, kept as reference |
 | `history/` | Earlier numbered drafts (75..86) |
 | `HANDOFF.md`, `UPGRADE-NOTES.md` | Notes from the earlier project |
 
-## Building (not done yet)
+## Building
 
-This is firmware for the keyboard, so `install.sh` skips it. Nothing here
-has been compiled since the handoff. The outline is:
+```sh
+./install.sh moonlander
+```
 
-1. Clone ZSA's QMK fork (https://github.com/zsa/qmk_firmware), firmware25
-   branch, and set it up as QMK describes.
-2. Copy `canary/` into the fork as a Moonlander keymap folder.
-3. Put optozorax's libraries next to `keymap.c`: `lang_shift`, `combo`,
-   `color`, `arbitrary_keycode` and `moonlander_leds.h`, from
-   https://github.com/optozorax/moonlander. They are not in this repo.
-4. Compile the keymap and flash it with Keymapp.
+Everything goes into your home folder; nothing needs root:
 
-The exact keyboard name and compile command for rev B on firmware25 still
-need checking on a real build.
+| What | Where |
+|---|---|
+| ZSA's QMK source, `firmware25` branch, with `qmk.patch` applied | `~/.local/share/qmk/zsa_qmk` |
+| `qmk` command, in its own Python environment | `~/.local/share/qmk/venv`, linked as `~/.local/bin/qmk` |
+| ARM compiler, only if `arm-none-eabi-gcc` isn't installed already (Arm GNU Toolchain 14.2.rel1) | `~/.local/share/qmk/arm-gnu-toolchain`, linked into `~/.local/bin` |
+
+Each run copies `canary/` into QMK as `keyboards/zsa/moonlander/keymaps/canary`,
+builds `zsa/moonlander/reva:canary` and puts
+`moonlander/zsa_moonlander_reva_canary.bin` here (git ignores it). Flash
+that file with Keymapp. Run it again after every change to the keymap; the
+download steps are skipped once done.
+
+`dfu-suffix` (package `dfu-util`, installed by `./install.sh --deps`) adds a
+small DFU trailer to the .bin. Without it the build still works and says so.
+
+### Libraries and the QMK patch
+
+The libraries in `canary/` are copies of optozorax's, unchanged:
+
+| Folder | From | Commit |
+|---|---|---|
+| `lang_shift/` | https://github.com/klavarog/lang_shift | `2a6f814` (2026-06-21) |
+| `combo/` (without the diagram images) | https://github.com/klavarog/combo | `c882759` (2026-06-21) |
+| `arbitrary_keycode/` | https://github.com/klavarog/arbitrary_keycode | `a3eb347` (2026-06-20) |
+| `color/`, `moonlander_leds.h`, `mcuconf.h`, `../qmk.patch` | https://github.com/optozorax/moonlander | `8b725d0` (2026-07-30) |
+
+`qmk.patch` changes ZSA's QMK in three places: key events can carry any
+keycode (needed by `arbitrary_keycode`, which the combo library uses to
+press keys), the RGB code ignores those events, and the audio state timer
+frequency can be set from `config.h`. `mcuconf.h` turns on the two extra
+timers the audio driver uses.

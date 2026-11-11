@@ -60,22 +60,24 @@ deps() {
 		asroot emerge --ask --noreplace x11-libs/libX11 x11-libs/libXft \
 			x11-libs/libXinerama x11-libs/libXrandr x11-libs/libXext \
 			media-libs/fontconfig media-libs/freetype \
-			dev-vcs/git app-editors/neovim app-misc/tmux ;;
+			dev-vcs/git app-editors/neovim app-misc/tmux \
+			app-mobilephone/dfu-util ;;
 	*debian*|*ubuntu*)
 		asroot apt-get install build-essential pkg-config libx11-dev \
 			libxft-dev libxinerama-dev libxrandr-dev libxext-dev \
-			libfontconfig-dev libfreetype-dev git neovim tmux ;;
+			libfontconfig-dev libfreetype-dev git neovim tmux \
+			python3-venv dfu-util ;;
 	*arch*)
 		asroot pacman -S --needed base-devel libx11 libxft libxinerama \
-			libxrandr libxext fontconfig freetype2 git neovim tmux ;;
+			libxrandr libxext fontconfig freetype2 git neovim tmux dfu-util ;;
 	*fedora*|*rhel*)
 		asroot dnf install gcc make pkgconf-pkg-config libX11-devel \
 			libXft-devel libXinerama-devel libXrandr-devel libXext-devel \
-			fontconfig-devel freetype-devel git neovim tmux ;;
+			fontconfig-devel freetype-devel git neovim tmux dfu-util ;;
 	*void*)
 		asroot xbps-install base-devel pkg-config libX11-devel libXft-devel \
 			libXinerama-devel libXrandr-devel libXext-devel \
-			fontconfig-devel freetype-devel git neovim tmux ;;
+			fontconfig-devel freetype-devel git neovim tmux dfu-util ;;
 	*)
 		warn "unknown distro ($id): install a C compiler, make, pkg-config,"
 		warn "and headers for X11, Xft, Xinerama, Xrandr, Xext, fontconfig, freetype." ;;
@@ -136,9 +138,84 @@ install_slock() {
 	build_suckless slock
 }
 
+# Moonlander: everything goes into your home folder, nothing needs root.
+#   ~/.local/share/qmk/zsa_qmk   ZSA's QMK source (firmware25), with qmk.patch
+#   ~/.local/share/qmk/venv      Python environment for the qmk command
+#   ~/.local/share/qmk/arm-gnu-toolchain   ARM compiler, if none is installed
+#   ~/.local/bin/qmk, arm-none-eabi-*      symlinks to the two above
+# Each run copies moonlander/canary into QMK fresh (like update.sh did) and
+# builds. The built .bin is copied to moonlander/ for Keymapp.
+QMK_DIR=${XDG_DATA_HOME:-$HOME/.local/share}/qmk
+QMK_BIN=$HOME/.local/bin
+QMK_BRANCH=firmware25
+QMK_TARGET=zsa/moonlander/reva:canary
+ARM_VERSION=14.2.rel1
+
 install_moonlander() {
-	# Firmware is flashed onto the keyboard, not installed into the system.
-	say "skip    moonlander (firmware: see moonlander/README.md to build and flash)"
+	fw=$QMK_DIR/zsa_qmk
+	mkdir -p "$QMK_DIR" "$QMK_BIN"
+	command -v git >/dev/null 2>&1 || die "git not found (try ./install.sh --deps)"
+	command -v python3 >/dev/null 2>&1 || die "python3 not found"
+
+	# 1. ZSA's QMK source, only the latest commit to keep it small.
+	if [ ! -d "$fw/.git" ]; then
+		say "clone   zsa/qmk_firmware ($QMK_BRANCH) -> $fw"
+		git clone --depth 1 --branch "$QMK_BRANCH" --recurse-submodules \
+			--shallow-submodules https://github.com/zsa/qmk_firmware "$fw"
+	fi
+
+	# 2. QMK patch for arbitrary_keycode and the audio timer (applied once).
+	if git -C "$fw" apply --reverse --check "$DOTFILES/moonlander/qmk.patch" 2>/dev/null; then
+		say "ok      qmk.patch already applied"
+	else
+		git -C "$fw" apply "$DOTFILES/moonlander/qmk.patch"
+		say "patch   qmk.patch -> $fw"
+	fi
+
+	# 3. qmk command in its own Python environment.
+	if [ ! -x "$QMK_DIR/venv/bin/qmk" ]; then
+		say "python  qmk -> $QMK_DIR/venv"
+		python3 -m venv "$QMK_DIR/venv"
+		"$QMK_DIR/venv/bin/python" -m pip install --quiet qmk -r "$fw/requirements.txt"
+	fi
+	link "$QMK_DIR/venv/bin/qmk" "$QMK_BIN/qmk"
+	"$QMK_DIR/venv/bin/qmk" config user.qmk_home="$fw" >/dev/null 2>&1
+
+	# 4. ARM compiler: use the system one if there is one, else download.
+	if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then
+		arm=$QMK_DIR/arm-gnu-toolchain
+		if [ ! -x "$arm/bin/arm-none-eabi-gcc" ]; then
+			name=arm-gnu-toolchain-$ARM_VERSION-$(uname -m)-arm-none-eabi
+			url=https://developer.arm.com/-/media/Files/downloads/gnu/$ARM_VERSION/binrel/$name.tar.xz
+			say "fetch   $name"
+			rm -rf "$arm" "$arm.tmp" && mkdir -p "$arm.tmp"
+			curl -fL "$url" | tar -xJ -C "$arm.tmp" --strip-components=1
+			mv "$arm.tmp" "$arm"
+		fi
+		for tool in "$arm"/bin/arm-none-eabi-*; do
+			link "$tool" "$QMK_BIN/$(basename "$tool")"
+		done
+	fi
+
+	# 5. Keymap: a fresh copy of moonlander/canary.
+	km=$fw/keyboards/zsa/moonlander/keymaps/canary
+	rm -rf "$km"
+	cp -R "$DOTFILES/moonlander/canary" "$km"
+	say "copy    moonlander/canary -> $km"
+
+	# 6. Build.
+	# dfu-suffix (from dfu-util) only adds a small DFU trailer to the .bin.
+	nosuffix=
+	if ! command -v dfu-suffix >/dev/null 2>&1; then
+		warn "dfu-suffix not found (package dfu-util): building without the DFU trailer"
+		nosuffix=DFU_SUFFIX=true
+	fi
+	say "build   $QMK_TARGET"
+	( cd "$fw" && PATH="$QMK_DIR/venv/bin:$QMK_BIN:$PATH" make "$QMK_TARGET" $nosuffix )
+	cp "$fw/zsa_moonlander_reva_canary.bin" "$DOTFILES/moonlander/"
+	say "built   moonlander/zsa_moonlander_reva_canary.bin (flash it with Keymapp)"
+
+	case ":$PATH:" in *":$QMK_BIN:"*) ;; *) warn "add $QMK_BIN to PATH to run qmk yourself" ;; esac
 }
 
 # --- main -----------------------------------------------------------------

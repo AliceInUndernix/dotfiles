@@ -15,7 +15,7 @@ script puts the whole configuration back after a fresh install.
 | `slock/` | slock 1.7 source (screen locker) | `PREFIX/bin/slock` |
 | `nvim/` | Neovim config (0.11+, no plugin manager) | `~/.config/nvim` (symlink) |
 | `tmux/` | tmux config | `~/.config/tmux/tmux.conf` (symlink) |
-| `moonlander/` | QMK "canary" keymap for the keyboard | flashed to the keyboard |
+| `moonlander/` | QMK "canary" keymap for the keyboard | built into `moonlander/*.bin`, flashed with Keymapp |
 | `archive/` | Untouched copies of everything downloaded from elsewhere | |
 | `install.sh` | Sets everything up | |
 
@@ -51,8 +51,9 @@ What the script does:
   `<name>.bak.<date>`, never deleted. Running it again is safe.
 - **suckless tools** are built as you, installed with `sudo` (or `doas`),
   and the build files are cleaned up afterwards.
-- **Moonlander** is skipped: it is keyboard firmware. See
-  `moonlander/README.md`.
+- **Moonlander**: QMK, its Python environment, the ARM compiler and ZSA's
+  QMK source go into `~/.local` (no root), then the firmware is built into
+  `moonlander/` for Keymapp. See `moonlander/README.md`.
 
 On Gentoo the build needs `x11-libs/libX11`, `libXft`, `libXinerama`,
 `libXrandr`, `libXext`, `media-libs/fontconfig` and `freetype`; `--deps`
@@ -107,6 +108,6 @@ copies in place first, so no internet is needed.
 
 ## Moonlander
 
-`moonlander/canary/` is the current layout (version 87);
-`moonlander/HANDOFF.md` explains it. Building needs ZSA's QMK fork and
-optozorax's keymap libraries, which are not in this repo.
+`moonlander/canary/` is the current layout (version 88);
+`moonlander/HANDOFF.md` explains it. `./install.sh moonlander` sets up QMK
+in your home folder and builds it (see `moonlander/README.md`).

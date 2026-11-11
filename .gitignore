@@ -6,3 +6,5 @@ st/st
 dmenu/dmenu
 dmenu/stest
 slock/slock
+# Moonlander build output
+moonlander/*.bin
