@@ -427,7 +427,7 @@ for arg in "$@"; do
 	case $arg in
 	--deps) want_deps=yes ;;
 	--list) echo "$PARTS"; exit 0 ;;
-	-h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	-h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 	-*) die "unknown option: $arg" ;;
 	*)
 		case " $PARTS " in *" $arg "*) ;; *) die "unknown part: $arg (see --list)" ;; esac
