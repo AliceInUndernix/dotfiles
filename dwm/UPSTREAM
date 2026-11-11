@@ -5,3 +5,6 @@ Copied:   2026-11-11, upstream tree at the tag without .git
 
 config.h started as a copy of config.def.h. Edit config.h; keep
 config.def.h as upstream so new releases can be compared against it.
+
+One change from upstream in config.def.h too: MODKEY is Mod4Mask (Super)
+instead of Mod1Mask (Alt), to match the Moonlander dwm layer.

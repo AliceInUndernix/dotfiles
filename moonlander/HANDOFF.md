@@ -85,7 +85,10 @@ suggest them again without asking:
   plain timed note.
 - **85-86:** steno number key `#` (STN_N1) replaces the upper S; thumb
   number-key experiment reverted.
-- **87 (latest):** RGB, Mouse and dwm layer keys added to the steno layer.
+- **87:** RGB, Mouse and dwm layer keys added to the steno layer.
+- **88 (latest):** the dwm layer key holds a real Super while held, and the
+  dwm keys send plain keys (KC_2, not LGUI(KC_2)). Before, Super was lost
+  when keys overlapped and a bare "2" got typed.
 - **config:** combo key count raised from 20 to 32 (by version 71); debounce
   raised to 12 ms against double letters (version 82). **rules:** unchanged in
   substance since the first numbered version (rules_1).

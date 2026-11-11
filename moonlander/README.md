@@ -8,7 +8,7 @@ that were tried and settled. Start with the comment at the top of
 
 | Path | What it is |
 |---|---|
-| `canary/` | Current layout (version 87): `keymap.c`, `config.h`, `rules.mk` |
+| `canary/` | Current layout (version 88): `keymap.c`, `config.h`, `rules.mk` |
 | `knowledge/canary/` | The first working canary keymap, kept as reference |
 | `history/` | Earlier numbered drafts (75..86) |
 | `HANDOFF.md`, `UPGRADE-NOTES.md` | Notes from the earlier project |
