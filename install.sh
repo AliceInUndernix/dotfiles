@@ -1,5 +1,6 @@
 #!/bin/sh
-# Install Alice's configuration on a fresh Linux system.
+# Install Alice's configuration on a fresh Linux system. Run it as root
+# (log in as root, or su -c ./install.sh); it never calls sudo or doas.
 #
 #   ./install.sh               link configs and build/install everything
 #   ./install.sh nvim dwm      only the parts named
@@ -7,17 +8,17 @@
 #                              distro's package manager (asks before it does)
 #   ./install.sh --list        show the parts
 #
-# Configs are symlinked, so editing them in ~/.config edits this repo.
-# Anything already in the way is moved to <name>.bak.<date>, never deleted.
-# suckless tools are built as you and installed with sudo (or doas) into
-# PREFIX (default /usr/local; PREFIX=~/.local ./install.sh needs no root).
-# POSIX sh, no bashisms, so it runs on any distro.
+# The configs are for the user who owns this repo folder (or INSTALL_USER=
+# name ./install.sh). Everything put in that user's home belongs to them,
+# not to root. Configs are symlinked, so editing them in ~/.config edits
+# this repo. Anything already in the way is moved to <name>.bak.<date>,
+# never deleted. suckless tools are installed into PREFIX (default
+# /usr/local). POSIX sh, no bashisms, so it runs on any distro.
 
 set -eu
 
 DOTFILES=$(cd "$(dirname "$0")" && pwd)
 PREFIX=${PREFIX:-/usr/local}
-CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}
 STAMP=$(date +%Y%m%d-%H%M%S)
 PARTS="ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock moonlander"
 
@@ -25,13 +26,35 @@ say()  { printf '==> %s\n' "$*"; }
 warn() { printf '!!  %s\n' "$*" >&2; }
 die()  { warn "$*"; exit 1; }
 
-# Root helper for installs outside $HOME.
-asroot() {
-	if [ "$(id -u)" -eq 0 ]; then "$@"
-	elif command -v sudo >/dev/null 2>&1; then sudo "$@"
-	elif command -v doas >/dev/null 2>&1; then doas "$@"
-	else die "need root for: $* (install sudo or doas, or set PREFIX=~/.local)"
-	fi
+[ "$(id -u)" -eq 0 ] || die "run this as root (log in as root, or: su -c ./install.sh)"
+
+# The user the configs are for: INSTALL_USER, else whoever owns this repo.
+USER_NAME=${INSTALL_USER:-$(stat -c %U "$DOTFILES" 2>/dev/null || stat -f %Su "$DOTFILES")}
+[ "$USER_NAME" != root ] ||
+	die "this repo belongs to root: say whose configs these are, e.g. INSTALL_USER=alice ./install.sh"
+pw=$(getent passwd "$USER_NAME" 2>/dev/null || grep "^$USER_NAME:" /etc/passwd) ||
+	die "no such user: $USER_NAME"
+USER_GROUP=$(id -gn "$USER_NAME")
+USER_SHELL=${pw##*:}
+pw=${pw%:*}
+HOME=${pw##*:}
+[ -d "$HOME" ] || die "home folder $HOME of $USER_NAME does not exist"
+# Root's own XDG settings must not leak in; use the user's defaults.
+unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME
+CONFIG=$HOME/.config
+DATA=$HOME/.local/share
+export HOME
+
+# own <path>...: give files root made in the user's home to the user.
+own() { chown -hR "$USER_NAME:$USER_GROUP" "$@"; }
+
+# userdir <dir>: mkdir -p, with every folder it creates owned by the user.
+userdir() {
+	d=$1 new=
+	while [ ! -e "$d" ]; do new="$new $d"; d=$(dirname "$d"); done
+	[ -z "$new" ] && return
+	mkdir -p "$1"
+	for d in $new; do chown "$USER_NAME:$USER_GROUP" "$d"; done
 }
 
 # link <file or dir in repo> <target>: symlink, backing up what is there.
@@ -45,8 +68,9 @@ link() {
 		mv "$dst" "$dst.bak.$STAMP"
 		say "backup  $dst -> $dst.bak.$STAMP"
 	fi
-	mkdir -p "$(dirname "$dst")"
+	userdir "$(dirname "$dst")"
 	ln -s "$src" "$dst"
+	own "$dst"
 	say "link    $dst -> $src"
 }
 
@@ -57,7 +81,7 @@ deps() {
 	[ -r /etc/os-release ] && id=$(. /etc/os-release; echo "${ID_LIKE:-} ${ID:-}")
 	case $id in
 	*gentoo*)
-		asroot emerge --ask --noreplace x11-libs/libX11 x11-libs/libXft \
+		emerge --ask --noreplace x11-libs/libX11 x11-libs/libXft \
 			x11-libs/libXinerama x11-libs/libXrandr x11-libs/libXext \
 			media-libs/fontconfig media-libs/freetype \
 			dev-vcs/git app-editors/neovim app-misc/tmux \
@@ -72,32 +96,32 @@ deps() {
 		for repo in src_prepare-overlay pf4public; do
 			portageq get_repo_path / "$repo" >/dev/null 2>&1 && continue
 			say "enable  overlay $repo"
-			asroot emerge --ask --noreplace app-eselect/eselect-repository
-			asroot eselect repository enable "$repo"
-			asroot emerge --sync "$repo"
+			emerge --ask --noreplace app-eselect/eselect-repository
+			eselect repository enable "$repo"
+			emerge --sync "$repo"
 		done
-		asroot emerge --ask --noreplace www-client/icecat \
+		emerge --ask --noreplace www-client/icecat \
 			www-client/ungoogled-chromium ;;
 	*debian*|*ubuntu*)
-		asroot apt-get install build-essential pkg-config libx11-dev \
+		apt-get install build-essential pkg-config libx11-dev \
 			libxft-dev libxinerama-dev libxrandr-dev libxext-dev \
 			libfontconfig-dev libfreetype-dev git neovim tmux \
 			xinit x11-xserver-utils xss-lock ksh fonts-liberation \
 			flameshot mpv yt-dlp pipewire wireplumber wiremix btop \
 			python3-venv dfu-util ;;
 	*arch*)
-		asroot pacman -S --needed base-devel libx11 libxft libxinerama \
+		pacman -S --needed base-devel libx11 libxft libxinerama \
 			libxrandr libxext fontconfig freetype2 git neovim tmux dfu-util \
 			xorg-xinit xorg-xsetroot xorg-xset xss-lock ttf-liberation \
 			flameshot mpv yt-dlp pipewire wireplumber wiremix btop ;;
 	*fedora*|*rhel*)
-		asroot dnf install gcc make pkgconf-pkg-config libX11-devel \
+		dnf install gcc make pkgconf-pkg-config libX11-devel \
 			libXft-devel libXinerama-devel libXrandr-devel libXext-devel \
 			fontconfig-devel freetype-devel git neovim tmux dfu-util \
 			xorg-x11-xinit xsetroot xset xss-lock ksh liberation-mono-fonts \
 			liberation-sans-fonts flameshot mpv yt-dlp pipewire wireplumber btop ;;
 	*void*)
-		asroot xbps-install base-devel pkg-config libX11-devel libXft-devel \
+		xbps-install base-devel pkg-config libX11-devel libXft-devel \
 			libXinerama-devel libXrandr-devel libXext-devel \
 			fontconfig-devel freetype-devel git neovim tmux dfu-util \
 			xinit xsetroot xset xss-lock mksh liberation-fonts-ttf \
@@ -114,16 +138,17 @@ install_nvim() {
 	link "$DOTFILES/nvim" "$CONFIG/nvim"
 	# Unpack archived plugins that are not there yet, so the first start
 	# works offline. init.lua only downloads plugins that are missing.
-	pack=${XDG_DATA_HOME:-$HOME/.local/share}/nvim/site/pack/plugins/opt
+	pack=$DATA/nvim/site/pack/plugins/opt
 	for tarball in "$DOTFILES"/archive/nvim-plugins/*.tar.gz; do
 		[ -e "$tarball" ] || continue
 		name=$(basename "$tarball" .tar.gz)
 		[ -e "$pack/$name" ] && continue
-		mkdir -p "$pack"
+		userdir "$pack"
 		tar -xzf "$tarball" -C "$pack"
 		if [ -d "$pack/$name/doc" ] && command -v nvim >/dev/null 2>&1; then
 			nvim --headless -u NONE -c "helptags $pack/$name/doc" -c q >/dev/null 2>&1 || :
 		fi
+		own "$pack/$name"
 		say "plugin  $name (from archive)"
 	done
 	command -v nvim >/dev/null 2>&1 || warn "nvim is not installed (needs 0.11+)"
@@ -137,11 +162,11 @@ install_ksh() {
 		warn "ksh is not installed (try ./install.sh --deps)"
 		return
 	fi
-	# Make ksh the login shell (chsh asks for your password).
-	if [ "$(basename "${SHELL:-}")" != "$(basename "$ksh")" ]; then
-		grep -qx "$ksh" /etc/shells 2>/dev/null || echo "$ksh" | asroot tee -a /etc/shells >/dev/null
-		say "shell   $ksh (takes effect at next login)"
-		chsh -s "$ksh"
+	# Make ksh the user's login shell.
+	if [ "$(basename "$USER_SHELL")" != "$(basename "$ksh")" ]; then
+		grep -qx "$ksh" /etc/shells 2>/dev/null || echo "$ksh" >> /etc/shells
+		say "shell   $ksh for $USER_NAME (takes effect at next login)"
+		chsh -s "$ksh" "$USER_NAME" 2>/dev/null || usermod -s "$ksh" "$USER_NAME"
 	fi
 }
 
@@ -195,18 +220,15 @@ install_btop() {
 	command -v btop >/dev/null 2>&1 || warn "btop is not installed"
 }
 
-# suckless: build as the user, install as root (unless PREFIX is writable).
+# suckless: build and install as root; make clean leaves nothing behind.
 build_suckless() {
 	name=$1
 	say "build   $name"
 	command -v make >/dev/null 2>&1 || die "make not found (try ./install.sh --deps)"
-	( cd "$DOTFILES/$name" && make PREFIX="$PREFIX" )
-	if mkdir -p "$PREFIX" 2>/dev/null && [ -w "$PREFIX" ]; then
-		( cd "$DOTFILES/$name" && make PREFIX="$PREFIX" install )
-	else
-		( cd "$DOTFILES/$name" && asroot make PREFIX="$PREFIX" install )
-	fi
+	( cd "$DOTFILES/$name" && make PREFIX="$PREFIX" && make PREFIX="$PREFIX" install )
 	( cd "$DOTFILES/$name" && make clean >/dev/null )
+	# PREFIX=~/.local and the like: the installed files belong to the user
+	case $PREFIX in "$HOME"/*) own "$PREFIX/bin/$name" ;; esac
 	say "install $name -> $PREFIX/bin/$name"
 }
 
@@ -214,7 +236,7 @@ install_dwm()   { build_suckless dwm; }
 # st's font2 falls back to Symbols Nerd Font Mono for icons and symbols
 # Liberation Mono lacks. It goes into your home folder, nothing needs root;
 # delete the folder and run ./install.sh st again to get the newest release.
-NERD_FONTS=${XDG_DATA_HOME:-$HOME/.local/share}/fonts/NerdFontsSymbolsOnly
+NERD_FONTS=$DATA/fonts/NerdFontsSymbolsOnly
 
 install_st() {
 	build_suckless st
@@ -223,9 +245,11 @@ install_st() {
 	else
 		url=https://github.com/ryanoasis/nerd-fonts/releases/latest/download/NerdFontsSymbolsOnly.tar.xz
 		say "fetch   Symbols Nerd Font -> $NERD_FONTS"
+		userdir "${NERD_FONTS%/*}"
 		rm -rf "$NERD_FONTS.tmp" && mkdir -p "$NERD_FONTS.tmp"
 		if curl -fL "$url" | tar -xJ -C "$NERD_FONTS.tmp"; then
 			rm -rf "$NERD_FONTS" && mv "$NERD_FONTS.tmp" "$NERD_FONTS"
+			own "$NERD_FONTS"
 		else
 			rm -rf "$NERD_FONTS.tmp"
 			warn "could not download Symbols Nerd Font; st still works without it"
@@ -258,7 +282,7 @@ install_slock() {
 #   ~/.local/bin/qmk, arm-none-eabi-*      symlinks to the two above
 # Each run copies moonlander/canary into QMK fresh (like update.sh did) and
 # builds. The built .bin is copied to moonlander/ for Keymapp.
-QMK_DIR=${XDG_DATA_HOME:-$HOME/.local/share}/qmk
+QMK_DIR=$DATA/qmk
 QMK_BIN=$HOME/.local/bin
 QMK_BRANCH=firmware25
 QMK_TARGET=zsa/moonlander/reva:canary
@@ -266,7 +290,10 @@ ARM_VERSION=14.2.rel1
 
 install_moonlander() {
 	fw=$QMK_DIR/zsa_qmk
-	mkdir -p "$QMK_DIR" "$QMK_BIN"
+	userdir "$QMK_DIR"
+	userdir "$QMK_BIN"
+	# whatever happens below, everything made here belongs to the user
+	trap 'own "$QMK_DIR"; [ ! -e "$CONFIG/qmk" ] || own "$CONFIG/qmk"' EXIT
 	command -v git >/dev/null 2>&1 || die "git not found (try ./install.sh --deps)"
 	command -v python3 >/dev/null 2>&1 || die "python3 not found"
 
@@ -278,6 +305,9 @@ install_moonlander() {
 	fi
 
 	# 2. QMK patch for arbitrary_keycode and the audio timer (applied once).
+	# root works in the user's clone (git apply, QMK's make): tell git,
+	# and every git QMK runs, that this is fine
+	export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$fw"
 	if git -C "$fw" apply --reverse --check "$DOTFILES/moonlander/qmk.patch" 2>/dev/null; then
 		say "ok      qmk.patch already applied"
 	else
@@ -326,6 +356,7 @@ install_moonlander() {
 	say "build   $QMK_TARGET"
 	( cd "$fw" && PATH="$QMK_DIR/venv/bin:$QMK_BIN:$PATH" make "$QMK_TARGET" $nosuffix )
 	cp "$fw/zsa_moonlander_reva_canary.bin" "$DOTFILES/moonlander/"
+	own "$DOTFILES/moonlander/zsa_moonlander_reva_canary.bin"
 	say "built   moonlander/zsa_moonlander_reva_canary.bin (flash it with Keymapp)"
 
 	case ":$PATH:" in *":$QMK_BIN:"*) ;; *) warn "add $QMK_BIN to PATH to run qmk yourself" ;; esac

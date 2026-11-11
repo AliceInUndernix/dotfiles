@@ -37,10 +37,13 @@ tag and commit, and any local change.
 
 ## Fresh install
 
+Clone as yourself, then run the script as root (it never uses sudo or
+doas). It sets up the configs for the user who owns the repo folder, and
+everything it puts in that home belongs to that user, not to root.
+
 ```sh
 git clone https://github.com/AliceInUndernix/dotfiles ~/dotfiles
-cd ~/dotfiles
-./install.sh --deps     # build dependencies + git + neovim, then everything
+su -c '~alice/dotfiles/install.sh --deps'   # dependencies, then everything
 ```
 
 `--deps` uses the system's package manager and asks first (emerge --ask on
@@ -51,7 +54,7 @@ dependencies are already there:
 ./install.sh            # everything
 ./install.sh nvim       # only some parts: ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock moonlander
 ./install.sh --list     # the part names
-PREFIX=~/.local ./install.sh dwm   # install without root
+INSTALL_USER=alice ./install.sh    # if the repo folder belongs to root
 ```
 
 What the script does:
@@ -59,10 +62,11 @@ What the script does:
 - **Configs** are symlinked, so `~/.config/nvim` *is* `~/dotfiles/nvim` and
   edits land in the repo. Anything already there is moved to
   `<name>.bak.<date>`, never deleted. Running it again is safe.
-- **suckless tools** are built as you, installed with `sudo` (or `doas`),
-  and the build files are cleaned up afterwards.
+- **suckless tools** are built and installed into `PREFIX`, and the build
+  files are cleaned up afterwards.
+- **Login shell**: ksh becomes the user's shell (`chsh`, no password asked).
 - **Moonlander**: QMK, its Python environment, the ARM compiler and ZSA's
-  QMK source go into `~/.local` (no root), then the firmware is built into
+  QMK source go into the user's `~/.local`, then the firmware is built into
   `moonlander/` for Keymapp. See `moonlander/README.md`.
 
 On Gentoo the build needs `x11-libs/libX11`, `libXft`, `libXinerama`,
@@ -76,7 +80,7 @@ The suckless way: settings are C code in `config.h`, and you rebuild.
 ```sh
 cd ~/dotfiles/dwm
 $EDITOR config.h
-../install.sh dwm       # or: make && sudo make install && make clean
+su -c '../install.sh dwm'   # or, as root: make install && make clean
 ```
 
 Then restart dwm (or log out and in). Rules for these directories:
