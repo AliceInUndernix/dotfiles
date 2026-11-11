@@ -19,7 +19,7 @@ DOTFILES=$(cd "$(dirname "$0")" && pwd)
 PREFIX=${PREFIX:-/usr/local}
 CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}
 STAMP=$(date +%Y%m%d-%H%M%S)
-PARTS="nvim tmux dwm st dmenu slock moonlander"
+PARTS="x nvim tmux dwm st dmenu slock moonlander"
 
 say()  { printf '==> %s\n' "$*"; }
 warn() { printf '!!  %s\n' "$*" >&2; }
@@ -61,23 +61,28 @@ deps() {
 			x11-libs/libXinerama x11-libs/libXrandr x11-libs/libXext \
 			media-libs/fontconfig media-libs/freetype \
 			dev-vcs/git app-editors/neovim app-misc/tmux \
+			x11-apps/xinit x11-apps/xsetroot \
 			app-mobilephone/dfu-util ;;
 	*debian*|*ubuntu*)
 		asroot apt-get install build-essential pkg-config libx11-dev \
 			libxft-dev libxinerama-dev libxrandr-dev libxext-dev \
 			libfontconfig-dev libfreetype-dev git neovim tmux \
+			xinit x11-xserver-utils \
 			python3-venv dfu-util ;;
 	*arch*)
 		asroot pacman -S --needed base-devel libx11 libxft libxinerama \
-			libxrandr libxext fontconfig freetype2 git neovim tmux dfu-util ;;
+			libxrandr libxext fontconfig freetype2 git neovim tmux dfu-util \
+			xorg-xinit xorg-xsetroot ;;
 	*fedora*|*rhel*)
 		asroot dnf install gcc make pkgconf-pkg-config libX11-devel \
 			libXft-devel libXinerama-devel libXrandr-devel libXext-devel \
-			fontconfig-devel freetype-devel git neovim tmux dfu-util ;;
+			fontconfig-devel freetype-devel git neovim tmux dfu-util \
+			xorg-x11-xinit xsetroot ;;
 	*void*)
 		asroot xbps-install base-devel pkg-config libX11-devel libXft-devel \
 			libXinerama-devel libXrandr-devel libXext-devel \
-			fontconfig-devel freetype-devel git neovim tmux dfu-util ;;
+			fontconfig-devel freetype-devel git neovim tmux dfu-util \
+			xinit xsetroot ;;
 	*)
 		warn "unknown distro ($id): install a C compiler, make, pkg-config,"
 		warn "and headers for X11, Xft, Xinerama, Xrandr, Xext, fontconfig, freetype." ;;
@@ -103,6 +108,11 @@ install_nvim() {
 		say "plugin  $name (from archive)"
 	done
 	command -v nvim >/dev/null 2>&1 || warn "nvim is not installed (needs 0.11+)"
+}
+
+install_x() {
+	link "$DOTFILES/x/xinitrc" "$HOME/.xinitrc"
+	command -v xsetroot >/dev/null 2>&1 || warn "xsetroot is not installed (sets the wallpaper colour)"
 }
 
 install_tmux() {

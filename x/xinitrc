@@ -1,0 +1,8 @@
+#!/bin/sh
+# Started by startx (linked to ~/.xinitrc by install.sh).
+
+# Wallpaper: Habamax's background colour, same as st, tmux and Neovim.
+xsetroot -solid "#1c1c1c"
+
+# dwm runs until you quit it (Mod+Shift+q), which ends the X session.
+exec dwm
