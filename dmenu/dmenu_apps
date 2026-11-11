@@ -9,6 +9,9 @@
 # Empty lines and lines starting with # are skipped. Entries are fuzzy
 # matched, case-insensitive, and sorted by how often they were chosen.
 # Shift+Return runs exactly what was typed, even if it is not in the list.
+# Up/Down go through what was run before, like a shell: type a few letters
+# first and only entries starting with them come up. Ctrl+p/n move in the
+# list. History: ${XDG_CACHE_HOME:-~/.cache}/dmenu_apps.hist
 # Extra arguments go to dmenu (dwm passes -m for the monitor).
 
 list=${XDG_CONFIG_HOME:-$HOME/.config}/dmenu/apps
@@ -17,9 +20,12 @@ if [ ! -r "$list" ]; then
 	exit 1
 fi
 
+hist=${XDG_CACHE_HOME:-$HOME/.cache}/dmenu_apps.hist
+mkdir -p "${hist%/*}"
+
 entries() { grep -v '^[[:space:]]*\(#\|$\)' "$list"; }
 
-name=$(entries | cut -f1 | dmenu -i -P "$@") || exit 0
+name=$(entries | cut -f1 | dmenu -i -P -H "$hist" "$@") || exit 0
 [ -n "$name" ] || exit 0
 
 cmd=$(entries | awk -F '\t' -v n="$name" '$1 == n { print (NF > 1 ? $2 : $1); exit }')

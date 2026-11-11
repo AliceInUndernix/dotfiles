@@ -30,6 +30,8 @@ dmenu \- dynamic menu
 .IR color ]
 .RB [ \-bw
 .IR width ]
+.RB [ \-H
+.IR histfile ]
 .RB [ \-w
 .IR windowid ]
 .P
@@ -116,6 +118,12 @@ prints version information to stdout, then exits.
 .TP
 .BI \-w " windowid"
 embed into windowid.
+.TP
+.BI \-H " histfile"
+saves each choice in histfile (the newest last, without repeats). Up and
+Down then go back and forward through it, and only through entries that
+start with what was typed before the first Up. Ctrl\-p and Ctrl\-n still
+move in the list.
 .SH USAGE
 dmenu is completely controlled by the keyboard.  Items are selected using the
 arrow keys, page up, page down, home, and end.

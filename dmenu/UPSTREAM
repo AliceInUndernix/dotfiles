@@ -23,8 +23,14 @@ apply again):
                      order is exact match, starts with the first letter
                      typed, popularity, then closeness of the match;
                      Shift+Return (typed text) isn't counted)
+  navhistory+search  dmenu-navhistory+search-20250328-52fc8a0.diff
+                     (rewritten by hand: Up/Down instead of Alt+p/n walk
+                     the -H history, searching by what was typed before
+                     the first Up; Ctrl+p/n still move in the list; a
+                     repeated choice moves to the newest place instead of
+                     being dropped; no Ctrl+r and no dmenu_run change)
 Their config.def.h hunks are not applied (config.def.h stays upstream);
-the settings are in config.h. usage() and dmenu.1 also list -c, -bw, -P.
+the settings are in config.h. usage() and dmenu.1 also list -c, -bw, -P, -H.
 
 dmenu_apps and apps are ours: Mod+p in dwm runs dmenu_apps, which shows
 only the programs in apps (linked to ~/.config/dmenu/apps by install.sh).

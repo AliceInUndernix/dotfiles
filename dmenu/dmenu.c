@@ -60,6 +60,10 @@ static XIC xic;
 static Drw *drw;
 static Clr *scheme[SchemeLast];
 
+static char *histfile;          /* -H option */
+static char **history;
+static size_t histsz, histpos;
+
 #include "config.h"
 
 static int (*fstrncmp)(const char *, const char *, size_t) = strncmp;
@@ -549,6 +553,106 @@ movewordedge(int dir)
 	}
 }
 
+/* history (-H): the last maxhist chosen entries, oldest first, no repeats */
+static void
+loadhistory(void)
+{
+	FILE *fp;
+	char *line = NULL;
+	size_t cap = 0, linesiz = 0;
+	ssize_t len;
+
+	if (!histfile || !(fp = fopen(histfile, "r")))
+		return;
+	while ((len = getline(&line, &linesiz, fp)) != -1) {
+		if (len && line[len - 1] == '\n')
+			line[--len] = '\0';
+		if (!len)
+			continue;
+		if (histsz == cap) {
+			cap += 64;
+			if (!(history = realloc(history, cap * sizeof(*history))))
+				die("cannot realloc %zu bytes:", cap * sizeof(*history));
+		}
+		if (!(history[histsz++] = strdup(line)))
+			die("strdup:");
+	}
+	free(line);
+	fclose(fp);
+	histpos = histsz;
+}
+
+/* Up (dir -1) and Down (dir +1): the previous/next history entry that
+ * starts with what was typed before the first Up, like a shell's
+ * history-search; Down past the newest entry gives the typed text back */
+static void
+navhistory(int dir)
+{
+	static char prefix[sizeof text];
+	static const char *shown = NULL;
+	const char *p;
+	size_t i, plen, len;
+
+	if (!histsz)
+		return;
+	if (!shown || strcmp(text, shown)) { /* first Up, or edited since */
+		strcpy(prefix, text);
+		histpos = histsz;
+	}
+	plen = strlen(prefix);
+	for (i = histpos;;) {
+		if (dir < 0) {
+			if (i == 0)
+				return; /* nothing older */
+			i--;
+		} else {
+			if (i >= histsz)
+				return;
+			if (++i == histsz)
+				break;
+		}
+		if (!fstrncmp(prefix, history[i], plen))
+			break;
+	}
+	histpos = i;
+	p = i == histsz ? prefix : history[i];
+	shown = i == histsz ? NULL : history[i];
+	len = MIN(strlen(p), sizeof text - 1);
+	memmove(text, p, len);
+	text[len] = '\0';
+	cursor = len;
+	match();
+}
+
+static void
+savehistory(const char *input)
+{
+	FILE *fp;
+	size_t i, n, skip;
+
+	if (!histfile || !maxhist || !*input)
+		return;
+	if (!(fp = fopen(histfile, "w"))) {
+		fprintf(stderr, "dmenu: cannot write '%s'\n", histfile);
+		return;
+	}
+	/* keep the newest maxhist - 1 others, then this one as the newest */
+	for (i = n = 0; i < histsz; i++)
+		n += strcmp(history[i], input) != 0;
+	skip = n >= maxhist ? n - maxhist + 1 : 0;
+	for (i = 0; i < histsz; i++) {
+		if (!strcmp(history[i], input))
+			continue;
+		if (skip) {
+			skip--;
+			continue;
+		}
+		fprintf(fp, "%s\n", history[i]);
+	}
+	fprintf(fp, "%s\n", input);
+	fclose(fp);
+}
+
 static void
 keypress(XKeyEvent *ev)
 {
@@ -640,6 +744,21 @@ keypress(XKeyEvent *ev)
 		}
 	}
 
+	/* with -H the arrows (without Ctrl or Alt) go through the history;
+	 * Ctrl+p/n and Alt+h/l still move in the list */
+	if (histfile && !(ev->state & (ControlMask | Mod1Mask))) {
+		switch (ksym) {
+		case XK_Up:
+		case XK_KP_Up:
+			navhistory(-1);
+			goto draw;
+		case XK_Down:
+		case XK_KP_Down:
+			navhistory(+1);
+			goto draw;
+		}
+	}
+
 	switch(ksym) {
 	default:
 insert:
@@ -722,6 +841,7 @@ insert:
 			incpop(sel);
 		puts((sel && !(ev->state & ShiftMask)) ? sel->text : text);
 		if (!(ev->state & ControlMask)) {
+			savehistory((sel && !(ev->state & ShiftMask)) ? sel->text : text);
 			cleanup();
 			exit(0);
 		}
@@ -1059,7 +1179,7 @@ usage(void)
 	die("usage: dmenu [-bcFfiPv] [-l lines] [-p prompt] [-fn font] [-m monitor]\n"
 	    "             [-nb color] [-nf color] [-sb color] [-sf color]\n"
 	    "             [-nhb color] [-nhf color] [-shb color] [-shf color]\n"
-	    "             [-bw width] [-w windowid]");
+	    "             [-bw width] [-H histfile] [-w windowid]");
 }
 
 int
@@ -1089,6 +1209,8 @@ main(int argc, char *argv[])
 		} else if (i + 1 == argc)
 			usage();
 		/* these options take one argument */
+		else if (!strcmp(argv[i], "-H"))   /* history file */
+			histfile = argv[++i];
 		else if (!strcmp(argv[i], "-l"))   /* number of lines in vertical list */
 			lines = atoi(argv[++i]);
 		else if (!strcmp(argv[i], "-m"))
@@ -1148,6 +1270,7 @@ main(int argc, char *argv[])
 		readstdin();
 		grabkeyboard();
 	}
+	loadhistory();
 	if (popularity) {
 		loadpopitems();
 		sortitemsbypop();

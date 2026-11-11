@@ -24,6 +24,8 @@ static const char *colors[SchemeLast][2] = {
 };
 /* -l option; if nonzero, dmenu uses vertical list with given number of lines */
 static unsigned int lines      = 10;
+/* -H option; how many entries the history file keeps */
+static unsigned int maxhist    = 100;
 
 /*
  * Characters not considered part of a word while deleting words
