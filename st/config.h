@@ -95,33 +95,34 @@ unsigned int tabspaces = 8;
 
 /* Terminal colors (16 first used in escape sequence) */
 static const char *colorname[] = {
+	/* Habamax terminal palette (Neovim's colorscheme, see nvim/init.lua) */
 	/* 8 normal colors */
-	"black",
-	"red3",
-	"green3",
-	"yellow3",
-	"blue2",
-	"magenta3",
-	"cyan3",
-	"gray90",
+	"#1c1c1c", /* black   */
+	"#af5f5f", /* red     */
+	"#87af87", /* green   */
+	"#af875f", /* yellow  */
+	"#5f87af", /* blue    */
+	"#af87af", /* magenta */
+	"#5f8787", /* cyan    */
+	"#c7c7c7", /* white   */
 
 	/* 8 bright colors */
-	"gray50",
-	"red",
-	"green",
-	"yellow",
-	"#5c5cff",
-	"magenta",
-	"cyan",
-	"white",
+	"#767676",
+	"#d75f87",
+	"#87d787",
+	"#d7af87",
+	"#5fafd7",
+	"#d787d7",
+	"#87afaf",
+	"#eeeeee",
 
 	[255] = 0,
 
 	/* more colors can be added after 255 to use with DefaultXX */
-	"#cccccc",
-	"#555555",
-	"gray90", /* default foreground colour */
-	"black", /* default background colour */
+	"#eeeeee", /* cursor */
+	"#1c1c1c", /* reverse cursor */
+	"#c7c7c7", /* default foreground colour */
+	"#1c1c1c", /* default background colour */
 };
 
 

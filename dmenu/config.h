@@ -8,10 +8,10 @@ static const char *fonts[] = {
 };
 static const char *prompt      = NULL;      /* -p  option; prompt to the left of input field */
 static const char *colors[SchemeLast][2] = {
-	/*     fg         bg       */
-	[SchemeNorm] = { "#bbbbbb", "#222222" },
-	[SchemeSel] = { "#eeeeee", "#005577" },
-	[SchemeOut] = { "#000000", "#00ffff" },
+	/*     fg         bg       */   /* Habamax colours */
+	[SchemeNorm] = { "#c7c7c7", "#1c1c1c" },
+	[SchemeSel] = { "#1c1c1c", "#5f87af" },
+	[SchemeOut] = { "#1c1c1c", "#87afaf" },
 };
 /* -l option; if nonzero, dmenu uses vertical list with given number of lines */
 static unsigned int lines      = 0;

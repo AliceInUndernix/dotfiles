@@ -115,9 +115,9 @@ does go to Claude online and counts toward your usage.
 
 ## Terminal theme
 
-Habamax is built into Neovim (no plugin). To match your terminal, set its
-background to `#1c1c1c` and text to `#bcbcbc`; ask Claude for a full
-16-colour palette for your terminal.
+Habamax is built into Neovim (no plugin). st, dwm, dmenu, slock and the
+tmux status bar use the same colours (background `#1c1c1c`, text `#c7c7c7`,
+accent blue `#5f87af`), and st has Habamax's full 16-colour palette.
 
 ## What Neovim remembers between sessions
 
