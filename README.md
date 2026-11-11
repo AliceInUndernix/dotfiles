@@ -1,6 +1,6 @@
 # dotfiles
 
-My Linux setup: Gentoo, plain X, dwm, st, dmenu, slock, Neovim and a
+My Linux setup: Gentoo, plain X, dwm, st, dmenu, slock, tmux, Neovim and a
 ZSA Moonlander keyboard. The aim is a small, fast system with as little
 as possible running. Every application has its own directory, and one
 script puts the whole configuration back after a fresh install.
@@ -14,7 +14,9 @@ script puts the whole configuration back after a fresh install.
 | `dmenu/` | dmenu 5.4 source (launcher) | `PREFIX/bin/dmenu`, `dmenu_run` |
 | `slock/` | slock 1.7 source (screen locker) | `PREFIX/bin/slock` |
 | `nvim/` | Neovim config (0.11+, no plugin manager) | `~/.config/nvim` (symlink) |
+| `tmux/` | tmux config | `~/.config/tmux/tmux.conf` (symlink) |
 | `moonlander/` | QMK "canary" keymap for the keyboard | flashed to the keyboard |
+| `archive/` | Untouched copies of everything downloaded from elsewhere | |
 | `install.sh` | Sets everything up | |
 
 `PREFIX` is `/usr/local` unless you set it.
@@ -37,7 +39,7 @@ dependencies are already there:
 
 ```sh
 ./install.sh            # everything
-./install.sh nvim       # only some parts: nvim dwm st dmenu slock moonlander
+./install.sh nvim       # only some parts: nvim tmux dwm st dmenu slock moonlander
 ./install.sh --list     # the part names
 PREFIX=~/.local ./install.sh dwm   # install without root
 ```
@@ -79,13 +81,29 @@ Local changes so far: `slock/config.h` uses group `nobody` instead of
 `nogroup`, because Gentoo has no `nogroup` group (Debian and Ubuntu do;
 the script warns if the group is missing).
 
+## Archive
+
+`archive/` keeps release tarballs of dwm, st, dmenu, slock and tmux, the
+three Neovim plugins and optozorax's Moonlander libraries, with source,
+version and checksum for each in `archive/README.md`. If an upstream
+disappears, everything can still be rebuilt from this repo. The install
+script also unpacks the Neovim plugins from here, so Neovim works on
+first start without internet.
+
+## tmux
+
+`tmux/tmux.conf` stays close to defaults (prefix is still Ctrl-b): no Esc
+delay for Neovim, true colour from st, windows numbered from 1, vi keys
+in copy mode, a plain grey status bar.
+
 ## Neovim
 
 `nvim/README.md` is the user guide (keys, prose mode, grammar check,
 Claude proofreading, Sioyek tracker) and `nvim/HANDOFF.md` records
 earlier decisions and open issues. Its rules: stay close to Neovim
 defaults, no plugin manager, keep working on 0.11. Plugins download
-themselves on first start, so start `nvim` once while online.
+themselves on first start if missing; `install.sh` puts the archived
+copies in place first, so no internet is needed.
 
 ## Moonlander
 
