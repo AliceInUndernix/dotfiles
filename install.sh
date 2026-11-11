@@ -211,7 +211,32 @@ build_suckless() {
 }
 
 install_dwm()   { build_suckless dwm; }
-install_st()    { build_suckless st; }
+# st's font2 falls back to Symbols Nerd Font Mono for icons and symbols
+# Liberation Mono lacks. It goes into your home folder, nothing needs root;
+# delete the folder and run ./install.sh st again to get the newest release.
+NERD_FONTS=${XDG_DATA_HOME:-$HOME/.local/share}/fonts/NerdFontsSymbolsOnly
+
+install_st() {
+	build_suckless st
+	if [ -f "$NERD_FONTS/SymbolsNerdFontMono-Regular.ttf" ]; then
+		say "ok      $NERD_FONTS"
+	else
+		url=https://github.com/ryanoasis/nerd-fonts/releases/latest/download/NerdFontsSymbolsOnly.tar.xz
+		say "fetch   Symbols Nerd Font -> $NERD_FONTS"
+		rm -rf "$NERD_FONTS.tmp" && mkdir -p "$NERD_FONTS.tmp"
+		if curl -fL "$url" | tar -xJ -C "$NERD_FONTS.tmp"; then
+			rm -rf "$NERD_FONTS" && mv "$NERD_FONTS.tmp" "$NERD_FONTS"
+		else
+			rm -rf "$NERD_FONTS.tmp"
+			warn "could not download Symbols Nerd Font; st still works without it"
+		fi
+	fi
+	if command -v fc-cache >/dev/null 2>&1; then
+		fc-cache "${NERD_FONTS%/*}"
+	else
+		warn "fc-cache not found (fontconfig): log in again before st sees the font"
+	fi
+}
 install_dmenu() {
 	build_suckless dmenu
 	link "$DOTFILES/dmenu/apps" "$CONFIG/dmenu/apps"

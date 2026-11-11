@@ -6,6 +6,12 @@
  * font: see http://freedesktop.org/software/fontconfig/fontconfig-user.html
  */
 static char *font = "Liberation Mono:pixelsize=12:antialias=true:autohint=true";
+/* font2 patch: fonts tried first for glyphs the main font lacks (icons,
+ * powerline arrows, symbols); install.sh puts this one in ~/.local/share/fonts */
+static char *font2[] = {
+	"Symbols Nerd Font Mono:pixelsize=12:antialias=true:autohint=true",
+};
+
 static int borderpx = 2;
 
 /*
@@ -194,6 +200,11 @@ static Shortcut shortcuts[] = {
 	{ ControlMask,          XK_Print,       toggleprinter,  {.i =  0} },
 	{ ShiftMask,            XK_Print,       printscreen,    {.i =  0} },
 	{ XK_ANY_MOD,           XK_Print,       printsel,       {.i =  0} },
+	/* scrollback, like Alacritty (-1 is one page; outside vim/tmux/less) */
+	{ ShiftMask,            XK_Prior,       kscrollup,      {.i = -1} },
+	{ ShiftMask,            XK_Next,        kscrolldown,    {.i = -1} },
+	{ ShiftMask,            XK_Home,        kscrollup,      {.i = 1 << 30} },
+	{ ShiftMask,            XK_End,         kscrolldown,    {.i = 1 << 30} },
 	{ TERMMOD,              XK_Prior,       zoom,           {.f = +1} },
 	{ TERMMOD,              XK_Next,        zoom,           {.f = -1} },
 	{ TERMMOD,              XK_Home,        zoomreset,      {.f =  0} },
@@ -473,3 +484,19 @@ static char ascii_printable[] =
 	" !\"#$%&'()*+,-./0123456789:;<=>?"
 	"@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_"
 	"`abcdefghijklmnopqrstuvwxyz{|}~";
+
+/*
+ * boxdraw: st draws line, block and braille characters itself (and the
+ * Legacy Computing sextants/eighths) so they join up without gaps.
+ * boxdraw_bold 1 makes bold lines thicker.
+ */
+const int boxdraw = 1;
+const int boxdraw_bold = 0;
+const int boxdraw_braille = 1;
+
+/*
+ * The amount of lines scrollback can hold before it wraps around.
+ */
+unsigned int scrollback_lines = 10000;
+/* lines moved per mouse wheel step in the scrollback (Alacritty uses 3) */
+static int wheellines = 3;

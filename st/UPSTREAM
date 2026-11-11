@@ -5,3 +5,19 @@ Copied:   2026-11-11, upstream tree at the tag without .git
 
 config.h started as a copy of config.def.h. Edit config.h; keep
 config.def.h as upstream so new releases can be compared against it.
+
+Patches (originals from st.suckless.org/patches, kept in patches/,
+applied in this order; st.c/x.c already have them, so don't apply again):
+  scrollback-reflow  st-scrollback-reflow-standalone-extended-0.9.3.diff
+                     (tsetdirt row check by hand: it is from st after
+                     0.9.3; by hand too: 3 lines per wheel step
+                     (wheellines), Shift+PageUp/PageDown scroll a page
+                     and pass through to vim/tmux/less in the alt screen,
+                     wheel in the alt screen goes to mshortcuts again)
+  font2              st-font2-bitmap-0.9.3.diff
+  boxdraw            st-boxdraw_v2-0.8.5.diff (one st.h line by hand)
+  boxdraw-legacy     st-boxdraw-legacycomputing-0.9.3.diff
+  anysize            st-anysize-20220718-baa9357.diff
+Their config.def.h hunks are not applied (config.def.h stays upstream);
+the settings are in config.h. font2 uses Symbols Nerd Font Mono, which
+install.sh downloads into ~/.local/share/fonts.
