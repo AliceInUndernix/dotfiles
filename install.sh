@@ -94,6 +94,10 @@ deps() {
 			echo "$atom ~$arch" >> "$kw"
 			say "keyword $atom ~$arch -> $kw"
 		done
+		# PipeWire first, on its own: wiremix needs its libpipewire-0.3 to
+		# build, but its ebuild doesn't say so, so emerge may build wiremix
+		# before PipeWire is in.
+		emerge --ask --noreplace media-video/pipewire media-video/wireplumber
 		emerge --ask --noreplace x11-libs/libX11 x11-libs/libXft \
 			x11-libs/libXinerama x11-libs/libXrandr x11-libs/libXext \
 			media-libs/fontconfig media-libs/freetype \
@@ -102,7 +106,7 @@ deps() {
 			app-shells/ksh media-fonts/liberation-fonts \
 			x11-misc/xclip x11-misc/xsel \
 			media-gfx/flameshot media-video/mpv net-misc/yt-dlp \
-			media-video/pipewire media-video/wireplumber media-sound/wiremix \
+			media-sound/wiremix \
 			sys-process/btop media-gfx/feh \
 			app-mobilephone/dfu-util
 		# Browsers are not in the main tree: IceCat comes from
