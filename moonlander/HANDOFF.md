@@ -108,6 +108,9 @@ suggest them again without asking:
 - Version 89 compiles for revb with `./install.sh moonlander` (checked 2026-11-11,
   ARM gcc 13.2, no warnings). The script then flashes with dfu-util; that
   step and the layout itself are not yet tested on the keyboard.
+- Build with the pinned Arm GNU Toolchain 14.2 (install.sh does). Built
+  with Gentoo's arm-none-eabi-gcc 16 the firmware froze after 3-4 key
+  presses on Alice's rev B; the same code built with gcc 13 works.
 - If double letters come back, raise `DEBOUNCE` in `config.h` (15 or 20).
 - USB endpoints are used up exactly (keyboard 1 + mouse 1 + Oryx raw HID 2 +
   steno 3 = 7). Turning on NKRO, console, WebUSB or media keys needs one freed first.

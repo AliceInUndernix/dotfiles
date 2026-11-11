@@ -358,8 +358,11 @@ install_moonlander() {
 	link "$QMK_DIR/venv/bin/qmk" "$QMK_BIN/qmk"
 	"$QMK_DIR/venv/bin/qmk" config user.qmk_home="$fw" >/dev/null 2>&1
 
-	# 4. ARM compiler: use the system one if there is one, else download.
-	if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then
+	# 4. ARM compiler: always our own pinned Arm GNU Toolchain, even when the
+	# system has one. Gentoo's gcc 16 built firmware that froze the
+	# keyboard after a few key presses (2026-11-11); gcc 13 built it fine.
+	# It is linked into ~/.local/bin, which comes first in the build's PATH.
+	{
 		arm=$QMK_DIR/arm-gnu-toolchain
 		if [ ! -x "$arm/bin/arm-none-eabi-gcc" ]; then
 			name=arm-gnu-toolchain-$ARM_VERSION-$(uname -m)-arm-none-eabi
@@ -372,7 +375,7 @@ install_moonlander() {
 		for tool in "$arm"/bin/arm-none-eabi-*; do
 			link "$tool" "$QMK_BIN/$(basename "$tool")"
 		done
-	fi
+	}
 
 	# 4b. ZSA's rev B code moves the stack pointer with an asm "g"
 	# operand; gcc 16 (Gentoo's arm-none-eabi-gcc) then picks a memory
