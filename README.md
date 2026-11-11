@@ -21,6 +21,8 @@ script puts the whole configuration back after a fresh install.
 | `sioyek/` | Book/PDF reader in Habamax colours (TypeTrack's green/red too) | `~/.config/sioyek/prefs_user.config` (symlink) |
 | `wiremix/` | PipeWire mixer in the terminal (like pavucontrol), Habamax theme | `~/.config/wiremix/wiremix.toml` (symlink) |
 | `btop/` | btop with a Habamax theme and vim keys | `~/.config/btop/` files (symlinks) |
+| `xdg/` | Download, Pictures, Music etc. all set to `~` (no capitalised folders) | `~/.config/user-dirs.dirs`, `user-dirs.conf` (symlinks) |
+| `feh/` | feh shows pictures on Habamax grey | `~/.config/feh/themes` (symlink) |
 | `x/` | `xinitrc`: Habamax-grey wallpaper, PipeWire, xss-lock (slock on idle/suspend), then dwm (run `startx`) | `~/.xinitrc` (symlink) |
 | `moonlander/` | QMK "canary" keymap for the keyboard | built into `moonlander/*.bin`, flashed with Keymapp |
 | `archive/` | Untouched copies of everything downloaded from elsewhere | |
@@ -47,7 +49,7 @@ dependencies are already there:
 
 ```sh
 ./install.sh            # everything
-./install.sh nvim       # only some parts: ksh x nvim tmux flameshot mpv sioyek wiremix btop dwm st dmenu slock moonlander
+./install.sh nvim       # only some parts: ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock moonlander
 ./install.sh --list     # the part names
 PREFIX=~/.local ./install.sh dwm   # install without root
 ```

@@ -1,0 +1,3 @@
+# feh themes (linked to ~/.config/feh/themes). The "feh" theme is used
+# every time feh runs: Habamax's #1c1c1c behind pictures instead of black.
+feh --image-bg "#1c1c1c"

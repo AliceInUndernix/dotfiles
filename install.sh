@@ -19,7 +19,7 @@ DOTFILES=$(cd "$(dirname "$0")" && pwd)
 PREFIX=${PREFIX:-/usr/local}
 CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}
 STAMP=$(date +%Y%m%d-%H%M%S)
-PARTS="ksh x nvim tmux flameshot mpv sioyek wiremix btop dwm st dmenu slock moonlander"
+PARTS="ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock moonlander"
 
 say()  { printf '==> %s\n' "$*"; }
 warn() { printf '!!  %s\n' "$*" >&2; }
@@ -65,8 +65,16 @@ deps() {
 			app-shells/ksh media-fonts/liberation-fonts \
 			media-gfx/flameshot media-video/mpv net-misc/yt-dlp \
 			media-video/pipewire media-video/wireplumber media-sound/wiremix \
-			sys-process/btop \
-			app-mobilephone/dfu-util ;;
+			sys-process/btop media-gfx/feh www-client/chromium \
+			app-mobilephone/dfu-util
+		# IceCat is not in the main tree: it comes from src_prepare-overlay.
+		if ! portageq get_repo_path / src_prepare-overlay >/dev/null 2>&1; then
+			say "enable  src_prepare-overlay (for www-client/icecat)"
+			asroot emerge --ask --noreplace app-eselect/eselect-repository
+			asroot eselect repository enable src_prepare-overlay
+			asroot emerge --sync src_prepare-overlay
+		fi
+		asroot emerge --ask --noreplace www-client/icecat ;;
 	*debian*|*ubuntu*)
 		asroot apt-get install build-essential pkg-config libx11-dev \
 			libxft-dev libxinerama-dev libxrandr-dev libxext-dev \
@@ -132,6 +140,16 @@ install_ksh() {
 		say "shell   $ksh (takes effect at next login)"
 		chsh -s "$ksh"
 	fi
+}
+
+install_xdg() {
+	link "$DOTFILES/xdg/user-dirs.dirs" "$CONFIG/user-dirs.dirs"
+	link "$DOTFILES/xdg/user-dirs.conf" "$CONFIG/user-dirs.conf"
+}
+
+install_feh() {
+	link "$DOTFILES/feh/themes" "$CONFIG/feh/themes"
+	command -v feh >/dev/null 2>&1 || warn "feh is not installed"
 }
 
 install_x() {
