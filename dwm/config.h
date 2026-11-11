@@ -12,11 +12,10 @@ static const char col_bg[]          = "#1c1c1c";
 static const char col_border[]      = "#585858";
 static const char col_fg[]          = "#c7c7c7";
 static const char col_selfg[]       = "#1c1c1c";
-static const char col_blue[]        = "#5f87af";
 static const char *colors[][3]      = {
 	/*               fg         bg       border     */
 	[SchemeNorm] = { col_fg,    col_bg,   col_border },
-	[SchemeSel]  = { col_selfg, col_blue, col_blue   },
+	[SchemeSel]  = { col_selfg, col_fg,   col_fg     },
 };
 
 /* tagging */
@@ -59,7 +58,7 @@ static const Layout layouts[] = {
 
 /* commands */
 static char dmenumon[2] = "0"; /* component of dmenucmd, manipulated in spawn() */
-static const char *dmenucmd[] = { "dmenu_run", "-m", dmenumon, "-fn", dmenufont, "-nb", col_bg, "-nf", col_fg, "-sb", col_blue, "-sf", col_selfg, NULL };
+static const char *dmenucmd[] = { "dmenu_run", "-m", dmenumon, "-fn", dmenufont, "-nb", col_bg, "-nf", col_fg, "-sb", col_fg, "-sf", col_selfg, NULL };
 static const char *termcmd[]  = { "st", NULL };
 static const char *lockcmd[]  = { "slock", NULL };
 /* xss-lock (x/xinitrc) locks with slock before the suspend happens */
