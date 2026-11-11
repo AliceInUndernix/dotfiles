@@ -357,7 +357,10 @@ install_moonlander() {
 		nosuffix=DFU_SUFFIX=true
 	fi
 	say "build   $QMK_TARGET"
-	( cd "$fw" && PATH="$QMK_DIR/venv/bin:$QMK_BIN:$PATH" make "$QMK_TARGET" $nosuffix )
+	# Build as the user, not root: the QMK folder is theirs, and git (which
+	# QMK asks for its version string) refuses repositories owned by someone
+	# else when run as root ("dubious ownership"), which breaks the build.
+	su -s /bin/sh "$USER_NAME" -c "cd '$fw' && PATH='$QMK_DIR/venv/bin:$QMK_BIN:$PATH' make '$QMK_TARGET' $nosuffix"
 	cp "$fw/zsa_moonlander_reva_canary.bin" "$DOTFILES/moonlander/"
 	own "$DOTFILES/moonlander/zsa_moonlander_reva_canary.bin"
 	say "built   moonlander/zsa_moonlander_reva_canary.bin (flash it with Keymapp)"

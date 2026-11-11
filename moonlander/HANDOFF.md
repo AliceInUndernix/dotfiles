@@ -86,21 +86,23 @@ suggest them again without asking:
 - **85-86:** steno number key `#` (STN_N1) replaces the upper S; thumb
   number-key experiment reverted.
 - **87:** RGB, Mouse and dwm layer keys added to the steno layer.
-- **88 (latest):** the dwm layer key holds a real Super while held, and the
+- **88:** the dwm layer key holds a real Super while held, and the
   dwm keys send plain keys (KC_2, not LGUI(KC_2)). Before, Super was lost
   when keys overlapped and a bare "2" got typed.
+- **89 (latest):** dwm layer brought up to date with `dwm/config.h`:
+  dmenu is Super+p, focus/master use h j k l (Shift+j/k moves the window),
+  Super+` is the scratchpad, Enter is zoom and Shift+Enter the terminal.
+  Left hand now has windows and layouts, right hand tags and apps. The
+  previous-tag key (Back) was removed: Alice doesn't use it. New keys: master count (i/d), doubledeck (r),
+  IceCat/Chromium (w), wiremix (a), btop (Escape), Flameshot (Print and
+  Super+Print), lock (Super+Shift+l) and suspend (Super+Shift+s).
 - **config:** combo key count raised from 20 to 32 (by version 71); debounce
   raised to 12 ms against double letters (version 82). **rules:** unchanged in
   substance since the first numbered version (rules_1).
 
 ## Open notes for the next project
 
-- **To do with the next batch of layout changes:** add keys for locking
-  and suspending. dwm locks on Mod+Shift+l (slock) and suspends on
-  Mod+Shift+s, so the keys should send Super+Shift+L (`LGUI(LSFT(KC_L))`)
-  and Super+Shift+S (`LGUI(LSFT(KC_S))`) wherever they fit best.
-
-- Version 88 compiles with `./install.sh moonlander` (checked 2026-11-11,
+- Version 89 compiles with `./install.sh moonlander` (checked 2026-11-11,
   ARM gcc 13.2, no warnings). Flashing and testing on the keyboard are still
   Alice's to do.
 - If double letters come back, raise `DEBOUNCE` in `config.h` (15 or 20).
