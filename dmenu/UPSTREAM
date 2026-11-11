@@ -1,0 +1,7 @@
+Upstream: https://git.suckless.org/dmenu
+Tag:      5.4
+Commit:   d893c63cdd927c33b9b8c9bc52aaa284199a650a (2025-08-09)
+Copied:   2026-11-11, upstream tree at the tag without .git
+
+config.h started as a copy of config.def.h. Edit config.h; keep
+config.def.h as upstream so new releases can be compared against it.

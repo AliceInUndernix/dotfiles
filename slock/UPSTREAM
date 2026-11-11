@@ -1,0 +1,10 @@
+Upstream: https://git.suckless.org/slock
+Tag:      1.7
+Commit:   b04f4d0810f0c54a64312da39a85be2b372aa80a (2026-07-27)
+Copied:   2026-11-11, upstream tree at the tag without .git
+
+config.h started as a copy of config.def.h. Edit config.h; keep
+config.def.h as upstream so new releases can be compared against it.
+
+Local changes:
+- config.h: group "nogroup" -> "nobody" (Gentoo has no "nogroup").
