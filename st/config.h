@@ -5,11 +5,11 @@
  *
  * font: see http://freedesktop.org/software/fontconfig/fontconfig-user.html
  */
-static char *font = "Liberation Mono:pixelsize=12:antialias=true:autohint=true";
+static char *font = "Liberation Mono:pixelsize=25:antialias=true:autohint=true";
 /* font2 patch: fonts tried first for glyphs the main font lacks (icons,
  * powerline arrows, symbols); install.sh puts this one in ~/.local/share/fonts */
 static char *font2[] = {
-	"Symbols Nerd Font Mono:pixelsize=12:antialias=true:autohint=true",
+	"Symbols Nerd Font Mono:pixelsize=25:antialias=true:autohint=true",
 };
 
 static int borderpx = 2;

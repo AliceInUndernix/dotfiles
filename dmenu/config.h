@@ -8,7 +8,7 @@ static const float menu_height_ratio = 2.0f; /* 2 = middle of the screen, 4 = up
 static int fuzzy = 1;                       /* -F  option; if 0, dmenu doesn't use fuzzy matching */
 /* -fn option overrides fonts[0]; default X11 font or font set */
 static const char *fonts[] = {
-	"Liberation Mono:pixelsize=12"
+	"Liberation Mono:pixelsize=25"
 };
 static const char *prompt      = NULL;      /* -p  option; prompt to the left of input field */
 static const char *colors[SchemeLast][2] = {
