@@ -7,6 +7,8 @@
 #   ./install.sh --deps        first install build dependencies with the
 #                              distro's package manager (asks before it does)
 #   ./install.sh --list        show the parts
+#   BROWSERS=yes ./install.sh --deps   also build IceCat and Chromium
+#                              (Gentoo; from source, takes hours)
 #
 # The configs are for the user who owns this repo folder (or INSTALL_USER=
 # name ./install.sh). Everything put in that user's home belongs to them,
@@ -109,17 +111,22 @@ deps() {
 			media-sound/wiremix \
 			sys-process/btop media-gfx/feh \
 			app-mobilephone/dfu-util
-		# Browsers are not in the main tree: IceCat comes from
+		# Browsers only with BROWSERS=yes: both build from source and take
+		# hours. They are not in the main tree: IceCat comes from
 		# parona-overlay, ungoogled-chromium from pf4public.
-		for repo in parona-overlay pf4public; do
-			portageq get_repo_path / "$repo" >/dev/null 2>&1 && continue
-			say "enable  overlay $repo"
-			emerge --ask --noreplace app-eselect/eselect-repository
-			eselect repository enable "$repo"
-			emerge --sync "$repo"
-		done
-		emerge --ask --noreplace www-client/icecat \
-			www-client/ungoogled-chromium ;;
+		if [ "${BROWSERS:-no}" = yes ]; then
+			for repo in parona-overlay pf4public; do
+				portageq get_repo_path / "$repo" >/dev/null 2>&1 && continue
+				say "enable  overlay $repo"
+				emerge --ask --noreplace app-eselect/eselect-repository
+				eselect repository enable "$repo"
+				emerge --sync "$repo"
+			done
+			emerge --ask --noreplace www-client/icecat \
+				www-client/ungoogled-chromium
+		else
+			say "skip    IceCat and Chromium (BROWSERS=yes ./install.sh --deps builds them)"
+		fi ;;
 	*debian*|*ubuntu*)
 		apt-get install build-essential pkg-config libx11-dev \
 			libxft-dev libxinerama-dev libxrandr-dev libxext-dev \
