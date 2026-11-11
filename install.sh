@@ -65,16 +65,19 @@ deps() {
 			app-shells/ksh media-fonts/liberation-fonts \
 			media-gfx/flameshot media-video/mpv net-misc/yt-dlp \
 			media-video/pipewire media-video/wireplumber media-sound/wiremix \
-			sys-process/btop media-gfx/feh www-client/chromium \
+			sys-process/btop media-gfx/feh \
 			app-mobilephone/dfu-util
-		# IceCat is not in the main tree: it comes from src_prepare-overlay.
-		if ! portageq get_repo_path / src_prepare-overlay >/dev/null 2>&1; then
-			say "enable  src_prepare-overlay (for www-client/icecat)"
+		# Browsers are not in the main tree: IceCat comes from
+		# src_prepare-overlay, ungoogled-chromium from pf4public.
+		for repo in src_prepare-overlay pf4public; do
+			portageq get_repo_path / "$repo" >/dev/null 2>&1 && continue
+			say "enable  overlay $repo"
 			asroot emerge --ask --noreplace app-eselect/eselect-repository
-			asroot eselect repository enable src_prepare-overlay
-			asroot emerge --sync src_prepare-overlay
-		fi
-		asroot emerge --ask --noreplace www-client/icecat ;;
+			asroot eselect repository enable "$repo"
+			asroot emerge --sync "$repo"
+		done
+		asroot emerge --ask --noreplace www-client/icecat \
+			www-client/ungoogled-chromium ;;
 	*debian*|*ubuntu*)
 		asroot apt-get install build-essential pkg-config libx11-dev \
 			libxft-dev libxinerama-dev libxrandr-dev libxext-dev \
