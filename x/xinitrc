@@ -32,7 +32,7 @@ xss-lock -- slock &
 # Status text on the right of dwm's bar (Mod+b shows the bar): the date
 # and time, updated at the start of every minute. See date(1) for the
 # % codes in STATUS_DATE.
-STATUS_DATE="%a %d %b %H:%M"
+STATUS_DATE="%H:%M %Z, %A, %d %B %Y"
 while true; do
 	xsetroot -name "$(date +"$STATUS_DATE")"
 	sleep $((60 - $(date +%S | sed 's/^0//')))
