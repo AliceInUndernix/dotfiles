@@ -11,8 +11,46 @@ set -o noclobber          # > will not overwrite a file; >| does
 # "unlimited", so a million commands stands in for it.
 HISTFILE=$HOME/.ksh_history
 HISTSIZE=1000000
-# Up/Down with text typed find older commands starting with that text;
-# with an empty line they go through all of history (ksh93 does this).
+# Up/Down search history for commands that start with what you typed
+# (all commands if the line is empty), both ways: Down goes back to newer
+# matches and, past the newest, to what you typed. Each command shows
+# once, even if you ran it many times. ksh93 only (its KEYBD trap); its
+# own Up already searches like this, but its Down does not. Other ksh
+# keep their plain arrows.
+case ${KSH_VERSION:-} in *93*) eval "$(cat <<'EOF'
+_hs_key() {
+	typeset dir l n
+	case ${.sh.edchar} in
+	$'\e[A'|$'\eOA') dir=up ;;
+	$'\e[B'|$'\eOB') dir=down ;;
+	*) _hs_on= ; return ;;
+	esac
+	# a new search, unless the last key was an arrow and the line is
+	# still what it showed
+	if [[ -z $_hs_on || ${.sh.edtext} != "$_hs_shown" ]]; then
+		_hs_on=1 _hs_i=0 _hs_prefix=${.sh.edtext}
+		unset _hs_list; typeset -ga _hs_list; n=0
+		hist -lnr -$HISTSIZE 2>/dev/null |
+			P=$_hs_prefix awk 'sub(/^\t/, "") && index($0, ENVIRON["P"]) == 1 &&
+				$0 != ENVIRON["P"] && !seen[$0]++' |
+			while IFS= read -r l; do _hs_list[n++]=$l; done
+	fi
+	if [[ $dir == up ]]; then
+		(( _hs_i < ${#_hs_list[@]} )) || { .sh.edchar= ; return; }
+		(( _hs_i++ ))
+	else
+		(( _hs_i > 0 )) || { .sh.edchar= ; return; }
+		(( _hs_i-- ))
+	fi
+	if (( _hs_i == 0 )); then l=$_hs_prefix; else l=${_hs_list[_hs_i-1]}; fi
+	_hs_shown=$l
+	# replace the line: Ctrl+A, Ctrl+K, then the text, with Ctrl+V before
+	# control characters (a Tab would otherwise complete)
+	.sh.edchar=$'\001\013'"${l//@([[:cntrl:]])/$'\026'\1}"
+}
+trap _hs_key KEYBD
+EOF
+)" ;; esac
 
 # Prompt: folder (~ for home), then $ for you or # for root,
 # e.g. "~/dotfiles $ " and "/etc # ".
