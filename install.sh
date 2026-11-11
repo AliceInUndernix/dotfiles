@@ -19,7 +19,7 @@ DOTFILES=$(cd "$(dirname "$0")" && pwd)
 PREFIX=${PREFIX:-/usr/local}
 CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}
 STAMP=$(date +%Y%m%d-%H%M%S)
-PARTS="nvim dwm st dmenu slock moonlander"
+PARTS="nvim tmux dwm st dmenu slock moonlander"
 
 say()  { printf '==> %s\n' "$*"; }
 warn() { printf '!!  %s\n' "$*" >&2; }
@@ -60,22 +60,22 @@ deps() {
 		asroot emerge --ask --noreplace x11-libs/libX11 x11-libs/libXft \
 			x11-libs/libXinerama x11-libs/libXrandr x11-libs/libXext \
 			media-libs/fontconfig media-libs/freetype \
-			dev-vcs/git app-editors/neovim ;;
+			dev-vcs/git app-editors/neovim app-misc/tmux ;;
 	*debian*|*ubuntu*)
 		asroot apt-get install build-essential pkg-config libx11-dev \
 			libxft-dev libxinerama-dev libxrandr-dev libxext-dev \
-			libfontconfig-dev libfreetype-dev git neovim ;;
+			libfontconfig-dev libfreetype-dev git neovim tmux ;;
 	*arch*)
 		asroot pacman -S --needed base-devel libx11 libxft libxinerama \
-			libxrandr libxext fontconfig freetype2 git neovim ;;
+			libxrandr libxext fontconfig freetype2 git neovim tmux ;;
 	*fedora*|*rhel*)
 		asroot dnf install gcc make pkgconf-pkg-config libX11-devel \
 			libXft-devel libXinerama-devel libXrandr-devel libXext-devel \
-			fontconfig-devel freetype-devel git neovim ;;
+			fontconfig-devel freetype-devel git neovim tmux ;;
 	*void*)
 		asroot xbps-install base-devel pkg-config libX11-devel libXft-devel \
 			libXinerama-devel libXrandr-devel libXext-devel \
-			fontconfig-devel freetype-devel git neovim ;;
+			fontconfig-devel freetype-devel git neovim tmux ;;
 	*)
 		warn "unknown distro ($id): install a C compiler, make, pkg-config,"
 		warn "and headers for X11, Xft, Xinerama, Xrandr, Xext, fontconfig, freetype." ;;
@@ -86,7 +86,26 @@ deps() {
 
 install_nvim() {
 	link "$DOTFILES/nvim" "$CONFIG/nvim"
+	# Unpack archived plugins that are not there yet, so the first start
+	# works offline. init.lua only downloads plugins that are missing.
+	pack=${XDG_DATA_HOME:-$HOME/.local/share}/nvim/site/pack/plugins/opt
+	for tarball in "$DOTFILES"/archive/nvim-plugins/*.tar.gz; do
+		[ -e "$tarball" ] || continue
+		name=$(basename "$tarball" .tar.gz)
+		[ -e "$pack/$name" ] && continue
+		mkdir -p "$pack"
+		tar -xzf "$tarball" -C "$pack"
+		if [ -d "$pack/$name/doc" ] && command -v nvim >/dev/null 2>&1; then
+			nvim --headless -u NONE -c "helptags $pack/$name/doc" -c q >/dev/null 2>&1 || :
+		fi
+		say "plugin  $name (from archive)"
+	done
 	command -v nvim >/dev/null 2>&1 || warn "nvim is not installed (needs 0.11+)"
+}
+
+install_tmux() {
+	link "$DOTFILES/tmux/tmux.conf" "$CONFIG/tmux/tmux.conf"
+	command -v tmux >/dev/null 2>&1 || warn "tmux is not installed"
 }
 
 # suckless: build as the user, install as root (unless PREFIX is writable).
