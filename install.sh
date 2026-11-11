@@ -19,7 +19,7 @@ DOTFILES=$(cd "$(dirname "$0")" && pwd)
 PREFIX=${PREFIX:-/usr/local}
 CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}
 STAMP=$(date +%Y%m%d-%H%M%S)
-PARTS="x nvim tmux dwm st dmenu slock moonlander"
+PARTS="ksh x nvim tmux dwm st dmenu slock moonlander"
 
 say()  { printf '==> %s\n' "$*"; }
 warn() { printf '!!  %s\n' "$*" >&2; }
@@ -61,28 +61,29 @@ deps() {
 			x11-libs/libXinerama x11-libs/libXrandr x11-libs/libXext \
 			media-libs/fontconfig media-libs/freetype \
 			dev-vcs/git app-editors/neovim app-misc/tmux \
-			x11-apps/xinit x11-apps/xsetroot \
+			x11-apps/xinit x11-apps/xsetroot x11-misc/xss-lock \
+			app-shells/ksh media-fonts/liberation-fonts \
 			app-mobilephone/dfu-util ;;
 	*debian*|*ubuntu*)
 		asroot apt-get install build-essential pkg-config libx11-dev \
 			libxft-dev libxinerama-dev libxrandr-dev libxext-dev \
 			libfontconfig-dev libfreetype-dev git neovim tmux \
-			xinit x11-xserver-utils \
+			xinit x11-xserver-utils xss-lock ksh fonts-liberation \
 			python3-venv dfu-util ;;
 	*arch*)
 		asroot pacman -S --needed base-devel libx11 libxft libxinerama \
 			libxrandr libxext fontconfig freetype2 git neovim tmux dfu-util \
-			xorg-xinit xorg-xsetroot ;;
+			xorg-xinit xorg-xsetroot xss-lock ttf-liberation ;;
 	*fedora*|*rhel*)
 		asroot dnf install gcc make pkgconf-pkg-config libX11-devel \
 			libXft-devel libXinerama-devel libXrandr-devel libXext-devel \
 			fontconfig-devel freetype-devel git neovim tmux dfu-util \
-			xorg-x11-xinit xsetroot ;;
+			xorg-x11-xinit xsetroot xss-lock ksh liberation-mono-fonts ;;
 	*void*)
 		asroot xbps-install base-devel pkg-config libX11-devel libXft-devel \
 			libXinerama-devel libXrandr-devel libXext-devel \
 			fontconfig-devel freetype-devel git neovim tmux dfu-util \
-			xinit xsetroot ;;
+			xinit xsetroot xss-lock mksh liberation-fonts-ttf ;;
 	*)
 		warn "unknown distro ($id): install a C compiler, make, pkg-config,"
 		warn "and headers for X11, Xft, Xinerama, Xrandr, Xext, fontconfig, freetype." ;;
@@ -110,9 +111,27 @@ install_nvim() {
 	command -v nvim >/dev/null 2>&1 || warn "nvim is not installed (needs 0.11+)"
 }
 
+install_ksh() {
+	link "$DOTFILES/ksh/profile" "$HOME/.profile"
+	link "$DOTFILES/ksh/kshrc" "$HOME/.kshrc"
+	ksh=$(command -v ksh || command -v mksh || :)
+	if [ -z "$ksh" ]; then
+		warn "ksh is not installed (try ./install.sh --deps)"
+		return
+	fi
+	# Make ksh the login shell (chsh asks for your password).
+	if [ "$(basename "${SHELL:-}")" != "$(basename "$ksh")" ]; then
+		grep -qx "$ksh" /etc/shells 2>/dev/null || echo "$ksh" | asroot tee -a /etc/shells >/dev/null
+		say "shell   $ksh (takes effect at next login)"
+		chsh -s "$ksh"
+	fi
+}
+
 install_x() {
 	link "$DOTFILES/x/xinitrc" "$HOME/.xinitrc"
-	command -v xsetroot >/dev/null 2>&1 || warn "xsetroot is not installed (sets the wallpaper colour)"
+	for tool in xsetroot xss-lock; do
+		command -v $tool >/dev/null 2>&1 || warn "$tool is not installed (try ./install.sh --deps)"
+	done
 }
 
 install_tmux() {

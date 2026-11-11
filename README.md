@@ -15,7 +15,8 @@ script puts the whole configuration back after a fresh install.
 | `slock/` | slock 1.7 source (screen locker) | `PREFIX/bin/slock` |
 | `nvim/` | Neovim config (0.11+, no plugin manager) | `~/.config/nvim` (symlink) |
 | `tmux/` | tmux config | `~/.config/tmux/tmux.conf` (symlink) |
-| `x/` | `xinitrc`: Habamax-grey wallpaper, then dwm (run `startx`) | `~/.xinitrc` (symlink) |
+| `ksh/` | Korn shell: `profile` (PATH, EDITOR) and `kshrc` (prompt, vi keys, aliases) | `~/.profile`, `~/.kshrc` (symlinks); ksh becomes the login shell |
+| `x/` | `xinitrc`: Habamax-grey wallpaper, xss-lock (slock on idle/suspend), then dwm (run `startx`) | `~/.xinitrc` (symlink) |
 | `moonlander/` | QMK "canary" keymap for the keyboard | built into `moonlander/*.bin`, flashed with Keymapp |
 | `archive/` | Untouched copies of everything downloaded from elsewhere | |
 | `install.sh` | Sets everything up | |
@@ -40,7 +41,7 @@ dependencies are already there:
 
 ```sh
 ./install.sh            # everything
-./install.sh nvim       # only some parts: x nvim tmux dwm st dmenu slock moonlander
+./install.sh nvim       # only some parts: ksh x nvim tmux dwm st dmenu slock moonlander
 ./install.sh --list     # the part names
 PREFIX=~/.local ./install.sh dwm   # install without root
 ```

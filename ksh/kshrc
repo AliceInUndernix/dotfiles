@@ -1,0 +1,28 @@
+# Korn shell settings for interactive shells (read through $ENV, which
+# ~/.profile sets). Works in ksh93, mksh and OpenBSD ksh.
+
+case $- in *i*) ;; *) return 0 2>/dev/null ;; esac
+
+set -o vi                 # vi keys on the command line (Esc, then hjkl)
+set -o noclobber          # > will not overwrite a file; >| does
+
+HISTFILE=$HOME/.local/state/ksh/history
+HISTSIZE=10000
+[ -d "${HISTFILE%/*}" ] || mkdir -p "${HISTFILE%/*}"
+
+# Prompt: folder (~ for home) and $, e.g. "~/dotfiles $ ".
+_pwd() {
+	case $PWD in
+	"$HOME") printf '~' ;;
+	"$HOME"/*) printf '~%s' "${PWD#"$HOME"}" ;;
+	*) printf '%s' "$PWD" ;;
+	esac
+}
+PS1='$(_pwd) $ '
+
+alias ls='ls --color=auto'
+alias ll='ls -lh'
+alias la='ls -lAh'
+alias grep='grep --color=auto'
+alias v='nvim'
+alias ..='cd ..'

@@ -4,5 +4,9 @@
 # Wallpaper: Habamax's background colour, same as st, tmux and Neovim.
 xsetroot -solid "#1c1c1c"
 
+# Lock with slock when the screen blanks (after 10 idle minutes, X's
+# default) and before suspend. Mod+Shift+l locks by hand.
+xss-lock -- slock &
+
 # dwm runs until you quit it (Mod+Shift+q), which ends the X session.
 exec dwm
