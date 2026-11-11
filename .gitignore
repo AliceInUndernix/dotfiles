@@ -1,0 +1,8 @@
+# suckless build output
+*/*.o
+*/*.tar.gz
+dwm/dwm
+st/st
+dmenu/dmenu
+dmenu/stest
+slock/slock

@@ -1,0 +1,96 @@
+# Handoff: Neovim config for steno prose writing
+
+Written 2026-11-11 so a new Claude project can continue this work from the
+files alone. Read this first, then `README.md` (user guide), then the code.
+The comments in `nvim/init.lua` and `nvim/lua/typetrack.lua` describe the
+current behaviour section by section.
+
+## Files
+
+```
+nvim-config/
+  HANDOFF.md            this file
+  README.md             user guide: install, keys, every feature
+  nvim/init.lua         the config  -> ~/.config/nvim/init.lua
+  nvim/lua/typetrack.lua  Sioyek tracker -> ~/.config/nvim/lua/typetrack.lua
+```
+
+## The user and their setup
+
+- Gentoo Linux. Neovim 0.11.7 from the stable tree. Upgrading to 0.12
+  was attempted and needs `~amd64` keywords for both
+  `app-editors/neovim` and `dev-lua/luv` in
+  `/etc/portage/package.accept_keywords/neovim`; whether they finished
+  is unknown. The config must keep working on 0.11 (no `vim.pack`).
+- Writes fiction with stenography (Plover). Spelling comes from steno,
+  so spell checks are off by default; grammar and misstroke checks are
+  wanted.
+- Installs by downloading files to `~/Downloads` and copying them into
+  `~/.config/nvim`. Give ready-to-paste commands.
+- Uses Sioyek as EPUB/PDF reader, 2.0.0 at `~/.local/bin/sioyek`.
+- Writes short, sometimes cut-off messages (often dictated or stenoed);
+  ask what they meant when a message stops mid-sentence.
+- Prefers plain explanations and a config that stays close to default.
+
+## What was asked for, and how it was done
+
+| Request | Implementation | Status |
+|---|---|---|
+| Minimal config, colour column 80, hybrid line numbers | options at top of init.lua | user ran it |
+| Dark theme "Habamax" | built-in `habamax`; Gruvbox dropped | user ran it |
+| Prose mode, wrap at 80, distraction-free | zen-mode.nvim + vim-pencil (hard wrap), `Space p` | user ran it |
+| Plugins on 0.11 | git clone into pack/plugins/opt + packadd; vim.pack needs 0.12 | user ran it |
+| Remember cursor, folds, undo between sessions | undofile/viewdir/shada in stdpath("state"), mkview/loadview autocmds | not confirmed |
+| Single Enter must not be pulled back into the paragraph | `pencil#autoformat = 0`; `gqip` to re-wrap | fixed after user report, not confirmed |
+| Arrows move by screen line in prose mode only | buffer-local gj/gk maps added on_open, removed on_close | not confirmed |
+| Grammar check (not spelling) | Harper LSP via vim.lsp.config, SpellCheck linter off | not confirmed |
+| Claude proofreading with the signed-in account, current file only | `Space g`: `claude -p` with no tools, no MCP, empty cwd, API-key vars unset, Sonnet, low effort | user ran it; it over-marked fine lines |
+| Show exact words, explain, offer a fix, work in prose mode | diagnostics with col ranges, popup on CursorHold, `Space f` applies | prompt tightened after over-marking, not confirmed |
+| Spell check toggle | `Space s` | not confirmed |
+| plover-vim | only plover-vim-tutor help pages installed; user is NOT using plover-vim yet (doesn't want to learn Emily's modifiers) but wants the line kept | `:help plover-vim-tutorial` opened in a test |
+| Em dash etc. from Plover arrived as "2014" | insert-mode `<C-S-u>` expr map reads hex digits and inserts the character | just added, not confirmed |
+| Mark typed words green/red in Sioyek | lua/typetrack.lua, `:TypeTrack`, `Space t` | Neovim side tested; never run against Sioyek |
+
+## Open issues (pick these up first)
+
+1. **Sioyek tracker has never run against Sioyek.** It needs the
+   development Sioyek (`select_current_search_match` command), not 2.0.0
+   or sioyek3-alpha0. The user was installing GURU's `sioyek-9999` and
+   hit a Qt slot conflict (qtbase 6.11.2 installed vs 6.11.3 wanted).
+   Suggested fix: `sudo emerge --ask --update --deep --changed-use @world
+   =app-text/sioyek-9999`. Outcome unknown. After install they must move
+   `~/.local/bin/sioyek` (2.0.0) aside and back up `~/.local/share/sioyek`.
+2. **Plover unicode fix unconfirmed.** It only works if the terminal
+   sends Ctrl+Shift+U as a distinct key. The user's terminal and X11 vs
+   Wayland are not known. If digits still appear, ask for both.
+3. **Claude proofreading accuracy.** After the prompt was tightened, it
+   has not been re-tested. `:ClaudeLog` shows the raw answer; ask the
+   user to paste it if marks look wrong.
+4. **Nothing in init.lua has been run by the Claude that wrote it**
+   (Neovim couldn't be run in its sandbox). Only the user's reports and
+   the plover-vim-tutor test confirm behaviour. Ask for `:messages`
+   output if anything errors on start.
+5. Possible terminal colour palette for Habamax was offered (background
+   `#1c1c1c`, text `#bcbcbc`) once the user names their terminal.
+
+## Rules for editing
+
+- Keep it minimal and close to Neovim defaults; no plugin manager.
+- Keep everything that must work without plugins above the plugin
+  section in init.lua: the file `return`s early if zen-mode or pencil
+  fail to download.
+- Leader is Space. Taken: w, p, s, g, f, G, t.
+- Keep the plover-vim-tutor line.
+- Keep `claude` locked down: no tools, `--strict-mcp-config`, empty cwd,
+  `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` removed, only the current
+  buffer on stdin. The user asked for exactly this.
+- Say plainly what was and wasn't tested, and give copy commands from
+  `~/Downloads` with every changed file.
+
+## Ideas offered but not taken
+
+- A starter Plover dictionary of ~20 Vim command strokes (Esc, save,
+  undo, ciw, gq...). Offered by the steno research, not requested yet.
+- Other steno-in-Vim approaches researched: Emily's modifiers,
+  plover-dict-commands (`SOLO_DICT`), plover-modal-dictionary, and toggling
+  Plover off (`PHRO*F`) for keyboard editing.

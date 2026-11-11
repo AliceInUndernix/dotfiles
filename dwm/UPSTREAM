@@ -1,0 +1,7 @@
+Upstream: https://git.suckless.org/dwm
+Tag:      6.8
+Commit:   f63cde9354504ee9cfecc07517c03736d0f90c26 (2026-01-30)
+Copied:   2026-11-11, upstream tree at the tag without .git
+
+config.h started as a copy of config.def.h. Edit config.h; keep
+config.def.h as upstream so new releases can be compared against it.

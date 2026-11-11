@@ -1,0 +1,7 @@
+Upstream: https://git.suckless.org/st
+Tag:      0.9.3
+Commit:   6e970474743d57a5d8b054c41fd3bff2bc895742 (2025-08-09)
+Copied:   2026-11-11, upstream tree at the tag without .git
+
+config.h started as a copy of config.def.h. Edit config.h; keep
+config.def.h as upstream so new releases can be compared against it.
