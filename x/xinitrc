@@ -4,6 +4,12 @@
 # Wallpaper: Habamax's background colour, same as st, tmux and Neovim.
 xsetroot -solid "#1c1c1c"
 
+# Sound: start PipeWire and WirePlumber (Gentoo without systemd; with
+# systemd they start by themselves as user services).
+if [ ! -d /run/systemd/system ] && command -v gentoo-pipewire-launcher >/dev/null 2>&1; then
+	gentoo-pipewire-launcher &
+fi
+
 # Lock with slock when the screen blanks (after 10 idle minutes, X's
 # default) and before suspend. Mod+Shift+l locks by hand.
 xss-lock -- slock &

@@ -1,0 +1,36 @@
+# wiremix: PipeWire mixer in the terminal, like pavucontrol
+# (linked to ~/.config/wiremix/wiremix.toml).
+# Tabs: Playback, Recording, Output, Input, Configuration (profiles).
+# Press ? inside it for the keys, q to quit.
+
+theme = "habamax"
+
+# Habamax colours, same as Neovim, st and dwm.
+[themes.habamax]
+tab = { fg = "#767676" }
+tab_selected = { fg = "#eeeeee", add_modifier = "BOLD" }
+tab_marker = { fg = "#5f87af" }
+selector = { fg = "#5f87af" }
+list_more = { fg = "#767676" }
+default_device = { fg = "#87af87" }
+default_stream = { fg = "#87af87" }
+node_title = { fg = "#c7c7c7" }
+node_target = { fg = "#767676" }
+volume = { fg = "#c7c7c7" }
+volume_empty = { fg = "#585858" }
+volume_filled = { fg = "#5f87af" }
+meter_inactive = { fg = "#585858" }
+meter_active = { fg = "#87af87" }
+meter_overload = { fg = "#af5f5f" }
+meter_center_inactive = { fg = "#585858" }
+meter_center_active = { fg = "#87af87" }
+config_device = { fg = "#c7c7c7" }
+config_profile = { fg = "#767676" }
+dropdown_icon = { fg = "#767676" }
+dropdown_border = { fg = "#585858" }
+dropdown_item = { fg = "#c7c7c7" }
+dropdown_selected = { fg = "#1c1c1c", bg = "#5f87af" }
+dropdown_more = { fg = "#767676" }
+help_border = { fg = "#585858" }
+help_item = { fg = "#c7c7c7" }
+help_more = { fg = "#767676" }
