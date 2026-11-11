@@ -89,13 +89,19 @@ suggest them again without asking:
 - **88:** the dwm layer key holds a real Super while held, and the
   dwm keys send plain keys (KC_2, not LGUI(KC_2)). Before, Super was lost
   when keys overlapped and a bare "2" got typed.
-- **89 (latest):** dwm layer brought up to date with `dwm/config.h`:
-  dmenu is Super+p, focus/master use h j k l (Shift+j/k moves the window),
-  Super+` is the scratchpad, Enter is zoom and Shift+Enter the terminal.
-  Left hand now has windows and layouts, right hand tags and apps. The
-  previous-tag key (Back) was removed: Alice doesn't use it. New keys: master count (i/d), doubledeck (r),
-  IceCat/Chromium (w), wiremix (a), btop (Escape), Flameshot (Print and
-  Super+Print), lock (Super+Shift+l) and suspend (Super+Shift+s).
+- **89:** dwm layer brought up to date with `dwm/config.h`: dmenu is
+  Super+p, focus/master use h j k l (Shift+j/k moves the window), Super+`
+  is the scratchpad, Enter is zoom and Shift+Enter the terminal. The
+  previous-tag key (Back) was removed: Alice doesn't use it. New keys:
+  master count (i/d), doubledeck (r), IceCat/Chromium (w), wiremix (a),
+  btop (Escape), Flameshot (Print), lock (Super+Shift+l) and suspend
+  (Super+Shift+s).
+- **90 (latest):** dwm layer laid out again by Alice, key by key: tags on
+  the bottom row counted from the right (Tag1 right pinky, All left
+  pinky), Shrk/Next/Prev/Grow on the red layer's arrow keys, Zoom left of
+  them, layouts on the left top row, apps on the left home row. Kill only
+  works with Shift. Shift moved to left thumb 1. Removed: last-two-layouts
+  (Super+Space) and Flameshot full screen (Super+Print).
 - **config:** combo key count raised from 20 to 32 (by version 71); debounce
   raised to 12 ms against double letters (version 82). **rules:** unchanged in
   substance since the first numbered version (rules_1).
@@ -105,7 +111,7 @@ suggest them again without asking:
 - The build target is `zsa/moonlander/revb:canary`: Alice's keyboard is
   revision B. Until 2026-11-11 the script built `reva` by mistake; rev A
   firmware doesn't run on rev B (other bootloader, other flash address).
-- Version 89 compiles for revb with `./install.sh moonlander` (checked 2026-11-11,
+- Version 90 compiles for revb with `./install.sh moonlander` (checked 2026-11-11,
   ARM gcc 13.2, no warnings). The script then flashes with dfu-util; that
   step and the layout itself are not yet tested on the keyboard.
 - Build with the pinned Arm GNU Toolchain 14.2 (install.sh does). Built

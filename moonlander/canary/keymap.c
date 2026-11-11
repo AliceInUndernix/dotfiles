@@ -2,7 +2,7 @@
  * ==========================================================================
  *  ZSA Moonlander (rev B), keymap "canary"
  *  Canary letter layout, built on optozorax's keymap libraries.
- *  Version 89 (the latest; earlier drafts were numbered 75..88).
+ *  Version 90 (the latest; earlier drafts were numbered 75..89).
  * ==========================================================================
  *
  * HOW TO READ THIS FILE
@@ -272,13 +272,12 @@ enum custom_keycodes {
 #define D_ZOOM  DWM_MOD(KC_ENT)          // focused window to/from master (Super+Enter)
 #define D_RUN   DWM_MOD(KC_P)            // dmenu launcher (Super+p)
 #define D_SCRT  DWM_MOD(KC_GRV)          // scratchpad terminal on/off (Super+`)
-#define D_KILL  DWM_MOD_SFT(KC_C)        // close the focused window
+#define D_KILL  DWM_MOD(KC_C)            // nothing alone; with Shift held: close the window (Super+Shift+c)
 #define D_WEB   DWM_MOD(KC_W)            // IceCat (Super+w; Shift: Ungoogled Chromium)
 #define D_MIX   DWM_MOD(KC_A)            // wiremix sound mixer (Super+a)
 #define D_TOP   DWM_MOD(KC_ESC)          // btop (Super+Escape)
 #define D_LOCK  DWM_MOD_SFT(KC_L)        // lock the screen, slock (Super+Shift+l)
 #define D_SUSP  DWM_MOD_SFT(KC_S)        // suspend (Super+Shift+s)
-#define D_FULL  DWM_MOD(KC_PSCR)         // Flameshot: whole screen to clipboard (Super+Print)
 // D_SHOT (plain Print, Flameshot's picker) is an own keycode in section 2,
 // because it has to let go of the held Super for a moment.
 
@@ -296,7 +295,6 @@ enum custom_keycodes {
 #define D_FLOT  DWM_MOD(KC_F)            // floating
 #define D_MONO  DWM_MOD(KC_M)            // monocle (one window fills the screen)
 #define D_DECK  DWM_MOD(KC_R)            // doubledeck
-#define D_LAYT  DWM_MOD(KC_SPC)          // switch between the last two layouts
 #define D_TFLT  DWM_MOD_SFT(KC_SPC)      // float / unfloat the focused window
 #define D_BAR   DWM_MOD(KC_B)            // show / hide the bar
 
@@ -559,51 +557,58 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      * Holding the layer key also holds Super (see section 3), so every key
      * here is Super + that key, and each dwm shortcut is one key.
      * Matches dwm/config.h in the dotfiles (checked 2026-11-11).
+     * Layout chosen by Alice key by key (version 90).
      *
-     * Left hand: windows and layouts. Right hand: tags and apps.
-     *
-     * top      Kill Tile Flt  Mono Deck Lay  TFlt     Scr  Menu Term Web  Mix  Top  Shot
-     * home     Lock Shrk Next Prev Grow Zoom --       --   Tag1 Tag2 Tag3 Tag4 Tag5 Full
-     * bottom   Susp Mon< Mon> Mst- Mst+ Bar                Tag6 Tag7 Tag8 Tag9 All  --
+     * top      --   Flt  Tile Deck Mono Bar  --       --   TFlt Mst+ Mon> Mon< Mst- Susp
+     * home     Web  Kill Menu Scr  Term Lock --       --   Zoom Shrk Next Prev Grow Top
+     * bottom   Mix  All  Tag9 Tag8 Tag7 Tag6               Tag5 Tag4 Tag3 Tag2 Tag1 Shot
      * lower    __   __   __   __   __   __          __   (held)
-     * thumbs                  __   __   Shift       __   __   __
-     *   (__ = same as layer 0)
+     * thumbs                  Shift __   --          __   __   __
+     *   (__ = same as layer 0, so Ctrl and Alt still work; -- = nothing)
+     *
+     * Shrk Next Prev Grow sit where the red layer has its arrows (Left Down
+     * Up Right), like h j k l. The tags are on the bottom row like the red
+     * layer's digits, but counted from the right: Tag1 is the right pinky,
+     * All (0) the left pinky.
      *
      *   Tag1..9  go to tag 1..9 (Super+1..9)    All   view all tags (Super+0)
-     *   Mon< Mon>  focus monitor (Super+, .)
      *   Shrk Grow  master area smaller / bigger (Super+h / l)
      *   Next Prev  focus next / previous window (Super+j / k)
+     *   Zoom     window to/from master (Super+Enter)
      *   Mst+ Mst-  one more / fewer window in master (Super+i / d)
-     *   Lay      last two layouts (Super+Space) TFlt  float the window (Super+Shift+Space)
-     *   Tile Flt Mono Deck  tiled / floating / monocle / doubledeck (Super+t f m r)
-     *   Bar      show/hide bar (Super+b)        Zoom  window to/from master (Super+Enter)
-     *   Term     st (Super+Shift+Enter)         Scr   scratchpad terminal (Super+`)
-     *   Menu     dmenu (Super+p)                Kill  close window (Super+Shift+c)
-     *   Web      IceCat (Super+w)               Mix   wiremix (Super+a)
-     *   Top      btop (Super+Escape)
-     *   Shot     Flameshot picker (plain Print) Full  whole screen to clipboard (Super+Print)
+     *   Mon< Mon>  focus previous / next monitor (Super+, .)
+     *   TFlt     float / unfloat the window (Super+Shift+Space)
+     *   Flt Tile Deck Mono  floating / tiled / doubledeck / monocle (Super+f t r m)
+     *   Bar      show/hide bar (Super+b)
+     *   Kill     close window: only with Shift (Super+Shift+c); alone it
+     *            sends Super+c, which dwm doesn't use
+     *   Menu     dmenu (Super+p)                Scr   scratchpad terminal (Super+`)
+     *   Term     st (Super+Shift+Enter)         Web   IceCat (Super+w)
+     *   Mix      wiremix (Super+a)              Top   btop (Super+Escape)
+     *   Shot     Flameshot picker (plain Print; Ctrl+A in it takes the whole screen)
      *   Lock     slock (Super+Shift+l)          Susp  suspend (Super+Shift+s)
-     *            Lock and Suspend sit on the far-left column, out of the way.
      *
      * Shift versions: hold Shift as well. Either Shift works: right thumb 1
-     * (normal Shift), or left thumb 3, which on this layer is a plain Shift
-     * (KC_LSFT) so you can hold it with the left thumb while your right hand
-     * holds the dwm key. This is the one place where plain KC_LSFT is used
-     * on purpose. With Shift:
+     * (normal Shift), or left thumb 1 (Space on layer 0), which is a plain
+     * Shift (KC_LSFT) here, so you can hold it with the left thumb while the
+     * right hand holds the dwm key. This is the one place where plain
+     * KC_LSFT is used on purpose. Left thumb 3 is KC_NO here, so it can't
+     * switch steno on by accident. With Shift:
      *   Tag1..9  move the window to that tag    All   window on all tags
      *   Next Prev  move the window down / up the stack
      *   Mon< Mon>  send the window to that monitor
      *   Web      Ungoogled Chromium instead of IceCat
+     *   Kill     close the window
      * Ctrl versions of the tags (Super+Ctrl+1..9: show that tag as well)
      * work by holding the big Ctrl key too.
      */
     [L_DWM] = LAYOUT_moonlander(
         _______, _______, _______, _______, _______, _______, _______,      _______, _______, _______, _______, _______, _______, _______,
-        D_KILL,  D_TILE,  D_FLOT,  D_MONO,  D_DECK,  D_LAYT,  D_TFLT,       D_SCRT,  D_RUN,   D_TERM,  D_WEB,   D_MIX,   D_TOP,   D_SHOT,
-        D_LOCK,  D_MSTS,  D_FOCN,  D_FOCP,  D_MSTG,  D_ZOOM,  KC_NO,        KC_NO,   D_TAG1,  D_TAG2,  D_TAG3,  D_TAG4,  D_TAG5,  D_FULL,
-        D_SUSP,  D_MONP,  D_MONN,  D_NMAD,  D_NMAI,  D_BAR,                 D_TAG6,  D_TAG7,  D_TAG8,  D_TAG9,  D_ALL,   KC_NO,
+        KC_NO,   D_FLOT,  D_TILE,  D_DECK,  D_MONO,  D_BAR,   KC_NO,        KC_NO,   D_TFLT,  D_NMAI,  D_MONN,  D_MONP,  D_NMAD,  D_SUSP,
+        D_WEB,   D_KILL,  D_RUN,   D_SCRT,  D_TERM,  D_LOCK,   KC_NO,        KC_NO,   D_ZOOM,  D_MSTS,  D_FOCN,  D_FOCP,  D_MSTG,  D_TOP,
+        D_MIX,   D_ALL,   D_TAG9,  D_TAG8,  D_TAG7,  D_TAG6,                D_TAG5,  D_TAG4,  D_TAG3,  D_TAG2,  D_TAG1,  D_SHOT,
         _______, _______, _______, _______, _______, _______,               _______, _______, _______, _______, _______, _______,
-                                            _______, _______, KC_LSFT,      _______, _______, _______
+                                            KC_LSFT, _______, KC_NO,        _______, _______, _______
     ),
 
     /*
