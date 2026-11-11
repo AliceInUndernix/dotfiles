@@ -29,5 +29,14 @@ fi
 # password. Mod+Shift+l locks by hand, Mod+Shift+s suspends.
 xss-lock -- slock &
 
+# Status text on the right of dwm's bar (Mod+b shows the bar): the date
+# and time, updated at the start of every minute. See date(1) for the
+# % codes in STATUS_DATE.
+STATUS_DATE="%a %d %b %H:%M"
+while true; do
+	xsetroot -name "$(date +"$STATUS_DATE")"
+	sleep $((60 - $(date +%S | sed 's/^0//')))
+done &
+
 # dwm runs until you quit it (Mod+Shift+q), which ends the X session.
 exec dwm

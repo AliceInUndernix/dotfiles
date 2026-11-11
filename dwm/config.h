@@ -27,14 +27,16 @@ static const Rule rules[] = {
 	 *	WM_NAME(STRING) = title
 	 */
 	/* class      instance    title       tags mask     isfloating   monitor */
-	{ "Gimp",     NULL,       NULL,       0,            1,           -1 },
-	{ "Firefox",  NULL,       NULL,       1 << 8,       0,           -1 },
+	/* No rules yet. C needs at least one entry: this one matches every
+	 * window and changes nothing. Example rule (IceCat on tag 2):
+	 * { "Icecat",   NULL,       NULL,       1 << 1,       0,           -1 }, */
+	{ NULL,       NULL,       NULL,       0,            0,           -1 },
 };
 
 /* layout(s) */
 static const float mfact     = 0.55; /* factor of master area size [0.05..0.95] */
 static const int nmaster     = 1;    /* number of clients in master area */
-static const int resizehints = 1;    /* 1 means respect size hints in tiled resizals */
+static const int resizehints = 0;    /* 0: tiled windows fill their space exactly */
 static const int attachbelow = 1;    /* 1 means attach after the currently active window */
 static const int lockfullscreen = 1; /* 1 will force focus on the fullscreen window */
 static const int refreshrate = 120;  /* refresh rate (per second) for client move/resize */
