@@ -8,3 +8,18 @@ config.def.h as upstream so new releases can be compared against it.
 
 One change from upstream in config.def.h too: MODKEY is Mod4Mask (Super)
 instead of Mod1Mask (Alt), to match the Moonlander dwm layer.
+
+Patches (originals from dwm.suckless.org/patches, kept in patches/,
+applied in this order; dwm.c already has them, so don't apply again):
+  alwayscenter       dwm-alwayscenter-20200625-f04cac6.diff
+  attachbelow        dwm-attachbelow-6.2.diff (updategeom hunk by hand)
+  scratchpad         dwm-scratchpad-20240321-061e9fe.diff
+  combo              dwm-combo-6.1.diff
+  noborder           dwm-noborderselflickerfix-2022042627-d93ff48803f0.diff
+                     (solitary() prototype by hand)
+  pertag             dwm-pertag_with_sel-20231003-9f88553.diff
+                     (by hand: the bar is left out, so Mod+b is the same
+                     on every tag; comboview goes through view() so a
+                     combo uses the settings of its first tag)
+Their config.def.h hunks are not applied (config.def.h stays upstream);
+the settings are in config.h.
