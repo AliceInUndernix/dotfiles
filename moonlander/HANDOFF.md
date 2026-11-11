@@ -103,8 +103,8 @@ suggest them again without asking:
 ## Open notes for the next project
 
 - Version 89 compiles with `./install.sh moonlander` (checked 2026-11-11,
-  ARM gcc 13.2, no warnings). Flashing and testing on the keyboard are still
-  Alice's to do.
+  ARM gcc 13.2, no warnings). The script then flashes with dfu-util; that
+  step and the layout itself are not yet tested on the keyboard.
 - If double letters come back, raise `DEBOUNCE` in `config.h` (15 or 20).
 - USB endpoints are used up exactly (keyboard 1 + mouse 1 + Oryx raw HID 2 +
   steno 3 = 7). Turning on NKRO, console, WebUSB or media keys needs one freed first.

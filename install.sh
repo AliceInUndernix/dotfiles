@@ -284,7 +284,7 @@ install_slock() {
 #   ~/.local/share/qmk/arm-gnu-toolchain   ARM compiler, if none is installed
 #   ~/.local/bin/qmk, arm-none-eabi-*      symlinks to the two above
 # Each run copies moonlander/canary into QMK fresh (like update.sh did) and
-# builds. The built .bin is copied to moonlander/ for Keymapp.
+# builds and flashes. The built .bin is also copied to moonlander/.
 QMK_DIR=$DATA/qmk
 QMK_BIN=$HOME/.local/bin
 QMK_BRANCH=firmware25
@@ -363,7 +363,34 @@ install_moonlander() {
 	su -s /bin/sh "$USER_NAME" -c "cd '$fw' && PATH='$QMK_DIR/venv/bin:$QMK_BIN:$PATH' make '$QMK_TARGET' $nosuffix"
 	cp "$fw/zsa_moonlander_reva_canary.bin" "$DOTFILES/moonlander/"
 	own "$DOTFILES/moonlander/zsa_moonlander_reva_canary.bin"
-	say "built   moonlander/zsa_moonlander_reva_canary.bin (flash it with Keymapp)"
+	say "built   moonlander/zsa_moonlander_reva_canary.bin"
+
+	# 7. Flash, with dfu-util (root can reach the keyboard without udev
+	# rules). Waits up to 2 minutes for the keyboard to be in flashing mode;
+	# if it never shows up, the .bin is still there for Keymapp.
+	# MOONLANDER_FLASH=no ./install.sh moonlander  builds without flashing.
+	[ "${MOONLANDER_FLASH:-yes}" = no ] && return 0
+	if ! command -v dfu-util >/dev/null 2>&1; then
+		warn "dfu-util not found (try ./install.sh --deps): flash the .bin with Keymapp"
+		return 0
+	fi
+	say "flash   put the Moonlander in flashing mode now:"
+	say "        tap the far-left lower key (backlight layer), then BOOT"
+	say "        (the key next to Ctrl), or press the reset pin hole"
+	i=0
+	until dfu-util -l 2>/dev/null | grep -q '0483:df11'; do
+		i=$((i + 1))
+		if [ "$i" -gt 120 ]; then
+			warn "no keyboard in flashing mode after 2 minutes: flash the .bin with Keymapp, or run ./install.sh moonlander again"
+			return 0
+		fi
+		sleep 1
+	done
+	if dfu-util -a 0 -d 0483:df11 -s 0x08000000:leave -D "$DOTFILES/moonlander/zsa_moonlander_reva_canary.bin"; then
+		say "flashed the Moonlander"
+	else
+		warn "dfu-util reported an error; if the keyboard doesn't restart, flash the .bin with Keymapp"
+	fi
 
 	case ":$PATH:" in *":$QMK_BIN:"*) ;; *) warn "add $QMK_BIN to PATH to run qmk yourself" ;; esac
 }

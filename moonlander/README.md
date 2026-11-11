@@ -20,7 +20,7 @@ that were tried and settled. Start with the comment at the top of
 ./install.sh moonlander
 ```
 
-Everything goes into your home folder; nothing needs root:
+Everything goes into your home folder (the script runs as root, but the build runs as you):
 
 | What | Where |
 |---|---|
@@ -30,8 +30,12 @@ Everything goes into your home folder; nothing needs root:
 
 Each run copies `canary/` into QMK as `keyboards/zsa/moonlander/keymaps/canary`,
 builds `zsa/moonlander/reva:canary` and puts
-`moonlander/zsa_moonlander_reva_canary.bin` here (git ignores it). Flash
-that file with Keymapp. Run it again after every change to the keymap; the
+`moonlander/zsa_moonlander_reva_canary.bin` here (git ignores it). Then it
+flashes the keyboard with `dfu-util`: when it says so, tap the far-left
+lower key (backlight layer) and then BOOT (the key next to Ctrl), or press
+the reset pin hole. It waits up to 2 minutes; if the keyboard doesn't show
+up, flash the .bin with Keymapp instead. `MOONLANDER_FLASH=no` builds
+without flashing. Run it again after every change to the keymap; the
 download steps are skipped once done.
 
 `dfu-suffix` (package `dfu-util`, installed by `./install.sh --deps`) adds a
