@@ -64,6 +64,7 @@ What the script does:
   `<name>.bak.<date>`, never deleted. Running it again is safe.
 - **suckless tools** are built and installed into `PREFIX`, and the build
   files are cleaned up afterwards.
+- **Private home**: new files are yours alone (umask 077 in `~/.profile`, not for root), and each run of `install.sh` takes group and other permissions off everything already in your home.
 - **Login shell**: ksh becomes the shell of both the user and root (`chsh`, no password asked; root gets copies of `profile` and `kshrc`, owned by root).
 - **Moonlander**: QMK, its Python environment, the ARM compiler and ZSA's
   QMK source go into the user's `~/.local`, then the firmware is built into

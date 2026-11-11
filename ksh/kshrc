@@ -6,9 +6,13 @@ case $- in *i*) ;; *) return 0 2>/dev/null ;; esac
 set -o emacs              # emacs keys on the command line (Ctrl+a, Ctrl+e, arrows)
 set -o noclobber          # > will not overwrite a file; >| does
 
-HISTFILE=$HOME/.local/state/ksh/history
-HISTSIZE=10000
-[ -d "${HISTFILE%/*}" ] || mkdir -p "${HISTFILE%/*}"
+# One history file shared by every open shell: a command run in one
+# terminal can be found with the arrows in the others. ksh has no
+# "unlimited", so a million commands stands in for it.
+HISTFILE=$HOME/.ksh_history
+HISTSIZE=1000000
+# Up/Down with text typed find older commands starting with that text;
+# with an empty line they go through all of history (ksh93 does this).
 
 # Prompt: folder (~ for home), then $ for you or # for root,
 # e.g. "~/dotfiles $ " and "/etc # ".

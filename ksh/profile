@@ -4,6 +4,10 @@ export EDITOR=nvim VISUAL=nvim PAGER=less
 # less: searches ignore case unless they have a capital letter (-i), quit
 # when the text fits on one screen (-F), show colours, e.g. git's (-R).
 export LESS=-iFR
+# New files and folders are yours alone (root can still read them).
+# Not for root: files it makes in /etc or /usr must stay readable.
+[ "$(id -u)" -eq 0 ] || umask 077
+
 export ENV=$HOME/.kshrc     # ksh reads this for every interactive shell
 
 # Your own programs (qmk, and suckless tools built with PREFIX=~/.local).

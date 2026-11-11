@@ -18,6 +18,9 @@
 # /usr/local). POSIX sh, no bashisms, so it runs on any distro.
 
 set -eu
+# What gets installed system-wide must be readable by everyone, whatever
+# umask the shell that started us has (the user's is 077).
+umask 022
 
 DOTFILES=$(cd "$(dirname "$0")" && pwd)
 PREFIX=${PREFIX:-/usr/local}
@@ -206,6 +209,13 @@ install_ksh() {
 	root_home=${root_home##*:}
 	rootcopy "$DOTFILES/ksh/profile" "$root_home/.profile"
 	rootcopy "$DOTFILES/ksh/kshrc" "$root_home/.kshrc"
+	# History moved from ~/.local/state/ksh/history to ~/.ksh_history.
+	old=$HOME/.local/state/ksh/history
+	if [ -f "$old" ] && [ ! -e "$HOME/.ksh_history" ]; then
+		mv "$old" "$HOME/.ksh_history"
+		rmdir "${old%/*}" 2>/dev/null || :
+		say "move    $old -> $HOME/.ksh_history"
+	fi
 }
 
 # rootcopy <file in repo> <target>: copy owned by root, backing up what is there.
@@ -498,4 +508,9 @@ done
 
 [ "$want_deps" = yes ] && deps
 for p in $parts; do "install_$p"; done
+# The user's files are theirs alone, like their umask 077 makes new ones:
+# take group and other permissions off everything in their home.
+chmod 700 "$HOME"
+n=$(find "$HOME" ! -type l -perm /077 -print -exec chmod go= {} + | wc -l)
+[ "$n" -eq 0 ] || say "private $n files and folders in $HOME (only $USER_NAME and root)"
 say "done"
