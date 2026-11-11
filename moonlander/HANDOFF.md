@@ -102,7 +102,10 @@ suggest them again without asking:
 
 ## Open notes for the next project
 
-- Version 89 compiles with `./install.sh moonlander` (checked 2026-11-11,
+- The build target is `zsa/moonlander/revb:canary`: Alice's keyboard is
+  revision B. Until 2026-11-11 the script built `reva` by mistake; rev A
+  firmware doesn't run on rev B (other bootloader, other flash address).
+- Version 89 compiles for revb with `./install.sh moonlander` (checked 2026-11-11,
   ARM gcc 13.2, no warnings). The script then flashes with dfu-util; that
   step and the layout itself are not yet tested on the keyboard.
 - If double letters come back, raise `DEBOUNCE` in `config.h` (15 or 20).

@@ -29,8 +29,8 @@ Everything goes into your home folder (the script runs as root, but the build ru
 | ARM compiler, only if `arm-none-eabi-gcc` isn't installed already (Arm GNU Toolchain 14.2.rel1) | `~/.local/share/qmk/arm-gnu-toolchain`, linked into `~/.local/bin` |
 
 Each run copies `canary/` into QMK as `keyboards/zsa/moonlander/keymaps/canary`,
-builds `zsa/moonlander/reva:canary` and puts
-`moonlander/zsa_moonlander_reva_canary.bin` here (git ignores it). Then it
+builds `zsa/moonlander/revb:canary` and puts
+`moonlander/zsa_moonlander_revb_canary.bin` here (git ignores it). Then it
 flashes the keyboard with `dfu-util`: when it says so, tap the far-left
 lower key (backlight layer) and then BOOT (the key next to Ctrl), or press
 the reset pin hole. It waits up to 2 minutes; if the keyboard doesn't show

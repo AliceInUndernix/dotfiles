@@ -312,7 +312,14 @@ install_slock() {
 QMK_DIR=$DATA/qmk
 QMK_BIN=$HOME/.local/bin
 QMK_BRANCH=firmware25
-QMK_TARGET=zsa/moonlander/reva:canary
+# Alice's Moonlander is revision B (shipped since December 2025). Rev B has
+# its own bootloader ("Moonlander Bootloader", USB 3297:2003) that starts
+# the firmware at 0x08002000; rev A's is ST's (0483:df11, at 0x08000000).
+# Flashing one revision's firmware on the other doesn't work.
+QMK_TARGET=zsa/moonlander/revb:canary
+ML_BIN=zsa_moonlander_revb_canary.bin
+ML_DFU_ID=3297:2003
+ML_DFU_ADDR=0x08002000
 ARM_VERSION=14.2.rel1
 
 install_moonlander() {
@@ -385,9 +392,9 @@ install_moonlander() {
 	# QMK asks for its version string) refuses repositories owned by someone
 	# else when run as root ("dubious ownership"), which breaks the build.
 	su -s /bin/sh "$USER_NAME" -c "cd '$fw' && PATH='$QMK_DIR/venv/bin:$QMK_BIN:$PATH' make '$QMK_TARGET' $nosuffix"
-	cp "$fw/zsa_moonlander_reva_canary.bin" "$DOTFILES/moonlander/"
-	own "$DOTFILES/moonlander/zsa_moonlander_reva_canary.bin"
-	say "built   moonlander/zsa_moonlander_reva_canary.bin"
+	cp "$fw/$ML_BIN" "$DOTFILES/moonlander/"
+	own "$DOTFILES/moonlander/$ML_BIN"
+	say "built   moonlander/$ML_BIN"
 
 	# 7. Flash, with dfu-util (root can reach the keyboard without udev
 	# rules). Waits up to 2 minutes for the keyboard to be in flashing mode;
@@ -402,7 +409,7 @@ install_moonlander() {
 	say "        tap the far-left lower key (backlight layer), then BOOT"
 	say "        (the key next to Ctrl), or press the reset pin hole"
 	i=0
-	until dfu-util -l 2>/dev/null | grep -q '0483:df11'; do
+	until dfu-util -l 2>/dev/null | grep -q "$ML_DFU_ID"; do
 		i=$((i + 1))
 		if [ "$i" -gt 120 ]; then
 			warn "no keyboard in flashing mode after 2 minutes: flash the .bin with Keymapp, or run ./install.sh moonlander again"
@@ -410,7 +417,7 @@ install_moonlander() {
 		fi
 		sleep 1
 	done
-	if dfu-util -a 0 -d 0483:df11 -s 0x08000000:leave -D "$DOTFILES/moonlander/zsa_moonlander_reva_canary.bin"; then
+	if dfu-util -a 0 -d "$ML_DFU_ID" -s "$ML_DFU_ADDR:leave" -D "$DOTFILES/moonlander/$ML_BIN"; then
 		say "flashed the Moonlander"
 	else
 		warn "dfu-util reported an error; if the keyboard doesn't restart, flash the .bin with Keymapp"
