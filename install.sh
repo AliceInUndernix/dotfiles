@@ -175,7 +175,13 @@ install_nvim() {
 		own "$pack/$name"
 		say "plugin  $name (from archive)"
 	done
-	command -v nvim >/dev/null 2>&1 || warn "nvim is not installed (needs 0.11+)"
+	# vim runs Neovim: ~/.local/bin/vim -> nvim (~/.local/bin is in PATH
+	# through ~/.profile, ahead of any real vim).
+	if nvim=$(command -v nvim); then
+		link "$nvim" "$HOME/.local/bin/vim"
+	else
+		warn "nvim is not installed (needs 0.11+)"
+	fi
 	command -v xclip >/dev/null 2>&1 || command -v xsel >/dev/null 2>&1 ||
 		warn "xclip/xsel not installed: Neovim can't use the system clipboard (try ./install.sh --deps)"
 }

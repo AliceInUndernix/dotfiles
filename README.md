@@ -13,7 +13,7 @@ script puts the whole configuration back after a fresh install.
 | `st/` | st 0.9.3 source (terminal): scrollback like Alacritty (Shift+PageUp/PageDown/Home/End, mouse wheel), Symbols Nerd Font for icons | `PREFIX/bin/st`, font in `~/.local/share/fonts` |
 | `dmenu/` | dmenu 5.4 source (launcher), `dmenu_apps` and its list `apps` | `PREFIX/bin/dmenu`, `dmenu_apps`, `~/.config/dmenu/apps` |
 | `slock/` | slock 1.7 source (screen locker; Mod+Shift+l locks, Mod+Shift+s suspends) | `PREFIX/bin/slock` |
-| `nvim/` | Neovim config (0.11+, no plugin manager) | `~/.config/nvim` (symlink) |
+| `nvim/` | Neovim config (0.11+, no plugin manager) | `~/.config/nvim` (symlink), `~/.local/bin/vim` -> nvim |
 | `tmux/` | tmux config | `~/.config/tmux/tmux.conf` (symlink) |
 | `ksh/` | Korn shell: `profile` (PATH, EDITOR) and `kshrc` (prompt, emacs keys, aliases) | `~/.profile`, `~/.kshrc` (symlinks); ksh becomes the login shell of the user and root |
 | `flameshot/` | Screenshots: Print selects, Mod+Print copies the screen | `~/.config/flameshot/flameshot.ini` (symlink) |
