@@ -3,7 +3,7 @@
 
 case $- in *i*) ;; *) return 0 2>/dev/null ;; esac
 
-set -o vi                 # vi keys on the command line (Esc, then hjkl)
+set -o emacs              # emacs keys on the command line (Ctrl+a, Ctrl+e, arrows)
 set -o noclobber          # > will not overwrite a file; >| does
 
 HISTFILE=$HOME/.local/state/ksh/history
@@ -20,7 +20,7 @@ _pwd() {
 }
 PS1='$(_pwd) $ '
 
-alias ls='ls --color=auto'
+alias ls='ls -F'          # / after folders, * after programs, @ after links; no colours
 alias ll='ls -lh'
 alias la='ls -lAh'
 alias grep='grep --color=auto'
