@@ -112,8 +112,8 @@ suggest them again without asking:
   revision B. Until 2026-11-11 the script built `reva` by mistake; rev A
   firmware doesn't run on rev B (other bootloader, other flash address).
 - Version 90 compiles for revb with `./install.sh moonlander` (checked 2026-11-11,
-  ARM gcc 13.2, no warnings). The script then flashes with dfu-util; that
-  step and the layout itself are not yet tested on the keyboard.
+  ARM gcc 13.2, no warnings). Flashed on Alice's rev B and working
+  (2026-11-11).
 - Build with the pinned Arm GNU Toolchain 14.2 (install.sh does). Built
   with Gentoo's arm-none-eabi-gcc 16 the firmware froze after 3-4 key
   presses on Alice's rev B; the same code built with gcc 13 works.
