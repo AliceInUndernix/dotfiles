@@ -374,6 +374,16 @@ install_moonlander() {
 		done
 	fi
 
+	# 4b. ZSA's rev B code moves the stack pointer with an asm "g"
+	# operand; gcc 16 (Gentoo's arm-none-eabi-gcc) then picks a memory
+	# operand that msr can't take ("Thumb encoding does not support an
+	# immediate here"). "r" (a register) is what msr needs, on every gcc.
+	ml=$fw/keyboards/zsa/moonlander/moonlander.c
+	if grep -q '"msr msp, %0" ::"g"' "$ml"; then
+		sed -i 's/"msr msp, %0" ::"g"/"msr msp, %0" ::"r"/' "$ml"
+		say "fix     msr operand in $ml (for gcc 16)"
+	fi
+
 	# 5. Keymap: a fresh copy of moonlander/canary.
 	km=$fw/keyboards/zsa/moonlander/keymaps/canary
 	rm -rf "$km"
