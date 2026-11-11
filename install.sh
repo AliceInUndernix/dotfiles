@@ -110,8 +110,8 @@ deps() {
 			sys-process/btop media-gfx/feh \
 			app-mobilephone/dfu-util
 		# Browsers are not in the main tree: IceCat comes from
-		# src_prepare-overlay, ungoogled-chromium from pf4public.
-		for repo in src_prepare-overlay pf4public; do
+		# parona-overlay, ungoogled-chromium from pf4public.
+		for repo in parona-overlay pf4public; do
 			portageq get_repo_path / "$repo" >/dev/null 2>&1 && continue
 			say "enable  overlay $repo"
 			emerge --ask --noreplace app-eselect/eselect-repository
