@@ -16,6 +16,9 @@ script puts the whole configuration back after a fresh install.
 | `nvim/` | Neovim config (0.11+, no plugin manager) | `~/.config/nvim` (symlink) |
 | `tmux/` | tmux config | `~/.config/tmux/tmux.conf` (symlink) |
 | `ksh/` | Korn shell: `profile` (PATH, EDITOR) and `kshrc` (prompt, vi keys, aliases) | `~/.profile`, `~/.kshrc` (symlinks); ksh becomes the login shell |
+| `flameshot/` | Screenshots: Print selects, Mod+Print copies the screen | `~/.config/flameshot/flameshot.ini` (symlink) |
+| `mpv/` | Video player: resume, Habamax OSD, vim seek keys | `~/.config/mpv` (symlink) |
+| `sioyek/` | Book/PDF reader in Habamax colours (TypeTrack's green/red too) | `~/.config/sioyek/prefs_user.config` (symlink) |
 | `x/` | `xinitrc`: Habamax-grey wallpaper, xss-lock (slock on idle/suspend), then dwm (run `startx`) | `~/.xinitrc` (symlink) |
 | `moonlander/` | QMK "canary" keymap for the keyboard | built into `moonlander/*.bin`, flashed with Keymapp |
 | `archive/` | Untouched copies of everything downloaded from elsewhere | |
@@ -41,7 +44,7 @@ dependencies are already there:
 
 ```sh
 ./install.sh            # everything
-./install.sh nvim       # only some parts: ksh x nvim tmux dwm st dmenu slock moonlander
+./install.sh nvim       # only some parts: ksh x nvim tmux flameshot mpv sioyek dwm st dmenu slock moonlander
 ./install.sh --list     # the part names
 PREFIX=~/.local ./install.sh dwm   # install without root
 ```

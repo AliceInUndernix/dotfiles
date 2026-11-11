@@ -19,7 +19,7 @@ DOTFILES=$(cd "$(dirname "$0")" && pwd)
 PREFIX=${PREFIX:-/usr/local}
 CONFIG=${XDG_CONFIG_HOME:-$HOME/.config}
 STAMP=$(date +%Y%m%d-%H%M%S)
-PARTS="ksh x nvim tmux dwm st dmenu slock moonlander"
+PARTS="ksh x nvim tmux flameshot mpv sioyek dwm st dmenu slock moonlander"
 
 say()  { printf '==> %s\n' "$*"; }
 warn() { printf '!!  %s\n' "$*" >&2; }
@@ -63,27 +63,32 @@ deps() {
 			dev-vcs/git app-editors/neovim app-misc/tmux \
 			x11-apps/xinit x11-apps/xsetroot x11-misc/xss-lock \
 			app-shells/ksh media-fonts/liberation-fonts \
+			media-gfx/flameshot media-video/mpv net-misc/yt-dlp \
 			app-mobilephone/dfu-util ;;
 	*debian*|*ubuntu*)
 		asroot apt-get install build-essential pkg-config libx11-dev \
 			libxft-dev libxinerama-dev libxrandr-dev libxext-dev \
 			libfontconfig-dev libfreetype-dev git neovim tmux \
 			xinit x11-xserver-utils xss-lock ksh fonts-liberation \
+			flameshot mpv yt-dlp \
 			python3-venv dfu-util ;;
 	*arch*)
 		asroot pacman -S --needed base-devel libx11 libxft libxinerama \
 			libxrandr libxext fontconfig freetype2 git neovim tmux dfu-util \
-			xorg-xinit xorg-xsetroot xss-lock ttf-liberation ;;
+			xorg-xinit xorg-xsetroot xss-lock ttf-liberation \
+			flameshot mpv yt-dlp ;;
 	*fedora*|*rhel*)
 		asroot dnf install gcc make pkgconf-pkg-config libX11-devel \
 			libXft-devel libXinerama-devel libXrandr-devel libXext-devel \
 			fontconfig-devel freetype-devel git neovim tmux dfu-util \
-			xorg-x11-xinit xsetroot xss-lock ksh liberation-mono-fonts ;;
+			xorg-x11-xinit xsetroot xss-lock ksh liberation-mono-fonts \
+			liberation-sans-fonts flameshot mpv yt-dlp ;;
 	*void*)
 		asroot xbps-install base-devel pkg-config libX11-devel libXft-devel \
 			libXinerama-devel libXrandr-devel libXext-devel \
 			fontconfig-devel freetype-devel git neovim tmux dfu-util \
-			xinit xsetroot xss-lock mksh liberation-fonts-ttf ;;
+			xinit xsetroot xss-lock mksh liberation-fonts-ttf \
+			flameshot mpv yt-dlp ;;
 	*)
 		warn "unknown distro ($id): install a C compiler, make, pkg-config,"
 		warn "and headers for X11, Xft, Xinerama, Xrandr, Xext, fontconfig, freetype." ;;
@@ -137,6 +142,21 @@ install_x() {
 install_tmux() {
 	link "$DOTFILES/tmux/tmux.conf" "$CONFIG/tmux/tmux.conf"
 	command -v tmux >/dev/null 2>&1 || warn "tmux is not installed"
+}
+
+install_flameshot() {
+	link "$DOTFILES/flameshot/flameshot.ini" "$CONFIG/flameshot/flameshot.ini"
+	command -v flameshot >/dev/null 2>&1 || warn "flameshot is not installed"
+}
+
+install_mpv() {
+	link "$DOTFILES/mpv" "$CONFIG/mpv"
+	command -v mpv >/dev/null 2>&1 || warn "mpv is not installed"
+}
+
+install_sioyek() {
+	link "$DOTFILES/sioyek/prefs_user.config" "$CONFIG/sioyek/prefs_user.config"
+	command -v sioyek >/dev/null 2>&1 || warn "sioyek is not installed"
 }
 
 # suckless: build as the user, install as root (unless PREFIX is writable).
