@@ -5,3 +5,26 @@ Copied:   2026-11-11, upstream tree at the tag without .git
 
 config.h started as a copy of config.def.h. Edit config.h; keep
 config.def.h as upstream so new releases can be compared against it.
+
+Patches (originals from tools.suckless.org/dmenu/patches, kept in
+patches/, applied in this order; dmenu.c already has them, so don't
+apply again):
+  center             dmenu-center-20250407-b1e217b.diff
+  bordercolor        dmenu-bordercolor-20230512-0fe460d.diff
+  fuzzymatch         dmenu-fuzzymatch-5.3.diff
+  fuzzyhighlight     dmenu-fuzzyhighlight-5.3.diff
+                     (scheme enum and usage() by hand)
+  sort_by_popularity dmenu-sort_by_popularity-20250117-86f0b51.diff
+                     (reworked by hand: only with the new -P flag, so
+                     other scripts piping into dmenu don't fill the
+                     cache; items are sorted once at start and keep the
+                     upstream exact/prefix/substring order instead of
+                     having their text swapped; with fuzzy matching the
+                     order is exact match, starts with the first letter
+                     typed, popularity, then closeness of the match;
+                     Shift+Return (typed text) isn't counted)
+Their config.def.h hunks are not applied (config.def.h stays upstream);
+the settings are in config.h. usage() and dmenu.1 also list -c, -bw, -P.
+
+dmenu_apps and apps are ours: Mod+p in dwm runs dmenu_apps, which shows
+only the programs in apps (linked to ~/.config/dmenu/apps by install.sh).

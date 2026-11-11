@@ -1,0 +1,13 @@
+# Programs for dmenu_apps (Mod+p in dwm). One per line:
+#   name<TAB>command   or just   command
+# Order here only matters until you've used them; then the most used come first.
+
+st	st
+tmux	st -e tmux
+nvim	st -e nvim
+btop	st -e btop
+wiremix	st -e wiremix
+sioyek	sioyek
+flameshot	flameshot gui
+icecat	icecat
+chromium	chromium-browser

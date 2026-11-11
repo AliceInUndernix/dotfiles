@@ -11,7 +11,7 @@ script puts the whole configuration back after a fresh install.
 |---|---|---|
 | `dwm/` | dwm 6.8 source (window manager) | `PREFIX/bin/dwm` |
 | `st/` | st 0.9.3 source (terminal) | `PREFIX/bin/st` |
-| `dmenu/` | dmenu 5.4 source (launcher) | `PREFIX/bin/dmenu`, `dmenu_run` |
+| `dmenu/` | dmenu 5.4 source (launcher), `dmenu_apps` and its list `apps` | `PREFIX/bin/dmenu`, `dmenu_apps`, `~/.config/dmenu/apps` |
 | `slock/` | slock 1.7 source (screen locker; Mod+Shift+l locks, Mod+Shift+s suspends) | `PREFIX/bin/slock` |
 | `nvim/` | Neovim config (0.11+, no plugin manager) | `~/.config/nvim` (symlink) |
 | `tmux/` | tmux config | `~/.config/tmux/tmux.conf` (symlink) |

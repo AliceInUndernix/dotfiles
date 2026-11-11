@@ -6,7 +6,6 @@ static const unsigned int snap      = 32;       /* snap pixel */
 static const int showbar            = 0;        /* 0 means no bar (Mod+b shows it) */
 static const int topbar             = 1;        /* 0 means bottom bar */
 static const char *fonts[]          = { "Liberation Mono:pixelsize=12" };
-static const char dmenufont[]       = "Liberation Mono:pixelsize=12";
 /* Habamax colours (Neovim's colorscheme, see nvim/init.lua) */
 static const char col_bg[]          = "#1c1c1c";
 static const char col_border[]      = "#585858";
@@ -64,7 +63,9 @@ static const Layout layouts[] = {
 
 /* commands */
 static char dmenumon[2] = "0"; /* component of dmenucmd, manipulated in spawn() */
-static const char *dmenucmd[] = { "dmenu_run", "-m", dmenumon, "-fn", dmenufont, "-nb", col_bg, "-nf", col_fg, "-sb", col_fg, "-sf", col_selfg, NULL };
+/* dmenu_apps shows only the programs in dmenu/apps; font, colours, border
+ * and size are in dmenu/config.h */
+static const char *dmenucmd[] = { "dmenu_apps", "-m", dmenumon, NULL };
 static const char *termcmd[]  = { "st", NULL };
 /* scratchpad: one floating st, Mod+` shows/hides it on any tag */
 static const char scratchpadname[] = "scratchpad";

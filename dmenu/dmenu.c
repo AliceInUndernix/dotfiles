@@ -1,6 +1,7 @@
 /* See LICENSE file for copyright and license details. */
 #include <ctype.h>
 #include <locale.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,21 +26,28 @@
 #define TEXTW(X)              (drw_fontset_getwidth(drw, (X)) + lrpad)
 
 /* enums */
-enum { SchemeNorm, SchemeSel, SchemeOut, SchemeLast }; /* color schemes */
+enum { SchemeNorm, SchemeSel, SchemeNormHighlight, SchemeSelHighlight,
+       SchemeOut, SchemeBorder, SchemeLast }; /* color schemes */
 
 struct item {
 	char *text;
+	unsigned int width;
 	struct item *left, *right;
 	int out;
+	double distance;
+	int pop; /* times chosen before, from the popularity cache */
 };
 
 static char text[BUFSIZ] = "";
 static char *embed;
+static char *popcache = NULL;
+static int popularity = 0; /* -P option; sort by and record popularity */
 static int bh, mw, mh;
 static int inputw = 0, promptw;
 static int lrpad; /* sum of left and right padding */
 static size_t cursor;
 static struct item *items = NULL;
+static struct item *popitems = NULL;
 static struct item *matches, *matchend;
 static struct item *prev, *curr, *next, *sel;
 static int mon = -1, screen;
@@ -95,6 +103,15 @@ calcoffsets(void)
 			break;
 }
 
+static int
+max_textw(void)
+{
+	int len = 0;
+	for (struct item *item = items; item && item->text; item++)
+		len = MAX(item->width, len);
+	return len;
+}
+
 static void
 cleanup(void)
 {
@@ -105,7 +122,13 @@ cleanup(void)
 		free(scheme[i]);
 	for (i = 0; items && items[i].text; ++i)
 		free(items[i].text);
+	for (i = 0; popitems && popitems[i].text; ++i)
+		free(popitems[i].text);
 	free(items);
+	free(popitems);
+	if(popcache != NULL)
+		free(popcache);
+
 	drw_free(drw);
 	XSync(dpy, False);
 	XCloseDisplay(dpy);
@@ -129,9 +152,47 @@ cistrstr(const char *h, const char *n)
 	return NULL;
 }
 
+static void
+drawhighlights(struct item *item, int x, int y, int maxw)
+{
+	int i, indent;
+	char c, *highlight;
+
+	if (!(strlen(item->text) && strlen(text)))
+		return;
+
+	drw_setscheme(drw, scheme[item == sel
+	                   ? SchemeSelHighlight
+	                   : SchemeNormHighlight]);
+	for (i = 0, highlight = item->text; *highlight && text[i];) {
+		if (!fstrncmp(highlight, &text[i], 1)) {
+			/* get indentation */
+			c = *highlight;
+			*highlight = '\0';
+			indent = TEXTW(item->text);
+			*highlight = c;
+
+			/* highlight character */
+			c = highlight[1];
+			highlight[1] = '\0';
+			drw_text(
+				drw,
+				x + indent - (lrpad / 2.),
+				y,
+				MIN(maxw - indent, TEXTW(highlight) - lrpad),
+				bh, 0, highlight, 0
+			);
+			highlight[1] = c;
+			++i;
+		}
+		++highlight;
+	}
+}
+
 static int
 drawitem(struct item *item, int x, int y, int w)
 {
+	int r;
 	if (item == sel)
 		drw_setscheme(drw, scheme[SchemeSel]);
 	else if (item->out)
@@ -139,7 +200,9 @@ drawitem(struct item *item, int x, int y, int w)
 	else
 		drw_setscheme(drw, scheme[SchemeNorm]);
 
-	return drw_text(drw, x, y, w, bh, lrpad / 2, item->text, 0);
+	r = drw_text(drw, x, y, w, bh, lrpad / 2, item->text, 0);
+	drawhighlights(item, x, y, w);
+	return r;
 }
 
 static void
@@ -226,9 +289,174 @@ grabkeyboard(void)
 	die("cannot grab keyboard");
 }
 
+int
+compare_distance(const void *a, const void *b)
+{
+	struct item *da = *(struct item **) a;
+	struct item *db = *(struct item **) b;
+
+	if (!db)
+		return 1;
+	if (!da)
+		return -1;
+
+	/* an exact match goes first, then the more popular (-P), then the
+	 * closer match; ties keep the order of items (popularity order) */
+	int ea = !fstrncmp(text, da->text, strlen(text) + 1);
+	int eb = !fstrncmp(text, db->text, strlen(text) + 1);
+	if (ea != eb)
+		return eb - ea;
+	/* then items starting with the first letter typed */
+	ea = !fstrncmp(text, da->text, 1);
+	eb = !fstrncmp(text, db->text, 1);
+	if (ea != eb)
+		return eb - ea;
+	if (da->pop != db->pop)
+		return db->pop - da->pop;
+	if (da->distance != db->distance)
+		return da->distance < db->distance ? -1 : 1;
+	return da < db ? -1 : da > db;
+}
+
+void
+fuzzymatch(void)
+{
+	/* bang - we have so much memory */
+	struct item *it;
+	struct item **fuzzymatches = NULL;
+	char c;
+	int number_of_matches = 0, i, pidx, sidx, eidx;
+	int text_len = strlen(text), itext_len;
+
+	matches = matchend = NULL;
+
+	/* walk through all items */
+	for (it = items; it && it->text; ++it) {
+		if (text_len) {
+			itext_len = strlen(it->text);
+			pidx = 0; /* pointer */
+			sidx = eidx = -1; /* start of match, end of match */
+			/* walk through item text */
+			for (i = 0; i < itext_len && (c = it->text[i]); ++i) {
+				/* fuzzy match pattern */
+				if (!fstrncmp(&text[pidx], &c, 1)) {
+					if(sidx == -1)
+						sidx = i;
+					++pidx;
+					if (pidx == text_len) {
+						eidx = i;
+						break;
+					}
+				}
+			}
+			/* build list of matches */
+			if (eidx != -1) {
+				/* compute distance */
+				/* add penalty if match starts late (log(sidx+2))
+				 * add penalty for long a match without many matching characters */
+				it->distance = log(sidx + 2) + (double)(eidx - sidx - text_len);
+				/* fprintf(stderr, "distance %s %f\n", it->text, it->distance); */
+				appenditem(it, &matches, &matchend);
+				++number_of_matches;
+			}
+		} else {
+			appenditem(it, &matches, &matchend);
+		}
+	}
+
+	if (number_of_matches) {
+		/* initialize array with matches */
+		if (!(fuzzymatches = realloc(fuzzymatches,
+		                             number_of_matches * sizeof(struct item *))))
+			die("cannot realloc %u bytes:", number_of_matches * sizeof(struct item *));
+		for (i = 0, it = matches; it && i < number_of_matches; ++i, it = it->right)
+			fuzzymatches[i] = it;
+		/* sort matches according to distance */
+		qsort(fuzzymatches, number_of_matches, sizeof(struct item*), compare_distance);
+		/* rebuild list of matches */
+		matches = matchend = NULL;
+		for (i = 0, it = fuzzymatches[i]; i < number_of_matches && it &&
+		        it->text; ++i, it = fuzzymatches[i])
+			appenditem(it, &matches, &matchend);
+		free(fuzzymatches);
+	}
+	curr = sel = matches;
+	calcoffsets();
+}
+
+static int
+comparepop(const void *a, const void *b)
+{
+	const struct item *ia = a, *ib = b;
+
+	if (ia->pop != ib->pop)
+		return ib->pop - ia->pop;
+	/* same popularity: keep the order of the input */
+	return ia->out - ib->out;
+}
+
+/* give every item its popularity and put the most popular first; items
+ * with the same popularity keep their order from stdin */
+static void
+sortitemsbypop(void)
+{
+	struct item *item, *pop;
+	size_t n;
+
+	for (n = 0, item = items; item && item->text; item++, n++) {
+		item->pop = 0;
+		item->out = n; /* input position, reset to 0 below */
+		for (pop = popitems; pop && pop->text; pop++)
+			if (!strcmp(item->text, pop->text)) {
+				item->pop = pop->out;
+				break;
+			}
+	}
+	if (n)
+		qsort(items, n, sizeof(*items), comparepop);
+	for (item = items; item && item->text; item++)
+		item->out = 0;
+}
+
+static void
+incpop(struct item* sel) {
+	if(!(sel && sel->text))
+		return;
+	struct item* pop = NULL;
+	int found = 0;
+	FILE *out;
+	out = fopen(popcache, "w");
+	if (out == NULL) {
+		fprintf(stderr, "dmenu: cannot open '%s'\n", popcache);
+		return;
+	}
+	char decimal[16] = {'\0'};
+	for (pop = popitems; pop && pop->text; ++pop) {
+		if(found == 0 && strcmp(pop->text, sel->text) == 0) {
+			pop->out += 1;
+			found = 1;
+		}
+		fputs(pop->text, out);
+		fputs(" ", out);
+		sprintf(decimal, "%i", MIN(pop->out, 999));
+		fputs(decimal, out);
+		fputs("\n", out);
+	}
+	if(found == 0) {
+		fputs(sel->text, out);
+		fputs(" 1", out);
+		fputs("\n", out);
+	}
+	fclose(out);
+}
+
 static void
 match(void)
 {
+	if (fuzzy) {
+		fuzzymatch();
+		return;
+	}
 	static char **tokv = NULL;
 	static int tokn = 0;
 
@@ -252,7 +480,8 @@ match(void)
 				break;
 		if (i != tokc) /* not all tokens match */
 			continue;
-		/* exact matches go first, then prefixes, then substrings */
+		/* exact matches go first, then prefixes, then substrings;
+		 * with -P each group is in popularity order, since items is */
 		if (!tokc || !fstrncmp(text, item->text, textsize))
 			appenditem(item, &matches, &matchend);
 		else if (!fstrncmp(tokv[0], item->text, len))
@@ -489,6 +718,8 @@ insert:
 		break;
 	case XK_Return:
 	case XK_KP_Enter:
+		if (popularity && sel && !(ev->state & ShiftMask))
+			incpop(sel);
 		puts((sel && !(ev->state & ShiftMask)) ? sel->text : text);
 		if (!(ev->state & ControlMask)) {
 			cleanup();
@@ -563,8 +794,10 @@ readstdin(void)
 			line[len - 1] = '\0';
 		if (!(items[i].text = strdup(line)))
 			die("strdup:");
+		items[i].width = TEXTW(line);
 
 		items[i].out = 0;
+		items[i].pop = 0;
 	}
 	free(line);
 	if (items)
@@ -636,6 +869,7 @@ setup(void)
 	bh = drw->fonts->h + 2;
 	lines = MAX(lines, 0);
 	mh = (lines + 1) * bh;
+	promptw = (prompt && *prompt) ? TEXTW(prompt) - lrpad / 4 : 0;
 #ifdef XINERAMA
 	i = 0;
 	if (parentwin == root && (info = XineramaQueryScreens(dpy, &n))) {
@@ -662,9 +896,16 @@ setup(void)
 				if (INTERSECT(x, y, 1, 1, info[i]) != 0)
 					break;
 
-		x = info[i].x_org;
-		y = info[i].y_org + (topbar ? 0 : info[i].height - mh);
-		mw = info[i].width;
+		if (centered) {
+			mw = MIN(MAX(max_textw() + promptw, min_width), info[i].width);
+			x = info[i].x_org + ((info[i].width  - mw) / 2);
+			y = info[i].y_org + ((info[i].height - mh) / menu_height_ratio);
+		} else {
+			x = info[i].x_org;
+			y = info[i].y_org + (topbar ? 0 : info[i].height - mh);
+			mw = info[i].width;
+		}
+
 		XFree(info);
 	} else
 #endif
@@ -672,9 +913,16 @@ setup(void)
 		if (!XGetWindowAttributes(dpy, parentwin, &wa))
 			die("could not get embedding window attributes: 0x%lx",
 			    parentwin);
-		x = 0;
-		y = topbar ? 0 : wa.height - mh;
-		mw = wa.width;
+
+		if (centered) {
+			mw = MIN(MAX(max_textw() + promptw, min_width), wa.width);
+			x = (wa.width  - mw) / 2;
+			y = (wa.height - mh) / 2;
+		} else {
+			x = 0;
+			y = topbar ? 0 : wa.height - mh;
+			mw = wa.width;
+		}
 	}
 	promptw = (prompt && *prompt) ? TEXTW(prompt) - lrpad / 4 : 0;
 	inputw = mw / 3; /* input width: ~33% of monitor width */
@@ -684,9 +932,11 @@ setup(void)
 	swa.override_redirect = True;
 	swa.background_pixel = scheme[SchemeNorm][ColBg].pixel;
 	swa.event_mask = ExposureMask | KeyPressMask | VisibilityChangeMask;
-	win = XCreateWindow(dpy, root, x, y, mw, mh, 0,
+	win = XCreateWindow(dpy, root, x, y, mw, mh, border_width,
 	                    CopyFromParent, CopyFromParent, CopyFromParent,
 	                    CWOverrideRedirect | CWBackPixel | CWEventMask, &swa);
+	if (border_width)
+		XSetWindowBorder(dpy, win, scheme[SchemeBorder][ColFg].pixel);
 	XSetClassHint(dpy, win, &ch);
 
 	/* input methods */
@@ -712,10 +962,104 @@ setup(void)
 }
 
 static void
+itemize(struct item* item, const char* line, const ssize_t size)
+{
+	const size_t UNDEF = size + 1;
+	size_t firstchar = UNDEF, lastchar = UNDEF;
+	size_t firstnum = UNDEF;
+	size_t i;
+	int afterspace = 0;
+	for (i = 0 ; i < size ; ++i) {
+		const char c = line[i];
+		if (c == ' ') {
+			if (firstchar != UNDEF)
+				afterspace = 1;
+			continue;
+		}
+		if (afterspace == 1 && (c >= '0' && c <= '9')) {
+			firstnum = i;
+			break;
+		}
+		if (firstchar == UNDEF)
+			firstchar = i;
+		lastchar = i;
+	}
+	size_t len = lastchar - firstchar + 2;
+	item->text = (char*)malloc(sizeof(char) * len);
+	memcpy(item->text, line + firstchar, len);
+	item->text[len - 1] = '\0';
+
+	item->out = 0;
+	if (firstnum != UNDEF)
+		item->out = atoi(line + firstnum);
+}
+
+static int
+compareitembyoutrev(const void* lhs, const void* rhs)
+{
+	return ((struct item*)rhs)->out - ((struct item*)lhs)->out;
+}
+
+static void
+loadpopitems(void)
+{
+	const char* xdg_cache_home = getenv("XDG_CACHE_HOME");
+	const char* home = getenv("HOME");
+	char* cache = NULL;
+	const char* CACHE_FILENAME = "/dmenu_pop.txt";
+	if(xdg_cache_home != NULL) {
+		size_t xdglen = strlen(xdg_cache_home);
+		cache = (char*)malloc(xdglen + 1);
+		cache[xdglen] = '\0';
+		strcpy(cache, xdg_cache_home);
+	} else {
+		const char* cachefolder = "/.cache";
+		size_t hclen = strlen(home) + strlen(cachefolder) + 1;
+		cache = (char*)malloc(hclen + 1);
+		cache[hclen - 1] = '\0';
+		strcpy(cache, home);
+		strcpy(cache + strlen(home), cachefolder);
+	}
+	const size_t cache_size = strlen(cache) + strlen(CACHE_FILENAME) + 1;
+	popcache = (char*)malloc(sizeof(char) * cache_size);
+	popcache[cache_size - 1] = '\0';
+	strcpy(popcache, cache);
+	strcpy(popcache + strlen(cache), CACHE_FILENAME);
+	free(cache);
+
+	FILE * fp;
+	char * line = NULL;
+	size_t i, itemsiz = 0, linesiz = 0;
+	ssize_t len;
+
+	fp = fopen(popcache, "r");
+	if (fp == NULL)
+		return;
+
+	for (i = 0; (len = getline(&line, &linesiz, fp)) != -1; i++) {
+		if (i + 1 >= itemsiz) {
+			itemsiz += 256;
+			if (!(popitems = realloc(popitems, itemsiz * sizeof(*popitems))))
+				die("cannot realloc %zu bytes:", itemsiz * sizeof(*popitems));
+		}
+		itemize((struct item*)&popitems[i], line, len);
+	}
+	fclose(fp);
+	if (line)
+		free(line);
+
+	if (popitems)
+		popitems[i].text = NULL;
+	qsort(popitems, i, sizeof(struct item), compareitembyoutrev);
+}
+
+static void
 usage(void)
 {
-	die("usage: dmenu [-bfiv] [-l lines] [-p prompt] [-fn font] [-m monitor]\n"
-	    "             [-nb color] [-nf color] [-sb color] [-sf color] [-w windowid]");
+	die("usage: dmenu [-bcFfiPv] [-l lines] [-p prompt] [-fn font] [-m monitor]\n"
+	    "             [-nb color] [-nf color] [-sb color] [-sf color]\n"
+	    "             [-nhb color] [-nhf color] [-shb color] [-shf color]\n"
+	    "             [-bw width] [-w windowid]");
 }
 
 int
@@ -731,8 +1075,14 @@ main(int argc, char *argv[])
 			exit(0);
 		} else if (!strcmp(argv[i], "-b")) /* appears at the bottom of the screen */
 			topbar = 0;
+		else if (!strcmp(argv[i], "-F"))   /* disables fuzzy matching */
+			fuzzy = 0;
+		else if (!strcmp(argv[i], "-P"))   /* sorts by and records popularity */
+			popularity = 1;
 		else if (!strcmp(argv[i], "-f"))   /* grabs keyboard before reading stdin */
 			fast = 1;
+		else if (!strcmp(argv[i], "-c"))   /* centers dmenu on screen */
+			centered = 1;
 		else if (!strcmp(argv[i], "-i")) { /* case-insensitive item matching */
 			fstrncmp = strncasecmp;
 			fstrstr = cistrstr;
@@ -755,8 +1105,18 @@ main(int argc, char *argv[])
 			colors[SchemeSel][ColBg] = argv[++i];
 		else if (!strcmp(argv[i], "-sf"))  /* selected foreground color */
 			colors[SchemeSel][ColFg] = argv[++i];
+		else if (!strcmp(argv[i], "-nhb")) /* normal hi background color */
+			colors[SchemeNormHighlight][ColBg] = argv[++i];
+		else if (!strcmp(argv[i], "-nhf")) /* normal hi foreground color */
+			colors[SchemeNormHighlight][ColFg] = argv[++i];
+		else if (!strcmp(argv[i], "-shb")) /* selected hi background color */
+			colors[SchemeSelHighlight][ColBg] = argv[++i];
+		else if (!strcmp(argv[i], "-shf")) /* selected hi foreground color */
+			colors[SchemeSelHighlight][ColFg] = argv[++i];
 		else if (!strcmp(argv[i], "-w"))   /* embedding window id */
 			embed = argv[++i];
+		else if (!strcmp(argv[i], "-bw"))
+			border_width = atoi(argv[++i]); /* border width */
 		else
 			usage();
 
@@ -788,8 +1148,13 @@ main(int argc, char *argv[])
 		readstdin();
 		grabkeyboard();
 	}
+	if (popularity) {
+		loadpopitems();
+		sortitemsbypop();
+	}
 	setup();
 	run();
 
 	return 1; /* unreachable */
 }
+

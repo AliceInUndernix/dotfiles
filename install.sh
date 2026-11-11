@@ -212,7 +212,10 @@ build_suckless() {
 
 install_dwm()   { build_suckless dwm; }
 install_st()    { build_suckless st; }
-install_dmenu() { build_suckless dmenu; }
+install_dmenu() {
+	build_suckless dmenu
+	link "$DOTFILES/dmenu/apps" "$CONFIG/dmenu/apps"
+}
 
 install_slock() {
 	# slock drops privileges to the group in slock/config.h ("nobody").
