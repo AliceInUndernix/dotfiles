@@ -2,22 +2,6 @@
 # One per line:  name<TAB>command   or just   command
 # Order here only matters until you've used them; then the most used come first.
 
-# Terminal and terminal programs
-st	st
-tmux	st -e tmux
-nvim	st -e nvim
-btop	st -e btop
-wiremix	st -e wiremix
-
 # Browsers
 icecat	icecat
 chromium	chromium-browser
-
-# Documents and screenshots
-sioyek	sioyek
-flameshot	flameshot gui
-flameshot full	flameshot full --clipboard
-
-# Session (the same commands as dwm's lock and suspend keys)
-lock	slock
-suspend	loginctl suspend
