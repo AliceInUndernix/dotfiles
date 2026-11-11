@@ -17,12 +17,14 @@
 --   Space t  Sioyek typing tracker on/off (:TypeTrack, :TypeTrackStop)
 --   Esc      clear search highlight
 --
--- Testing status: this file was written without a Neovim to run it in,
--- except the plover-vim-tutor line (checked: :help plover-vim-tutorial
--- opens). The user runs it on Neovim 0.11.7 and has reported problems
--- that were then fixed (missing vim.pack on 0.11, Pencil re-flowing
--- single Enters, Claude over-marking lines, Plover symbols arriving as
--- "2014"). The last two fixes have not been confirmed by the user yet.
+-- Lives in the dotfiles repo (nvim/), linked to ~/.config/nvim by
+-- install.sh. The user runs it on Neovim 0.11.7 in st (and tmux) under
+-- dwm on X11. Problems reported and fixed: missing vim.pack on 0.11,
+-- Pencil re-flowing single Enters, Claude over-marking lines, Plover
+-- symbols arriving as "2014". st and tmux now pass Ctrl+Shift+U through
+-- (tested: it reaches Neovim as <C-S-u>, in st and in st+tmux). Not yet
+-- confirmed by the user: the tightened Claude prompt, and a full Plover
+-- symbol typed for real.
 
 vim.g.mapleader = " "          -- Space is the leader key
 
@@ -55,6 +57,8 @@ o.splitright = true
 o.splitbelow = true
 o.mouse = "a"
 o.clipboard = "unnamedplus"    -- yank/paste uses the system clipboard
+                               -- (needs xclip or xsel; install.sh --deps
+                               -- installs both)
 o.updatetime = 300
 
 -- Persistent history. Neovim keeps these in its own state folder
@@ -102,11 +106,9 @@ map("n", "<leader>w", "<cmd>write<CR>", { desc = "Save" })
 -- the sequence in insert mode and puts in the real character instead.
 -- Up to 6 hex digits are read; Space or Enter ends the code and is
 -- dropped, any other key ends it and is typed as usual.
--- (Needs a terminal that tells Ctrl+Shift+U apart from Ctrl+U, e.g.
--- kitty, foot, WezTerm, Ghostty or a recent Alacritty. The user's
--- terminal is not known yet, and this fix is not confirmed to work.
--- Without such a terminal the mapping never fires and digits still
--- appear; then the fix has to come from the terminal or Plover side.)
+-- The terminal has to send Ctrl+Shift+U as its own key: st's config.h
+-- maps it to CSI u (ESC [117;6u), and tmux.conf turns on extended-keys
+-- so it also gets through tmux. Plain Ctrl+U is unchanged.
 map("i", "<C-S-u>", function()
   local hex = ""
   while true do
@@ -184,10 +186,9 @@ vim.api.nvim_create_autocmd("CursorHold", {
 --   explanation and suggested fix pop up. <Space>f applies the fix.
 --   ]d / [d jump between marks, <Space>g re-checks, <Space>G clears.
 --   :ClaudeLog opens Claude's last raw answer, for debugging the prompt.
---   The flags below were checked against `claude --help`; the writer
---   could not run them. The user has run Space g and it worked, but it
---   over-marked fine lines; the prompt and filter were tightened after
---   that and the result is not confirmed yet.
+--   The flags below were checked against `claude --help`. The user has
+--   run Space g and it worked, but it over-marked fine lines; the prompt
+--   and filter were tightened after that, not yet re-tested by the user.
 ---------------------------------------------------------------------------
 local claude_ns = vim.api.nvim_create_namespace("claude_check")
 -- "sonnet" is the best balance of quality and cost for proofreading

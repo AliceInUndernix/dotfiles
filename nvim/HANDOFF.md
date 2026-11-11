@@ -7,12 +7,15 @@ current behaviour section by section.
 
 ## Files
 
+In the dotfiles repo (github.com/AliceInUndernix/dotfiles); install.sh
+links the whole `nvim/` folder to `~/.config/nvim`.
+
 ```
-nvim-config/
+nvim/
   HANDOFF.md            this file
   README.md             user guide: install, keys, every feature
-  nvim/init.lua         the config  -> ~/.config/nvim/init.lua
-  nvim/lua/typetrack.lua  Sioyek tracker -> ~/.config/nvim/lua/typetrack.lua
+  init.lua              the config
+  lua/typetrack.lua     Sioyek tracker
 ```
 
 ## The user and their setup
@@ -25,8 +28,9 @@ nvim-config/
 - Writes fiction with stenography (Plover). Spelling comes from steno,
   so spell checks are off by default; grammar and misstroke checks are
   wanted.
-- Installs by downloading files to `~/Downloads` and copying them into
-  `~/.config/nvim`. Give ready-to-paste commands.
+- Terminal: st 0.9.3 (patched, see `st/UPSTREAM`), often with tmux,
+  under dwm on X11. Changes go to the dotfiles repo; `~/.config/nvim` is
+  a symlink to it, so nothing needs copying.
 - Uses Sioyek as EPUB/PDF reader, 2.0.0 at `~/.local/bin/sioyek`.
 - Writes short, sometimes cut-off messages (often dictated or stenoed);
   ask what they meant when a message stops mid-sentence.
@@ -48,7 +52,8 @@ nvim-config/
 | Show exact words, explain, offer a fix, work in prose mode | diagnostics with col ranges, popup on CursorHold, `Space f` applies | prompt tightened after over-marking, not confirmed |
 | Spell check toggle | `Space s` | not confirmed |
 | plover-vim | only plover-vim-tutor help pages installed; user is NOT using plover-vim yet (doesn't want to learn Emily's modifiers) but wants the line kept | `:help plover-vim-tutorial` opened in a test |
-| Em dash etc. from Plover arrived as "2014" | insert-mode `<C-S-u>` expr map reads hex digits and inserts the character | just added, not confirmed |
+| Em dash etc. from Plover arrived as "2014" | insert-mode `<C-S-u>` expr map reads hex digits and inserts the character; st sends Ctrl+Shift+U as CSI u, tmux has extended-keys on | key tested reaching Neovim in st and st+tmux; real Plover symbol not confirmed |
+| System clipboard | `clipboard=unnamedplus`; xclip and xsel installed by `install.sh --deps` | not confirmed |
 | Mark typed words green/red in Sioyek | lua/typetrack.lua, `:TypeTrack`, `Space t` | Neovim side tested; never run against Sioyek |
 
 ## Open issues (pick these up first)
@@ -60,18 +65,15 @@ nvim-config/
    Suggested fix: `sudo emerge --ask --update --deep --changed-use @world
    =app-text/sioyek-9999`. Outcome unknown. After install they must move
    `~/.local/bin/sioyek` (2.0.0) aside and back up `~/.local/share/sioyek`.
-2. **Plover unicode fix unconfirmed.** It only works if the terminal
-   sends Ctrl+Shift+U as a distinct key. The user's terminal and X11 vs
-   Wayland are not known. If digits still appear, ask for both.
+2. **Plover unicode fix: terminal side done.** st and tmux now pass
+   Ctrl+Shift+U to Neovim (tested). Not yet confirmed with Plover itself;
+   if digits still appear, check that st and tmux were rebuilt/reloaded.
 3. **Claude proofreading accuracy.** After the prompt was tightened, it
    has not been re-tested. `:ClaudeLog` shows the raw answer; ask the
    user to paste it if marks look wrong.
-4. **Nothing in init.lua has been run by the Claude that wrote it**
-   (Neovim couldn't be run in its sandbox). Only the user's reports and
-   the plover-vim-tutor test confirm behaviour. Ask for `:messages`
-   output if anything errors on start.
-5. Possible terminal colour palette for Habamax was offered (background
-   `#1c1c1c`, text `#bcbcbc`) once the user names their terminal.
+4. **init.lua itself has not been run by Claude** (only the Ctrl+Shift+U
+   key test, on an older Neovim). The user's reports confirm the rest.
+   Ask for `:messages` output if anything errors on start.
 
 ## Rules for editing
 
@@ -84,8 +86,8 @@ nvim-config/
 - Keep `claude` locked down: no tools, `--strict-mcp-config`, empty cwd,
   `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` removed, only the current
   buffer on stdin. The user asked for exactly this.
-- Say plainly what was and wasn't tested, and give copy commands from
-  `~/Downloads` with every changed file.
+- Say plainly what was and wasn't tested. Commit and push changes to
+  main in the dotfiles repo.
 
 ## Ideas offered but not taken
 

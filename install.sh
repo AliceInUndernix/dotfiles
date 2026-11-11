@@ -87,6 +87,7 @@ deps() {
 			dev-vcs/git app-editors/neovim app-misc/tmux \
 			x11-apps/xinit x11-apps/xsetroot x11-apps/xset x11-misc/xss-lock \
 			app-shells/ksh media-fonts/liberation-fonts \
+			x11-misc/xclip x11-misc/xsel \
 			media-gfx/flameshot media-video/mpv net-misc/yt-dlp \
 			media-video/pipewire media-video/wireplumber media-sound/wiremix \
 			sys-process/btop media-gfx/feh \
@@ -106,25 +107,25 @@ deps() {
 		apt-get install build-essential pkg-config libx11-dev \
 			libxft-dev libxinerama-dev libxrandr-dev libxext-dev \
 			libfontconfig-dev libfreetype-dev git neovim tmux \
-			xinit x11-xserver-utils xss-lock ksh fonts-liberation \
+			xinit x11-xserver-utils xss-lock ksh fonts-liberation xclip xsel \
 			flameshot mpv yt-dlp pipewire wireplumber wiremix btop \
 			python3-venv dfu-util ;;
 	*arch*)
 		pacman -S --needed base-devel libx11 libxft libxinerama \
 			libxrandr libxext fontconfig freetype2 git neovim tmux dfu-util \
-			xorg-xinit xorg-xsetroot xorg-xset xss-lock ttf-liberation \
+			xorg-xinit xorg-xsetroot xorg-xset xss-lock ttf-liberation xclip xsel \
 			flameshot mpv yt-dlp pipewire wireplumber wiremix btop ;;
 	*fedora*|*rhel*)
 		dnf install gcc make pkgconf-pkg-config libX11-devel \
 			libXft-devel libXinerama-devel libXrandr-devel libXext-devel \
 			fontconfig-devel freetype-devel git neovim tmux dfu-util \
 			xorg-x11-xinit xsetroot xset xss-lock ksh liberation-mono-fonts \
-			liberation-sans-fonts flameshot mpv yt-dlp pipewire wireplumber btop ;;
+			liberation-sans-fonts xclip xsel flameshot mpv yt-dlp pipewire wireplumber btop ;;
 	*void*)
 		xbps-install base-devel pkg-config libX11-devel libXft-devel \
 			libXinerama-devel libXrandr-devel libXext-devel \
 			fontconfig-devel freetype-devel git neovim tmux dfu-util \
-			xinit xsetroot xset xss-lock mksh liberation-fonts-ttf \
+			xinit xsetroot xset xss-lock mksh liberation-fonts-ttf xclip xsel \
 			flameshot mpv yt-dlp pipewire wireplumber btop ;;
 	*)
 		warn "unknown distro ($id): install a C compiler, make, pkg-config,"
@@ -152,6 +153,8 @@ install_nvim() {
 		say "plugin  $name (from archive)"
 	done
 	command -v nvim >/dev/null 2>&1 || warn "nvim is not installed (needs 0.11+)"
+	command -v xclip >/dev/null 2>&1 || command -v xsel >/dev/null 2>&1 ||
+		warn "xclip/xsel not installed: Neovim can't use the system clipboard (try ./install.sh --deps)"
 }
 
 install_ksh() {

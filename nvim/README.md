@@ -64,12 +64,11 @@ dictionary.
 ## Symbols from steno (— – “ ” …)
 
 On Linux, Plover types symbols as Ctrl+Shift+U, a hex code, then Space.
-Terminals ignore that shortcut, so you got `2014` instead of `—`. The
-config catches the sequence in insert mode and puts the real symbol in.
-This needs a terminal that passes Ctrl+Shift+U through as its own key
-(kitty, foot, WezTerm, Ghostty, recent Alacritty). If you still get
-digits, say which terminal you use. By hand: `Ctrl-k - M` types —,
-`Ctrl-k - N` types –.
+Most terminals ignore that shortcut, so you got `2014` instead of `—`.
+The config catches the sequence in insert mode and puts the real symbol
+in. st (`st/config.h`) sends Ctrl+Shift+U as its own key and tmux passes
+it on (`extended-keys`), so this works in st and in tmux inside st. By
+hand: `Ctrl-k - M` types —, `Ctrl-k - N` types –.
 
 ## Plugins
 
@@ -115,9 +114,16 @@ does go to Claude online and counts toward your usage.
 
 ## Terminal theme
 
-Habamax is built into Neovim (no plugin). st, dwm, dmenu, slock and the
-tmux status bar use the same colours (background `#1c1c1c`, text `#c7c7c7`,
-accent blue `#5f87af`), and st has Habamax's full 16-colour palette.
+Habamax is built into Neovim (no plugin). st, dwm, dmenu, slock and tmux
+use the same colours (background `#1c1c1c`, text `#c7c7c7`, greys for
+borders, toned-down Habamax accents), and st has Habamax's full
+16-colour palette.
+
+## Clipboard
+
+`y` and `p` use the system clipboard (`clipboard=unnamedplus`), so text
+moves between Neovim and the browser. Neovim needs xclip or xsel for
+that; `./install.sh --deps` installs both.
 
 ## What Neovim remembers between sessions
 

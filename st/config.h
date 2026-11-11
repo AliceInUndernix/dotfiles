@@ -240,7 +240,7 @@ static Shortcut shortcuts[] = {
  * If you want keys other than the X11 function keys (0xFD00 - 0xFFFF)
  * to be mapped below, add them to this array.
  */
-static KeySym mappedkeys[] = { -1 };
+static KeySym mappedkeys[] = { XK_U, XK_u };
 
 /*
  * State bits to ignore when matching key or button events.  By default,
@@ -254,6 +254,11 @@ static uint ignoremod = Mod2Mask|XK_SWITCH_MOD;
  */
 static Key key[] = {
 	/* keysym           mask            string      appkey appcursor */
+	/* Ctrl+Shift+U as its own key (CSI u), not Ctrl+U: Plover types a
+	 * symbol as Ctrl+Shift+U + hex code, and Neovim's init.lua turns that
+	 * into the character. Inside tmux this needs extended-keys (tmux.conf). */
+	{ XK_U,  ControlMask|ShiftMask,     "\033[117;6u",   0,    0},
+	{ XK_u,  ControlMask|ShiftMask,     "\033[117;6u",   0,    0},
 	{ XK_KP_Home,       ShiftMask,      "\033[2J",       0,   -1},
 	{ XK_KP_Home,       ShiftMask,      "\033[1;2H",     0,   +1},
 	{ XK_KP_Home,       XK_ANY_MOD,     "\033[H",        0,   -1},
