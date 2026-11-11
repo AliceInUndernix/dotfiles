@@ -65,6 +65,10 @@ static const char *lockcmd[]  = { "slock", NULL };
 static const char *suspendcmd[] = { "loginctl", "suspend", NULL };
 static const char *shotcmd[]  = { "flameshot", "gui", NULL };
 static const char *fullshotcmd[] = { "flameshot", "full", "--clipboard", NULL };
+static const char *icecatcmd[] = { "icecat", NULL };
+static const char *chromiumcmd[] = { "chromium-browser", NULL };
+static const char *mixercmd[] = { "st", "-e", "wiremix", NULL };
+static const char *topcmd[]   = { "st", "-e", "btop", NULL };
 
 static const Key keys[] = {
 	/* modifier                     key        function        argument */
@@ -104,6 +108,10 @@ static const Key keys[] = {
 	{ MODKEY|ShiftMask,             XK_s,      spawn,          {.v = suspendcmd } },
 	{ 0,                            XK_Print,  spawn,          {.v = shotcmd } },
 	{ MODKEY,                       XK_Print,  spawn,          {.v = fullshotcmd } },
+	{ MODKEY,                       XK_w,      spawn,          {.v = icecatcmd } },
+	{ MODKEY|ShiftMask,             XK_w,      spawn,          {.v = chromiumcmd } },
+	{ MODKEY,                       XK_a,      spawn,          {.v = mixercmd } },
+	{ MODKEY,                       XK_Escape, spawn,          {.v = topcmd } },
 	{ MODKEY|ShiftMask,             XK_q,      quit,           {0} },
 };
 
