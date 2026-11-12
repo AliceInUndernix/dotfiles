@@ -23,5 +23,15 @@ applied in this order; dwm.c already has them, so don't apply again):
                      combo uses the settings of its first tag)
   movestack          dwm-movestack-20211115-a786211.diff (movestack.c only)
   doubledeck         dwm-deck-double-6.2.diff
+  restart            local, not from suckless.org (the idea of restartsig
+                     and preserveonrestart, written for this dwm):
+                     Mod+Shift+r or `dwm restart` in a terminal execs dwm
+                     again in place. Before that, every window gets its
+                     tags, monitor, order and floating geometry as an X
+                     property, and the root window each monitor's tags in
+                     view and pertag settings (layouts, mfact, nmaster,
+                     focused window); the new dwm reads them back. `dwm
+                     restart` sends a _DWM_RESTART ClientMessage to the
+                     root window. patches/dwm-restart-local.diff.
 Their config.def.h hunks are not applied (config.def.h stays upstream);
 the settings are in config.h.

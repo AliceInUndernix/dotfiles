@@ -137,6 +137,9 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_x,      spawn,          {.v = tmuxcmd } },
 	{ MODKEY|ShiftMask,             XK_x,      spawn,          {.v = tmuxnewcmd } },
 	{ MODKEY|ShiftMask,             XK_q,      quit,           {0} },
+	/* restart dwm in place (e.g. after ./install.sh dwm): windows keep their
+	 * tags, order and layouts. From a terminal: dwm restart */
+	{ MODKEY|ShiftMask,             XK_r,      restart,        {0} },
 };
 
 /* button definitions */

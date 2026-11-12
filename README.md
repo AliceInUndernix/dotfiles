@@ -84,7 +84,10 @@ $EDITOR config.h
 su -c '../install.sh dwm'   # or, as root: make install && make clean
 ```
 
-Then restart dwm (or log out and in). Rules for these directories:
+For dwm, then type `dwm restart` in a terminal (or press Super+Shift+r):
+dwm starts again in place with the new build, and every window stays on
+its tag, in the same order, with each tag's layout. For the other tools,
+start them again. Rules for these directories:
 
 - Edit `config.h`. Leave `config.def.h` as upstream ships it, so a new
   release can be compared against it.
