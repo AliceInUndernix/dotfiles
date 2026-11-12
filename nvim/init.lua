@@ -14,7 +14,7 @@
 --   Space w  save                 Space p  prose mode on/off  (:Prose)
 --   Space s  spell check on/off   Space g  proofread file with Claude
 --   Space f  apply Claude's fix   Space G  clear Claude marks (:ClaudeLog)
---   Space t  Sioyek typing tracker on/off (:TypeTrack, :TypeTrackStop)
+--   Space t  book typing tracker on/off (:TypeTrack, :TypeTrackStop)
 --   Space Space  open a file (fuzzy)    Space /  search text in files
 --   Space b  pick an open buffer      Space h  search help pages
 --   Esc      clear search highlight
@@ -371,7 +371,7 @@ vim.api.nvim_create_autocmd("FileType", {
 
 ---------------------------------------------------------------------------
 -- Type a book along in Sioyek (the code is in lua/typetrack.lua)
---   :TypeTrack ~/books/book.epub   Sioyek marks each word of the book
+--   :TypeTrack ~/books/book.epub   underlines words you typed wrong
 --                                  green (typed right) or red (wrong)
 --   Space t                        start/stop for this file (remembers
 --                                  which book goes with it)

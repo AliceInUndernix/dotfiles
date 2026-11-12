@@ -1,6 +1,8 @@
 -- ~/.config/nvim/lua/typetrack.lua
--- Type a book out in Neovim while it is open in Sioyek, and Sioyek marks
--- each word of the book: green when you typed it right, red when not.
+-- Type a book out in Neovim and every word you get wrong is underlined
+-- as soon as you finish it. (With opts.sioyek_marks = true, Sioyek also
+-- colours each word of the book green or red: off, since Sioyek's
+-- development version crashed doing it.)
 --
 --   :TypeTrack ~/books/book.epub   start for the file you are in
 --   :TypeTrack                     start again (remembers the book)
@@ -43,10 +45,13 @@ local uv = vim.uv or vim.loop
 
 M.opts = {
   sioyek = "sioyek",     -- the sioyek program
+  sioyek_marks = false,  -- colour the words in Sioyek too (off: only the
+                         -- underlines in Neovim; Sioyek's development
+                         -- version crashed doing it, 2026-11-12)
   good = "g",            -- Sioyek highlight type for right words (green)
   bad = "r",             -- ...and for wrong or skipped words (red)
   strict = true,         -- capitals and punctuation must match too
-  lag = 2,               -- wait this many words before judging a word,
+  lag = 0,               -- wait this many words before judging a word,
                          -- so a quick steno correction is not marked red
   pause_ms = 1500,       -- after this long without typing, judge them all
   max_run = 12,          -- longest single highlight, in words (each one
@@ -435,7 +440,16 @@ local function process(buf, flush)
   end
   vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
   if not s then return end
-  local limit = flush and #typed or (#typed - M.opts.lag)
+  -- A word is judged as soon as it is finished: something (a space, a
+  -- new line) comes after it. The one you are still typing waits.
+  local limit = #typed - M.opts.lag
+  local last = typed[#typed]
+  if not flush and last then
+    local line = vim.api.nvim_buf_get_lines(buf, last.lnum, last.lnum + 1, false)[1] or ""
+    local more_lines = last.lnum < vim.api.nvim_buf_line_count(buf) - 1
+    if #line <= last.ecol and not more_lines then limit = limit - 1 end
+  end
+  if flush then limit = #typed end
   local marks, wrong = align(tr.book, typed, s.b, s.t, limit)
 
   -- On a first start, text that was already in the file is not sent
@@ -450,6 +464,8 @@ local function process(buf, flush)
     vim.api.nvim_buf_set_extmark(buf, ns, w.lnum, w.col,
       { end_col = w.ecol, hl_group = "TypeTrackBad" })
   end
+
+  if not M.opts.sioyek_marks then return end
 
   -- Send the marks Sioyek has not had yet, joined into runs of the same
   -- colour (one highlight per run).
@@ -510,7 +526,7 @@ function M.start(book_path, all)
       vim.log.levels.WARN)
   end
   book_path = vim.fn.fnamemodify(vim.fn.expand(book_path), ":p")
-  if vim.fn.executable(M.opts.sioyek) == 0 then
+  if M.opts.sioyek_marks and vim.fn.executable(M.opts.sioyek) == 0 then
     return vim.notify("TypeTrack: sioyek not found", vim.log.levels.ERROR)
   end
   local book, err = load_book(book_path)
@@ -535,7 +551,7 @@ function M.start(book_path, all)
   vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
     group = tr.group, buffer = buf,
     callback = function()
-      later(tr.timer, 250, false)
+      later(tr.timer, 30, false)   -- right after each key
       later(tr.pause, M.opts.pause_ms, true)
     end,
   })
@@ -550,7 +566,7 @@ function M.start(book_path, all)
 
   vim.notify(("TypeTrack: following %s (%d words)%s"):format(
     vim.fn.fnamemodify(book_path, ":t"), #book,
-    upto > 0 and (", carrying on after word " .. upto) or ""))
+    (M.opts.sioyek_marks and upto > 0) and (", carrying on after word " .. upto) or ""))
   process(buf, true)
 end
 
