@@ -675,7 +675,7 @@ install_plover() {
 			usermod -aG "$port_group" "$USER_NAME"
 			say "group   $USER_NAME in $port_group (the Moonlander's serial port; log in again)"
 		fi
-		su -s /bin/sh "$USER_NAME" -c "INSTALL_LOG='$INSTALL_LOG' '$DOTFILES/install.sh' plover"
+		su -s /bin/sh "$USER_NAME" -c "INSTALL_LOG='$INSTALL_LOG' DOTTEREL_CLEAN='${DOTTEREL_CLEAN:-no}' '$DOTFILES/install.sh' plover"
 		return
 	fi
 	[ "$in_group" = yes ] ||
