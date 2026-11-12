@@ -185,6 +185,12 @@ deps() (
 			qt="$qt dev-qt/${b%%-[0-9]*}"
 		done
 		[ -z "$qt" ] || emerge --ask --oneshot --update --deep --changed-use $qt
+		# The development branch also uses Qt Quick Widgets and Qt
+		# TextToSpeech, which GURU's ebuild doesn't list yet (qmake:
+		# "Unknown module(s) in QT: quickwidgets texttospeech",
+		# 2026-11-12), so they go in first, on their own.
+		emerge --ask --update --deep --changed-use --noreplace \
+			dev-qt/qtdeclarative dev-qt/qtspeech
 		had_sioyek=no
 		portageq has_version / app-text/sioyek && had_sioyek=yes
 		emerge --ask --update --deep --changed-use app-text/sioyek
