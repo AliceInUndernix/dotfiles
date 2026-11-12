@@ -21,7 +21,6 @@ edited) live in the app directories at the top of the repo.
 | `nvim-plugins/mini.pick.tar.gz` | fuzzy finder | https://github.com/nvim-mini/mini.pick | `f1216d7` (2026-11-07) |
 | `nvim-plugins/mini.surround.tar.gz` | surround quotes/brackets | https://github.com/nvim-mini/mini.surround | `5357f00` (2026-10-27) |
 | `nvim-plugins/which-key.nvim.tar.gz` | key hints | https://github.com/folke/which-key.nvim | `3aab214` (2025-10-28) |
-| `nvim-plugins/vim-tmux-navigator.tar.gz` | Ctrl+h/j/k/l across Neovim and tmux | https://github.com/christoomey/vim-tmux-navigator | `e41c431` (2026-01-25) |
 | `moonlander/optozorax-moonlander.tar.gz` | optozorax's keymap and libraries (`lang_shift`, `combo`, `color`, `arbitrary_keycode`, `moonlander_leds.h`, `qmk.patch`) | https://github.com/optozorax/moonlander | `8b725d0` (2026-07-30) |
 
 Full commits:
@@ -33,7 +32,6 @@ Full commits:
 - mini.pick `f1216d764d0c2772e88d4e1a0cef3082f5b498e1`
 - mini.surround `5357f00aca51a3b43e7775901b1ad9699f8c2678`
 - which-key.nvim `3aab2147e74890957785941f0c1ad87d0a44c15a`
-- vim-tmux-navigator `e41c431a0c7b7388ae7ba341f01a0d217eb3a432`
 - optozorax/moonlander `8b725d0876b16b788f18ab5530ce6440cf979b3d`
 
 The suckless tarballs match the checksums suckless publishes in each

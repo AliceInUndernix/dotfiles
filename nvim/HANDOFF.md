@@ -86,6 +86,7 @@ nvim/
   Neovim 0.11; `main` needs 0.12. Highlighting only: the user does not
   want LSP completion or error checking for code (asked 2026-11-12).
   Declined for now: gitsigns, vim-fugitive, language servers.
+  vim-tmux-navigator was tried and removed at the user's request (2026-11-12).
 - Keep the plover-vim-tutor line.
 - Keep `claude` locked down: no tools, `--strict-mcp-config`, empty cwd,
   `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` removed, only the current

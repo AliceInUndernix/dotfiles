@@ -19,7 +19,6 @@
 --   Space b  pick an open buffer      Space h  search help pages
 --   Esc      clear search highlight
 --   sa/sd/sr add/delete/replace surrounding quotes or brackets (mini.surround)
---   Ctrl+h/j/k/l  move between Neovim splits and tmux panes
 --   Press Space (or g, z, ", ...) and wait: a box lists the keys.
 --
 -- Lives in the dotfiles repo (nvim/), linked to ~/.config/nvim by
@@ -486,10 +485,6 @@ end
 if plugin("folke/which-key.nvim") then
   require("which-key").setup()
 end
-
--- Ctrl+h/j/k/l move to the split or tmux pane on the left/down/up/right,
--- across Neovim and tmux alike (tmux.conf has the other half).
-plugin("christoomey/vim-tmux-navigator")
 
 -- Without zen-mode and pencil there is no prose mode, so stop here.
 if not (have_zen and have_pencil) then return end
