@@ -1,0 +1,15 @@
+#!/bin/sh
+# Start Plover from ~/.system/plover (install.sh links this to
+# ~/.system/bin/plover). Started in a folder that holds plover.cfg, Plover
+# keeps everything there ("portable mode"): settings, plugins, dictionaries,
+# strokes.log. Nothing goes to ~/.config or ~/.local.
+#
+# --python skips the AppImage launcher's own start step, which asks for
+# your password (pkexec) to add a udev rule for /dev/uinput. That is only
+# for Wayland; on X11 (dwm) Plover types through X.
+#
+#   plover                                  start it
+#   plover -s plover_plugins install <pkg>  add a plugin
+dir=$HOME/.system/plover
+cd "$dir" || exit 1
+exec "$dir/app/AppRun" --python -s -m plover.scripts.dist_main "$@"

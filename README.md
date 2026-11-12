@@ -25,6 +25,7 @@ script puts the whole configuration back after a fresh install.
 | `feh/` | feh shows pictures on Habamax grey | `~/.config/feh/themes` (symlink) |
 | `x/` | `xinitrc`: Habamax-grey wallpaper, PipeWire, idle lock off by default (`IDLE_LOCK_MINUTES`), xss-lock (slock before suspend), then dwm (run `startx`) | `~/.xinitrc` (symlink) |
 | `moonlander/` | QMK "canary" keymap for the keyboard | built into `moonlander/*.bin`, flashed with Keymapp |
+| `plover/` | Plover (steno) launcher and first settings: Dotterel, Gemini PR on the Moonlander | `~/.system/plover` (newest release, Dotterel from the moonlander repo), `~/.system/bin/plover` |
 | `archive/` | Untouched copies of everything downloaded from elsewhere | |
 | `TODO.md` | Things decided but left for later | |
 | `install.sh` | Sets everything up | |
@@ -60,7 +61,7 @@ dependencies are already there:
 
 ```sh
 ./install.sh            # everything
-./install.sh nvim       # only some parts: ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock moonlander
+./install.sh nvim       # only some parts: ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock moonlander plover
 ./install.sh --list     # the part names
 INSTALL_USER=alice ./install.sh    # as root, if the repo folder belongs to root
 ```
@@ -77,6 +78,12 @@ What the script does:
 - **Moonlander**: QMK, its Python environment, the ARM compiler and ZSA's
   QMK source go into the user's `~/.local`, then the firmware is built into
   `moonlander/` for Keymapp. See `moonlander/README.md`.
+- **Plover**: the newest release (its AppImage, unpacked) goes into
+  `~/.system/plover`, with Dotterel and its dark theme from
+  AliceInUndernix/moonlander. Plover runs in portable mode there, so its
+  settings, plugins and logs stay in that folder too. Each run updates both.
+  To read the keyboard you must be in group `dialout`:
+  `su -c './install.sh plover'` adds you once (then log in again).
 
 On Gentoo the build needs `x11-libs/libX11`, `libXft`, `libXinerama`,
 `libXrandr`, `libXext`, `media-libs/fontconfig` and `freetype`; `--deps`

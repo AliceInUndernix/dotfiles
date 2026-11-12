@@ -4,6 +4,7 @@
 # (run those with su -c, never sudo or doas):
 #   --deps   system packages          slock   must be root's to lock
 #   ksh      making ksh the login shell, and root's copies of the files
+#   plover   adding you to the serial port's group (dialout), once
 #
 #   ./install.sh               link configs and build/install everything
 #   ./install.sh nvim dwm      only the parts named
@@ -28,7 +29,7 @@ umask 022
 
 DOTFILES=$(cd "$(dirname "$0")" && pwd)
 STAMP=$(date +%Y%m%d-%H%M%S)
-PARTS="ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock moonlander"
+PARTS="ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock moonlander plover"
 
 say()  { printf '==> %s\n' "$*"; }
 warn() { printf '!!  %s\n' "$*" >&2; }
@@ -530,6 +531,95 @@ install_moonlander() {
 	case ":$PATH:" in *":$QMK_BIN:"*) ;; *) warn "add $QMK_BIN to PATH to run qmk yourself" ;; esac
 }
 
+# Plover, the steno engine for the Moonlander's steno layer. Everything is
+# in ~/.system/plover, nothing needs root:
+#   app/          the newest Plover release from GitHub (its AppImage,
+#                 unpacked, so it runs without FUSE)
+#   plover.cfg    settings (from plover/plover.cfg the first time); Plover
+#                 keeps all its files next to it: plugins/, strokes.log, ...
+#   moonlander/   AliceInUndernix/moonlander, where Dotterel comes from
+#   ~/.system/bin/plover   starts it (plover/plover)
+# Each run updates Plover to its newest release and Dotterel (with its dark
+# theme) to the newest commit. Reading the keyboard's serial port needs
+# your user in the port's group (dialout); a root run adds you to it.
+PLOVER_DIR=$SYSTEM/plover
+PLOVER_API=https://api.github.com/repos/openstenoproject/plover/releases/latest
+PLOVER_REPO=https://github.com/AliceInUndernix/moonlander
+
+install_plover() {
+	# The serial port: the Moonlander is /dev/ttyACM0, group dialout (uucp
+	# on Arch). Only root can add you to it; the rest runs as you.
+	port_group=$(stat -c %G /dev/ttyACM0 2>/dev/null || :)
+	case $port_group in ""|root) port_group=dialout ;; esac
+	in_group=no
+	id -nG "$USER_NAME" | tr ' ' '\n' | grep -qx "$port_group" && in_group=yes
+	if [ "$AS_ROOT" = yes ]; then
+		if [ "$in_group" = no ] && getent group "$port_group" >/dev/null; then
+			usermod -aG "$port_group" "$USER_NAME"
+			say "group   $USER_NAME in $port_group (the Moonlander's serial port; log in again)"
+		fi
+		su -s /bin/sh "$USER_NAME" -c "'$DOTFILES/install.sh' plover"
+		return
+	fi
+	[ "$in_group" = yes ] ||
+		warn "Plover can't read the Moonlander until you are in group $port_group: su -c '$DOTFILES/install.sh plover', then log in again"
+	command -v curl >/dev/null 2>&1 || die "curl not found"
+	command -v git >/dev/null 2>&1 || die "git not found (try ./install.sh --deps)"
+	mkdir -p "$PLOVER_DIR" "$SYSBIN"
+
+	# 1. Plover: the newest release's AppImage for this machine.
+	url=$(curl -fsSL "$PLOVER_API" |
+		grep -o '"browser_download_url": *"[^"]*-'"$(uname -m)"'\.AppImage"' |
+		sed 's/.*"\(http[^"]*\)"$/\1/' | head -n 1) || :
+	app=$PLOVER_DIR/app
+	if [ -z "$url" ]; then
+		[ -x "$app/AppRun" ] || die "could not find the newest Plover release ($PLOVER_API)"
+		warn "could not check for a newer Plover; keeping the one in $app"
+	elif [ "$(cat "$app/.release" 2>/dev/null)" = "$url" ]; then
+		say "ok      Plover ${url##*/}"
+	else
+		say "fetch   ${url##*/}"
+		rm -rf "$app.tmp" && mkdir "$app.tmp"
+		curl -fL -o "$app.tmp/plover.AppImage" "$url"
+		chmod 755 "$app.tmp/plover.AppImage"
+		( cd "$app.tmp" && ./plover.AppImage --appimage-extract >/dev/null )
+		echo "$url" > "$app.tmp/squashfs-root/.release"
+		rm -rf "$app" && mv "$app.tmp/squashfs-root" "$app" && rm -rf "$app.tmp"
+		say "install Plover -> $app"
+	fi
+	link "$DOTFILES/plover/plover" "$SYSBIN/plover"
+
+	# 2. Settings: a copy, since Plover rewrites the file (and would replace
+	# a link with a file). Yours is never overwritten.
+	if [ -e "$PLOVER_DIR/plover.cfg" ]; then
+		say "ok      $PLOVER_DIR/plover.cfg (kept yours)"
+	else
+		cp "$DOTFILES/plover/plover.cfg" "$PLOVER_DIR/plover.cfg"
+		say "copy    plover/plover.cfg -> $PLOVER_DIR/plover.cfg"
+	fi
+
+	# 3. Dotterel and its dark theme, from the newest commit of the
+	# moonlander repo, into Plover's own plugins folder. pip's cache is
+	# off, so nothing lands in ~/.cache.
+	src=$PLOVER_DIR/moonlander
+	if [ -d "$src/.git" ]; then
+		git -C "$src" pull --quiet --ff-only ||
+			warn "could not update $src; installing Dotterel from what is there"
+	else
+		say "clone   $PLOVER_REPO -> $src"
+		git clone --quiet --depth 1 "$PLOVER_REPO" "$src"
+	fi
+	commit=$(git -C "$src" rev-parse HEAD)
+	if [ "$(cat "$PLOVER_DIR/plugins/.dotterel" 2>/dev/null)" = "$commit" ]; then
+		say "ok      Dotterel ($(git -C "$src" log -1 --format=%h))"
+	else
+		say "plugin  Dotterel and its dark theme ($(git -C "$src" log -1 --format=%h))"
+		PIP_NO_CACHE_DIR=1 "$SYSBIN/plover" -s plover_plugins install \
+			"$src/plover-dotterel" "$src/plover-dotterel/dark-theme"
+		echo "$commit" > "$PLOVER_DIR/plugins/.dotterel"
+	fi
+}
+
 # --- main -----------------------------------------------------------------
 
 want_deps=no
@@ -560,7 +650,7 @@ if [ "$AS_ROOT" = no ]; then
 		skipped=slock ;;
 	esac
 elif [ "$want_deps" = no ] && [ -n "$named" ]; then
-	case " $named " in *" slock "*|*" ksh "*) ;; *)
+	case " $named " in *" slock "*|*" ksh "*|*" plover "*) ;; *)
 		say "note    these parts don't need root; next time just run ./install.sh$named" ;;
 	esac
 fi
