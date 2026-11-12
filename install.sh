@@ -174,8 +174,12 @@ deps() (
 		pd=/etc/portage/patches/app-text/sioyek
 		mkdir -p "$pd"
 		for f in "$DOTFILES"/sioyek/gentoo-patches/*.patch; do
-			cmp -s "$f" "$pd/dotfiles-${f##*/}" && continue
+			[ "$(stat -c %a "$pd/dotfiles-${f##*/}" 2>/dev/null)" = 644 ] &&
+				cmp -s "$f" "$pd/dotfiles-${f##*/}" && continue
+			# readable by everyone: emerge reads it as user portage, and
+			# your repo's files are yours alone (600)
 			cp "$f" "$pd/dotfiles-${f##*/}"
+			chmod 644 "$pd/dotfiles-${f##*/}"
 			say "patch   ${f##*/} -> $pd (applied when Sioyek is built)"
 		done
 		# Portage reads package.use/ files in name order and the last one
