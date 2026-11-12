@@ -100,7 +100,14 @@ link() {
 
 # --- build dependencies ---------------------------------------------------
 
-deps() {
+# The package managers run as root with root's own home and settings,
+# not the user's: otherwise eselect, emerge and pip leave root's caches in
+# the user's ~/.system (eselect-repo, 2026-11-12). A subshell, so the
+# rest of the script keeps the user's.
+deps() (
+	root_home=$(getent passwd root 2>/dev/null || grep '^root:' /etc/passwd)
+	root_home=${root_home%:*}; HOME=${root_home##*:}
+	unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME
 	id=unknown
 	[ -r /etc/os-release ] && id=$(. /etc/os-release; echo "${ID_LIKE:-} ${ID:-}")
 	case $id in
@@ -177,7 +184,7 @@ deps() {
 		warn "unknown distro ($id): install a C compiler, make, pkg-config,"
 		warn "and headers for X11, Xft, Xinerama, Xrandr, Xext, fontconfig, freetype." ;;
 	esac
-}
+)
 
 # --- parts ----------------------------------------------------------------
 
@@ -737,23 +744,37 @@ fi
 # contents move into ~/.system/share, state and cache (the XDG folders
 # ~/.profile sets), and so does ~/.ksh_history. Nothing is deleted; a
 # name already taken in the new place is kept where it was and reported.
-# moveinto <old dir> <new dir>: move every entry, merging folders.
-moveinto() {
-	[ -d "$1" ] && [ ! -L "$1" ] || return 0
+# moveinto <old dir> <new dir>: move every entry, merging folders. Each
+# file is listed in ~/.system/state/install/<date>-moved.txt; the screen
+# and the log only get how many (a browser's cache is thousands of files).
+MOVED=$LOG_DIR/$STAMP-moved.txt
+moveinto_r() {
 	userdir "$2"
 	for f in "$1"/* "$1"/.[!.]*; do
 		[ -e "$f" ] || [ -L "$f" ] || continue
 		t=$2/$(basename "$f")
 		if [ ! -e "$t" ] && [ ! -L "$t" ]; then
 			mv "$f" "$t"
-			say "move    $f -> $t"
+			echo "move  $f -> $t" >> "$MOVED"
 		elif [ -d "$f" ] && [ ! -L "$f" ] && [ -d "$t" ] && [ ! -L "$t" ]; then
-			( moveinto "$f" "$t" )
+			( moveinto_r "$f" "$t" )
 		else
-			warn "kept    $f ($t already exists)"
+			echo "kept  $f ($t already exists)" >> "$MOVED"
 		fi
 	done
 	rmdir "$1" 2>/dev/null || :
+}
+moveinto() {
+	[ -d "$1" ] && [ ! -L "$1" ] || return 0
+	before=$(cat "$MOVED" 2>/dev/null | wc -l)
+	moveinto_r "$1" "$2"
+	[ -e "$MOVED" ] || return 0
+	own "$MOVED"
+	m=$(tail -n +$((before + 1)) "$MOVED" | grep -c '^move') || :
+	k=$(tail -n +$((before + 1)) "$MOVED" | grep -c '^kept') || :
+	[ "$m" -eq 0 ] || say "move    $m entries $1 -> $2 (list: $MOVED)"
+	[ "$k" -eq 0 ] ||
+		warn "kept    $k entries in $1: already in $2 (list: $MOVED)"
 }
 moveinto "$HOME/.local/share" "$DATA"
 moveinto "$HOME/.local/state" "$STATE"
