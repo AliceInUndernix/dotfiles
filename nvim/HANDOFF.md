@@ -64,7 +64,7 @@ nvim/
    hit a Qt slot conflict (qtbase 6.11.2 installed vs 6.11.3 wanted).
    Suggested fix: `sudo emerge --ask --update --deep --changed-use @world
    =app-text/sioyek-9999`. Outcome unknown. After install they must move
-   `~/.system/bin/sioyek` (2.0.0) aside and back up `~/.local/share/sioyek`.
+   `~/.system/bin/sioyek` (2.0.0) aside and back up `~/.system/share/sioyek` (install.sh moved it from `~/.local/share`).
 2. **Plover unicode fix: terminal side done.** st and tmux now pass
    Ctrl+Shift+U to Neovim (tested). Not yet confirmed with Plover itself;
    if digits still appear, check that st and tmux were rebuilt/reloaded.

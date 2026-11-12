@@ -3,7 +3,7 @@
 ## Status
 
 - **Finished:** dwm, dmenu, st, slock (keep as it is), tmux, Neovim,
-  install.sh (runs as root, no sudo).
+  install.sh (runs as you; asks for root via su -c only where needed).
 - **Later, Alice configures them herself or asks:** mpv, Sioyek,
   Flameshot, wiremix, btop, feh.
 - **Not started:** IceCat and Chromium settings.

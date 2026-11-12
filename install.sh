@@ -125,7 +125,7 @@ deps() {
 		emerge --ask --noreplace x11-libs/libX11 x11-libs/libXft \
 			x11-libs/libXinerama x11-libs/libXrandr x11-libs/libXext \
 			media-libs/fontconfig media-libs/freetype \
-			dev-vcs/git app-editors/neovim app-misc/tmux \
+			dev-vcs/git net-misc/curl app-editors/neovim app-misc/tmux \
 			x11-apps/xinit x11-apps/xsetroot x11-apps/xset x11-misc/xss-lock \
 			app-shells/ksh media-fonts/liberation-fonts \
 			x11-misc/xclip x11-misc/xsel \
@@ -152,25 +152,25 @@ deps() {
 	*debian*|*ubuntu*)
 		apt-get install build-essential pkg-config libx11-dev \
 			libxft-dev libxinerama-dev libxrandr-dev libxext-dev \
-			libfontconfig-dev libfreetype-dev git neovim tmux \
+			libfontconfig-dev libfreetype-dev git curl neovim tmux \
 			xinit x11-xserver-utils xss-lock ksh fonts-liberation xclip xsel \
 			flameshot mpv yt-dlp pipewire wireplumber wiremix btop \
 			python3-venv dfu-util ;;
 	*arch*)
 		pacman -S --needed base-devel libx11 libxft libxinerama \
-			libxrandr libxext fontconfig freetype2 git neovim tmux dfu-util \
+			libxrandr libxext fontconfig freetype2 git curl neovim tmux dfu-util \
 			xorg-xinit xorg-xsetroot xorg-xset xss-lock ttf-liberation xclip xsel \
 			flameshot mpv yt-dlp pipewire wireplumber wiremix btop ;;
 	*fedora*|*rhel*)
 		dnf install gcc make pkgconf-pkg-config libX11-devel \
 			libXft-devel libXinerama-devel libXrandr-devel libXext-devel \
-			fontconfig-devel freetype-devel git neovim tmux dfu-util \
+			fontconfig-devel freetype-devel git curl neovim tmux dfu-util \
 			xorg-x11-xinit xsetroot xset xss-lock ksh liberation-mono-fonts \
 			liberation-sans-fonts xclip xsel flameshot mpv yt-dlp pipewire wireplumber btop ;;
 	*void*)
 		xbps-install base-devel pkg-config libX11-devel libXft-devel \
 			libXinerama-devel libXrandr-devel libXext-devel \
-			fontconfig-devel freetype-devel git neovim tmux dfu-util \
+			fontconfig-devel freetype-devel git curl neovim tmux dfu-util \
 			xinit xsetroot xset xss-lock mksh liberation-fonts-ttf xclip xsel \
 			flameshot mpv yt-dlp pipewire wireplumber btop ;;
 	*)
@@ -193,7 +193,7 @@ install_nvim() {
 		userdir "$pack"
 		tar -xzf "$tarball" -C "$pack"
 		if [ -d "$pack/$name/doc" ] && command -v nvim >/dev/null 2>&1; then
-			nvim --headless -u NONE -c "helptags $pack/$name/doc" -c q >/dev/null 2>&1 || :
+			nvim --headless -u NONE -i NONE -n -c "helptags $pack/$name/doc" -c q >/dev/null 2>&1 || :
 		fi
 		own "$pack/$name"
 		say "plugin  $name (from archive)"
@@ -411,7 +411,8 @@ install_moonlander() {
 	userdir "$QMK_DIR"
 	userdir "$QMK_BIN"
 	# whatever happens below, everything made here belongs to the user
-	trap 'own "$QMK_DIR"; [ ! -e "$CONFIG/qmk" ] || own "$CONFIG/qmk"' EXIT
+	own_qmk() { own "$QMK_DIR"; [ ! -e "$CONFIG/qmk" ] || own "$CONFIG/qmk"; }
+	trap own_qmk EXIT
 	command -v git >/dev/null 2>&1 || die "git not found (try ./install.sh --deps)"
 	command -v python3 >/dev/null 2>&1 || die "python3 not found"
 
@@ -442,7 +443,7 @@ install_moonlander() {
 	if [ ! -x "$QMK_DIR/venv/bin/qmk" ]; then
 		say "python  qmk -> $QMK_DIR/venv"
 		python3 -m venv "$QMK_DIR/venv"
-		"$QMK_DIR/venv/bin/python" -m pip install --quiet qmk -r "$fw/requirements.txt"
+		PIP_NO_CACHE_DIR=1 "$QMK_DIR/venv/bin/python" -m pip install --quiet qmk -r "$fw/requirements.txt"
 	fi
 	link "$QMK_DIR/venv/bin/qmk" "$QMK_BIN/qmk"
 	"$QMK_DIR/venv/bin/qmk" config user.qmk_home="$fw" >/dev/null 2>&1
@@ -498,7 +499,10 @@ install_moonlander() {
 	# Build as the user, not root: the QMK folder is theirs, and git (which
 	# QMK asks for its version string) refuses repositories owned by someone
 	# else when run as root ("dubious ownership"), which breaks the build.
+	# What root cloned and unpacked above must be the user's first, or
+	# the build can't write its .build folder ("Permission denied").
 	if [ "$AS_ROOT" = yes ]; then
+		own_qmk
 		su -s /bin/sh "$USER_NAME" -c "cd '$fw' && PATH='$QMK_DIR/venv/bin:$QMK_BIN:$PATH' make '$QMK_TARGET' $nosuffix"
 	else
 		( cd "$fw" && PATH=$QMK_DIR/venv/bin:$QMK_BIN:$PATH make "$QMK_TARGET" $nosuffix )
@@ -634,7 +638,7 @@ for arg in "$@"; do
 	case $arg in
 	--deps) want_deps=yes ;;
 	--list) echo "$PARTS"; exit 0 ;;
-	-h|--help) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	-h|--help) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 	-*) die "unknown option: $arg" ;;
 	*)
 		case " $PARTS " in *" $arg "*) ;; *) die "unknown part: $arg (see --list)" ;; esac
@@ -661,7 +665,7 @@ if [ -z "${INSTALL_LOG:-}" ]; then
 	{
 		echo "install.sh $* ($(date '+%Y-%m-%d %H:%M:%S %z'))"
 		echo "repo     $DOTFILES $(git -c safe.directory="$DOTFILES" -C "$DOTFILES" log -1 --format='%h %cd' --date=short 2>/dev/null)" \
-			"$(git -c safe.directory="$DOTFILES" -C "$DOTFILES" status --porcelain 2>/dev/null | grep -q . && echo '(uncommitted changes)')"
+			"$(git --no-optional-locks -c safe.directory="$DOTFILES" -C "$DOTFILES" status --porcelain 2>/dev/null | grep -q . && echo '(uncommitted changes)')"
 		echo "system   $( (. /etc/os-release; echo "$PRETTY_NAME") 2>/dev/null), $(uname -srm)"
 		echo "run by   $(id -un) (uid $(id -u)), for $USER_NAME ($(id -nG "$USER_NAME")), home $HOME"
 		echo "shell    $(getent passwd "$USER_NAME" 2>/dev/null | cut -d: -f7), sh is $(readlink -f /bin/sh)"
@@ -771,6 +775,14 @@ for f in "$SYSBIN"/*; do
 done
 
 for p in $parts; do say "part    $p ($(date +%H:%M:%S))"; "install_$p"; done
+# A root run leaves files of root's behind where programs it ran wrote
+# their caches and state (fc-cache, pip, nvim): they belong to the user,
+# or the user's programs can't update them. slock stays root's.
+if [ "$AS_ROOT" = yes ]; then
+	n=$(find "$SYSTEM" "$CONFIG" -xdev ! -path "$SYSBIN/slock" ! -user "$USER_NAME" \
+		-print -exec chown -h "$USER_NAME:$USER_GROUP" {} + 2>/dev/null | wc -l)
+	[ "$n" -eq 0 ] || say "owner   $n files root made in $SYSTEM and $CONFIG -> $USER_NAME"
+fi
 # The user's files are theirs alone, like their umask 077 makes new ones:
 # take group and other permissions off everything in their home.
 chmod 700 "$HOME"
