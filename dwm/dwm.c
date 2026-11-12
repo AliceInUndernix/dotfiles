@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -282,6 +283,7 @@ static void (*handler[LASTEvent]) (XEvent *) = {
 static Atom wmatom[WMLast], netatom[NetLast], dwmatom[DwmLast];
 static int running = 1;
 static int restarting = 0; /* exec dwm again when the event loop ends */
+static time_t startrulesend; /* startrules apply until then (0: never) */
 static Cur *cursor[CurLast];
 static Clr **scheme;
 static Display *dpy;
@@ -302,6 +304,8 @@ struct Pertag {
 	const Layout *ltidxs[LENGTH(tags) + 1][2]; /* matrix of tags and layouts indexes  */
 	Client *sel[LENGTH(tags) + 1]; /* selected client */
 };
+
+static int startruleused[LENGTH(startrules)];
 
 /* compile-time check if all tags fit into an unsigned int bit array. */
 struct NumTags { char limitexceeded[LENGTH(tags) > 31 ? -1 : 1]; };
@@ -364,6 +368,23 @@ applyrules(Client *c)
 		&& (!r->class || strstr(class, r->class))
 		&& (!r->instance || strstr(instance, r->instance)))
 		{
+			c->isfloating = r->isfloating;
+			c->tags |= r->tags;
+			for (m = mons; m && m->num != r->monitor; m = m->next);
+			if (m)
+				c->mon = m;
+		}
+	}
+	/* startrules: each one only for the first window it matches, in
+	 * the first minute after X started dwm (not after dwm restart) */
+	for (i = 0; i < LENGTH(startrules) && time(NULL) < startrulesend; i++) {
+		r = &startrules[i];
+		if (!startruleused[i]
+		&& (!r->title || strstr(c->name, r->title))
+		&& (!r->class || strstr(class, r->class))
+		&& (!r->instance || strstr(instance, r->instance)))
+		{
+			startruleused[i] = 1;
 			c->isfloating = r->isfloating;
 			c->tags |= r->tags;
 			for (m = mons; m && m->num != r->monitor; m = m->next);
@@ -2686,6 +2707,10 @@ main(int argc, char *argv[])
 	if (!(dpy = XOpenDisplay(NULL)))
 		die("dwm: cannot open display");
 	checkotherwm();
+	if (getenv("DWM_RESTARTED"))
+		unsetenv("DWM_RESTARTED");
+	else
+		startrulesend = time(NULL) + 60;
 	setup();
 #ifdef __OpenBSD__
 	if (pledge("stdio rpath proc exec", NULL) == -1)
@@ -2699,6 +2724,7 @@ main(int argc, char *argv[])
 	cleanup();
 	XCloseDisplay(dpy);
 	if (restarting) {
+		setenv("DWM_RESTARTED", "1", 1);
 		execvp(argv[0], argv);
 		die("dwm: restart: execvp '%s' failed:", argv[0]);
 	}

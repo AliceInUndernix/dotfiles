@@ -40,8 +40,8 @@ while $STATUS_CLOCK; do
 	sleep $((60 - $(date +%S | sed 's/^0//')))
 done &
 
-# Started at login; dwm's rules (dwm/config.h) put them on tag 9.
-# dwm restart keeps them where they are, they only start again with X.
+# Started at login on tag 9 (startrules in dwm/config.h). Opened by hand
+# later, they open on the tag you are on like any other app.
 plover &
 st -c btop -e btop &
 
