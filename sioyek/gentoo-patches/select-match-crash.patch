@@ -1,0 +1,26 @@
+Sioyek (development branch): select_current_search_match crashed
+(segfault at address 4): a search result's character boxes are only
+worked out when it is shown, and it read rects[0] of the still empty
+list. Work them out first, as goto_search_result does, and do nothing
+if there are none.
+
+diff --git a/pdf_viewer/main_widget.cpp b/pdf_viewer/main_widget.cpp
+index ca53fe7..ac2fc52 100644
+--- a/pdf_viewer/main_widget.cpp
++++ b/pdf_viewer/main_widget.cpp
+@@ -10025,8 +10025,14 @@ std::string MainWidget::get_user_agent_string() {
+ 
+ void MainWidget::handle_select_current_search_match() {
+     std::optional<SearchResult> maybe_current_search_match = opengl_widget->get_current_search_result();
+-    if (maybe_current_search_match) {
++    if (maybe_current_search_match && doc()) {
+         SearchResult current_search_match = maybe_current_search_match.value();
++        if (current_search_match.rects.size() == 0) {
++            current_search_match.fill(doc());
++        }
++        if (current_search_match.rects.size() == 0) {
++            return;
++        }
+         DocumentPos selection_begin_doc, selection_end_doc;
+         selection_begin_doc.x = current_search_match.rects[0].x0;
+         selection_begin_doc.y = (current_search_match.rects[0].y0 + current_search_match.rects[0].y1) / 2;
