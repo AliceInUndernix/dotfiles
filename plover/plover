@@ -10,6 +10,13 @@
 #
 #   plover                                  start it
 #   plover -s plover_plugins install <pkg>  add a plugin
+# Plover 5 types through X only when XDG_SESSION_TYPE is x11. startx
+# leaves it at tty, and then Plover uses uinput, which types characters
+# that aren't on the keyboard (“ ” ’ …) as Ctrl+Shift+U + hex code: that
+# only works with ibus or fcitx5 and comes out as garbage in st.
+if [ -n "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ]; then
+	export XDG_SESSION_TYPE=x11
+fi
 dir=$HOME/.system/plover
 cd "$dir" || exit 1
 exec "$dir/app/AppRun" --python -s -m plover.scripts.dist_main "$@"
