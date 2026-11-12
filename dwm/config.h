@@ -79,6 +79,10 @@ static const char *icecatcmd[] = { "icecat", NULL };
 static const char *chromiumcmd[] = { "chromium-browser", NULL };
 static const char *mixercmd[] = { "st", "-e", "wiremix", NULL };
 static const char *topcmd[]   = { "st", "-e", "btop", NULL };
+/* tmux in st: Mod+x attaches to the last session (starts one if there is
+ * none), Mod+Shift+x always starts a new session */
+static const char *tmuxcmd[]  = { "st", "-e", "/bin/sh", "-c", "tmux attach || exec tmux", NULL };
+static const char *tmuxnewcmd[] = { "st", "-e", "tmux", "new-session", NULL };
 
 #include "movestack.c"
 static const Key keys[] = {
@@ -127,6 +131,8 @@ static const Key keys[] = {
 	{ MODKEY|ShiftMask,             XK_w,      spawn,          {.v = chromiumcmd } },
 	{ MODKEY,                       XK_a,      spawn,          {.v = mixercmd } },
 	{ MODKEY,                       XK_Escape, spawn,          {.v = topcmd } },
+	{ MODKEY,                       XK_x,      spawn,          {.v = tmuxcmd } },
+	{ MODKEY|ShiftMask,             XK_x,      spawn,          {.v = tmuxnewcmd } },
 	{ MODKEY|ShiftMask,             XK_q,      quit,           {0} },
 };
 

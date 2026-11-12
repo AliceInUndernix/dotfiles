@@ -1,14 +1,14 @@
 # Moonlander: "canary" layout
 
 QMK keymap for the ZSA Moonlander rev B: Canary letters, a steno layer for
-Plover, a dwm layer, a mouse layer and number-row punctuation combos.
+Plover, a dwm layer, a tmux layer, a mouse layer and number-row punctuation combos.
 `HANDOFF.md` has the full background, the version history and the things
 that were tried and settled. Start with the comment at the top of
 `canary/keymap.c`.
 
 | Path | What it is |
 |---|---|
-| `canary/` | Current layout (version 90): `keymap.c`, `config.h`, `rules.mk`, `keymap.json`, `mcuconf.h`, and the libraries it needs |
+| `canary/` | Current layout (version 91): `keymap.c`, `config.h`, `rules.mk`, `keymap.json`, `mcuconf.h`, and the libraries it needs |
 | `qmk.patch` | Small patch to ZSA's QMK that the libraries need |
 | `knowledge/canary/` | The first working canary keymap, kept as reference |
 | `history/` | Earlier numbered drafts (75..86) |

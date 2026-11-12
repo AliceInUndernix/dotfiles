@@ -49,6 +49,7 @@ In `canary/`, only comments differ from `keymap_87.c`, `config_87.h` and
 | 6 | dwm window manager (Super + key) | hold right lower key next to Alt | magenta |
 | 7 | Mouse with accelerating pointer | hold left lower key next to Ctrl | green |
 | 8 | Backlight, sound, LEDs, BOOT | tap far-left lower key | yellow |
+| 9 | tmux (Ctrl-b + a default tmux key) | hold right lower key next to DWM | cyan |
 
 The steno layer keeps the RGB, Mouse and dwm layer keys in the same spots as
 layer 0, so those layers can be reached while in steno.
@@ -96,12 +97,19 @@ suggest them again without asking:
   master count (i/d), doubledeck (r), IceCat/Chromium (w), wiremix (a),
   btop (Escape), Flameshot (Print), lock (Super+Shift+l) and suspend
   (Super+Shift+s).
-- **90 (latest):** dwm layer laid out again by Alice, key by key: tags on
+- **90:** dwm layer laid out again by Alice, key by key: tags on
   the bottom row counted from the right (Tag1 right pinky, All left
   pinky), Shrk/Next/Prev/Grow on the red layer's arrow keys, Zoom left of
   them, layouts on the left top row, apps on the left home row. Kill only
   works with Shift. Shift moved to left thumb 1. Removed: last-two-layouts
   (Super+Space) and Flameshot full screen (Super+Print).
+- **91 (latest):** tmux layer (9, cyan), held on the right lower key next
+  to DWM. Each key types Ctrl-b and one of tmux's default keys (no custom
+  tmux bindings), placed where the nearest dwm key is. On the dwm layer
+  Kill works without Shift and moved to the far-left home key, Menu moved
+  right into Kill's spot, and the new Tmux key (Super+x: attach to the last
+  session or start one; Shift: new session) took Menu's old spot. Web moved
+  up to the top-left key.
 - **config:** combo key count raised from 20 to 32 (by version 71); debounce
   raised to 12 ms against double letters (version 82). **rules:** unchanged in
   substance since the first numbered version (rules_1).

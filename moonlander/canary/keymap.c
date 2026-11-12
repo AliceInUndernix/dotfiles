@@ -2,7 +2,7 @@
  * ==========================================================================
  *  ZSA Moonlander (rev B), keymap "canary"
  *  Canary letter layout, built on optozorax's keymap libraries.
- *  Version 90 (the latest; earlier drafts were numbered 75..89).
+ *  Version 91 (the latest; earlier drafts were numbered 75..90).
  * ==========================================================================
  *
  * HOW TO READ THIS FILE
@@ -10,6 +10,7 @@
  *     1. Includes          the libraries this keymap is built on
  *     2. Names             layer names, combo key names, our own keycodes
  *     3. dwm shortcuts     short names for the window manager shortcuts
+ *        tmux keys        the tmux layer's keys (end of section 3)
  *     4. Combos            what each combo key does alone and in chords
  *     5. Layers            the keys of every layer, with a picture of each
  *     6. LED colours       thumb keys light up in the colour of the layer
@@ -43,6 +44,9 @@
  *               mouse pointer, wheel and clicks                 green
  *   8  L_RGB    TAP the far-left lower-row key to switch on, tap again
  *               (or the top-left key) to leave: backlight settings yellow
+ *   9  L_TMUX   HOLD the right lower-row key next to DWM: tmux,
+ *               each key types Ctrl-b and then one of tmux's
+ *               default keys                                    cyan
  *
  *   Layers 2 and 3 only exist because the lang_shift library always uses
  *   layers 0..3 for itself (English, English+Shift, Russian, Russian+Shift).
@@ -143,6 +147,7 @@ enum Layers {
     L_DWM,      // 6: dwm window manager shortcuts
     L_MOUSE,    // 7: mouse
     L_RGB,      // 8: backlight settings
+    L_TMUX,     // 9: tmux (Ctrl-b + a default tmux key)
 };
 
 /*
@@ -231,6 +236,20 @@ enum custom_keycodes {
     // Sound (section 8)
     JINGLE,                           // play Jingle Bells (press again to stop)
     CLICKY,                           // clicky mode on/off: a tick on every key press
+
+    // tmux layer (end of section 3): each one types Ctrl-b and then the
+    // key in tmux_keys[]. Keep T_FIRST..T_LAST together and in the same
+    // order as tmux_keys[].
+    T_FIRST,
+    T_WIN1 = T_FIRST, T_WIN2, T_WIN3, T_WIN4, T_WIN5,
+    T_WIN6, T_WIN7, T_WIN8, T_WIN9,
+    T_TREE, T_KEYS, T_PASTE,
+    T_LEFT, T_DOWN, T_UP, T_RIGHT,
+    T_ZOOM, T_PANES,
+    T_COPY, T_KILL, T_CMD, T_NEXTP, T_NEW, T_LAST,
+    T_LAYOUT, T_TILED, T_MAINV, T_EVEN, T_RENAME,
+    T_BREAK, T_SPLITH, T_SESN, T_SESP, T_SPLITV, T_DETACH,
+    T_LAST_KEY,
 };
 
 /* ========================================================================== *
@@ -272,7 +291,9 @@ enum custom_keycodes {
 #define D_ZOOM  DWM_MOD(KC_ENT)          // focused window to/from master (Super+Enter)
 #define D_RUN   DWM_MOD(KC_P)            // dmenu launcher (Super+p)
 #define D_SCRT  DWM_MOD(KC_GRV)          // scratchpad terminal on/off (Super+`)
-#define D_KILL  DWM_MOD(KC_C)            // nothing alone; with Shift held: close the window (Super+Shift+c)
+#define D_KILL  DWM_MOD_SFT(KC_C)        // close the window (Super+Shift+c), no Shift needed
+#define D_TMUX  DWM_MOD(KC_X)            // tmux: attach to the last session, or start one (Super+x;
+                                         //   Shift: always a new session)
 #define D_WEB   DWM_MOD(KC_W)            // IceCat (Super+w; Shift: Ungoogled Chromium)
 #define D_MIX   DWM_MOD(KC_A)            // wiremix sound mixer (Super+a)
 #define D_TOP   DWM_MOD(KC_ESC)          // btop (Super+Escape)
@@ -301,6 +322,62 @@ enum custom_keycodes {
 // Monitors (hold Shift too to send the window to the other monitor)
 #define D_MONP  DWM_MOD(KC_COMM)         // focus previous monitor
 #define D_MONN  DWM_MOD(KC_DOT)          // focus next monitor
+
+/*
+ * TMUX KEYS
+ *
+ * tmux's prefix stays Ctrl-b (tmux.conf doesn't change it). Each key on
+ * the tmux layer types Ctrl-b and then one of tmux's own default keys,
+ * so nothing has to be set up in tmux for them: "New" is Ctrl-b c, "Zoom"
+ * is Ctrl-b z. Run `tmux list-keys -N` (or the Keys key) to see them all.
+ *
+ * Ctrl or Alt held while pressing a key (the big thumb keys) are let go
+ * for Ctrl-b and held again for the second key. That gives tmux's default
+ * resize keys: Ctrl + arrow = resize by 1, Alt + arrow = resize by 5.
+ *
+ * The table is in the same order as T_FIRST..T_LAST_KEY in section 2.
+ */
+#define TMUX_PREFIX  LCTL(KC_B)
+
+static const uint16_t PROGMEM tmux_keys[] = {
+    KC_1, KC_2, KC_3, KC_4, KC_5,          // Win1..5  window 1..5
+    KC_6, KC_7, KC_8, KC_9,                // Win6..9  window 6..9
+    KC_W,                                  // Tree   choose a window from a list
+    LSFT(KC_SLSH),                         // Keys   ?  list key bindings
+    KC_RBRC,                               // Paste  ]  paste the last copied text
+    KC_LEFT, KC_DOWN, KC_UP, KC_RGHT,      // pane to the left / below / above / right
+    KC_Z,                                  // Zoom   pane fills the window, and back
+    KC_Q,                                  // Panes  show pane numbers
+    KC_LBRC,                               // Copy   [  copy mode
+    KC_X,                                  // Kill   close pane (asks y/n)
+    LSFT(KC_SCLN),                         // Cmd    :  command prompt
+    KC_O,                                  // Pane>  next pane
+    KC_C,                                  // New    new window
+    KC_L,                                  // Last   previous window
+    KC_SPC,                                // Lay    next layout
+    LALT(KC_5),                            // Tile   tiled layout
+    LALT(KC_4),                            // Main   main-vertical layout
+    LALT(KC_1),                            // Even   even-horizontal layout
+    KC_COMM,                               // Ren    ,  rename window
+    LSFT(KC_1),                            // Brk    !  pane into its own window
+    LSFT(KC_5),                            // Spl|   %  split side by side
+    LSFT(KC_0),                            // Ses>   )  next session
+    LSFT(KC_9),                            // Ses<   (  previous session
+    LSFT(KC_QUOT),                         // Spl-   "  split one above the other
+    KC_D,                                  // Det    detach
+};
+_Static_assert(sizeof(tmux_keys) / sizeof(tmux_keys[0]) == T_LAST_KEY - T_FIRST,
+               "tmux_keys[] and T_FIRST..T_LAST_KEY must have the same length");
+
+// Type Ctrl-b, then the key. Held Ctrl/Alt/Shift are let go for Ctrl-b
+// (so tmux sees a plain Ctrl-b) and pressed again for the second key.
+static void tmux_send(uint16_t keycode) {
+    uint8_t mods = get_mods();
+    clear_mods();
+    tap_code16(TMUX_PREFIX);
+    set_mods(mods);
+    tap_code16(pgm_read_word(&tmux_keys[keycode - T_FIRST]));
+}
 
 /* ========================================================================== *
  * 4. COMBOS
@@ -424,12 +501,13 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      * top      _    w    l    y    p    b    --       --   z    f    o    u    ;    -
      * home     1Sh  c    r    s    t    g    --       --   m    n    e    i    a    1Sh
      * bottom   --   q    j    v    d    k                 x    h    --   --   :    --
-     * lower    RGB  --   --   --   Mse  [Ctrl]      [Alt] DWM  --   --   --   --
+     * lower    RGB  --   --   --   Mse  [Ctrl]      [Alt] DWM  Tmux --   --   --
      * thumbs                  Spc  Red  Steno       Shift Tab  Bksp
      *
      *   1Sh   one-time Shift: the next key you press is shifted
      *   RGB   tap: backlight layer on/off           Mse  hold: mouse layer
      *   DWM   hold: Super + dwm layer               Red  hold: red layer
+ *   Tmux  hold: tmux layer
      *   Steno tap: steno layer on (tap again on the steno layer to leave)
      *
      * Punctuation that adds a space:
@@ -450,7 +528,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         EN_UNDS, EN_W,    EN_L,    EN_Y,    EN_P,    EN_B,    KC_NO,        KC_NO,   EN_Z,    EN_F,    EN_O,    EN_U,    SEMI_SP, EN_MINS,
         SFT_N_O, EN_C,    EN_R,    EN_S,    EN_T,    EN_G,    KC_NO,        KC_NO,   EN_M,    EN_N,    EN_E,    EN_I,    EN_A,    SFT_N_O,
         KC_NO,   EN_Q,    EN_J,    EN_V,    EN_D,    EN_K,                  EN_X,    EN_H,    KC_NO,   KC_NO,   COLN_SP, KC_NO,
-        CMB_RGB, KC_NO,   KC_NO,   KC_NO,   MO(L_MOUSE), CMB_CTL,           CMB_ALT, CMB_DWM, KC_NO,   KC_NO,   KC_NO,   KC_NO,
+        CMB_RGB, KC_NO,   KC_NO,   KC_NO,   MO(L_MOUSE), CMB_CTL,           CMB_ALT, CMB_DWM, MO(L_TMUX), KC_NO, KC_NO,   KC_NO,
                                             CMB_SPC, CMB_RED, TG(L_STENO), CMB_SFT, CMB_TAB, CMB_BSP
     ),
 
@@ -517,7 +595,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      *
      * home     --   #    T    P    H    *        --       --   *    F    P    L    T    D
      * bottom   --   S    K    W    R    *                     *    R    B    G    S    Z
-     * lower    RGB  --   --   --   Mse [--]            [--]  DWM  --   --   --   --
+     * lower    RGB  --   --   --   Mse [--]            [--]  DWM  Tmux --   --   --
      * thumbs                  A    O   exit               --   E    U
      *
      * 26 steno keys: 10 on the left rows, 12 on the right rows, 4 vowels.
@@ -526,7 +604,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      *          (Earlier versions had a second S here instead of #; Plover
      *          treats both S keys as the same S, so nothing was lost.)
      *   exit = left thumb 3, the same key that turns steno on from layer 0
-     *   RGB, Mse, DWM = the same layer keys as on layer 0, in the same spots:
+     *   RGB, Mse, DWM, Tmux = the same layer keys as on layer 0, in the same spots:
      *          tap RGB for the backlight layer (yellow), hold Mse for the
      *          mouse layer (green), hold DWM for the dwm layer (magenta).
      *          Those layers sit above steno, so they win while they are on.
@@ -547,7 +625,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,        KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,
         KC_NO,   STN_N1,  STN_TL,  STN_PL,  STN_HL,  STN_ST1, KC_NO,        KC_NO,   STN_ST3, STN_FR,  STN_PR,  STN_LR,  STN_TR,  STN_DR,
         KC_NO,   STN_S2,  STN_KL,  STN_WL,  STN_RL,  STN_ST2,               STN_ST4, STN_RR,  STN_BR,  STN_GR,  STN_SR,  STN_ZR,
-        CMB_RGB, KC_NO,   KC_NO,   KC_NO,   MO(L_MOUSE), KC_NO,             KC_NO,   CMB_DWM, KC_NO,   KC_NO,   KC_NO,   KC_NO,
+        CMB_RGB, KC_NO,   KC_NO,   KC_NO,   MO(L_MOUSE), KC_NO,             KC_NO,   CMB_DWM, MO(L_TMUX), KC_NO, KC_NO,   KC_NO,
                                             STN_A,   STN_O,   TG(L_STENO), KC_NO,   STN_E,   STN_U
     ),
 
@@ -556,11 +634,12 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      *
      * Holding the layer key also holds Super (see section 3), so every key
      * here is Super + that key, and each dwm shortcut is one key.
-     * Matches dwm/config.h in the dotfiles (checked 2026-11-11).
-     * Layout chosen by Alice key by key (version 90).
+     * Matches dwm/config.h in the dotfiles (checked 2026-11-12).
+     * Layout chosen by Alice key by key (version 90). Version 91: Kill,
+     * Menu and the new Tmux key on the home row, Web moved up to the top row.
      *
-     * top      --   Flt  Tile Deck Mono Bar  --       --   TFlt Mst+ Mon> Mon< Mst- Susp
-     * home     Web  Kill Menu Scr  Term Lock --       --   Zoom Shrk Next Prev Grow Top
+     * top      Web  Flt  Tile Deck Mono Bar  --       --   TFlt Mst+ Mon> Mon< Mst- Susp
+     * home     Kill Menu Tmux Scr  Term Lock --       --   Zoom Shrk Next Prev Grow Top
      * bottom   Mix  All  Tag9 Tag8 Tag7 Tag6               Tag5 Tag4 Tag3 Tag2 Tag1 Shot
      * lower    __   __   __   __   __   __          __   (held)
      * thumbs                  Shift __   --          __   __   __
@@ -580,8 +659,11 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      *   TFlt     float / unfloat the window (Super+Shift+Space)
      *   Flt Tile Deck Mono  floating / tiled / doubledeck / monocle (Super+f t r m)
      *   Bar      show/hide bar (Super+b)
-     *   Kill     close window: only with Shift (Super+Shift+c); alone it
-     *            sends Super+c, which dwm doesn't use
+     *   Kill     close the window (sends Super+Shift+c itself, no Shift
+     *            needed; version 91)
+     *   Tmux     st with tmux: attaches to the last session, or starts one
+     *            if there is none (Super+x). With Shift: always a new
+     *            session (Super+Shift+x)
      *   Menu     dmenu (Super+p)                Scr   scratchpad terminal (Super+`)
      *   Term     st (Super+Shift+Enter)         Web   IceCat (Super+w)
      *   Mix      wiremix (Super+a)              Top   btop (Super+Escape)
@@ -598,14 +680,14 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      *   Next Prev  move the window down / up the stack
      *   Mon< Mon>  send the window to that monitor
      *   Web      Ungoogled Chromium instead of IceCat
-     *   Kill     close the window
+     *   Tmux     a new tmux session
      * Ctrl versions of the tags (Super+Ctrl+1..9: show that tag as well)
      * work by holding the big Ctrl key too.
      */
     [L_DWM] = LAYOUT_moonlander(
         _______, _______, _______, _______, _______, _______, _______,      _______, _______, _______, _______, _______, _______, _______,
-        KC_NO,   D_FLOT,  D_TILE,  D_DECK,  D_MONO,  D_BAR,   KC_NO,        KC_NO,   D_TFLT,  D_NMAI,  D_MONN,  D_MONP,  D_NMAD,  D_SUSP,
-        D_WEB,   D_KILL,  D_RUN,   D_SCRT,  D_TERM,  D_LOCK,   KC_NO,        KC_NO,   D_ZOOM,  D_MSTS,  D_FOCN,  D_FOCP,  D_MSTG,  D_TOP,
+        D_WEB,   D_FLOT,  D_TILE,  D_DECK,  D_MONO,  D_BAR,   KC_NO,        KC_NO,   D_TFLT,  D_NMAI,  D_MONN,  D_MONP,  D_NMAD,  D_SUSP,
+        D_KILL,  D_RUN,   D_TMUX,  D_SCRT,  D_TERM,  D_LOCK,  KC_NO,        KC_NO,   D_ZOOM,  D_MSTS,  D_FOCN,  D_FOCP,  D_MSTG,  D_TOP,
         D_MIX,   D_ALL,   D_TAG9,  D_TAG8,  D_TAG7,  D_TAG6,                D_TAG5,  D_TAG4,  D_TAG3,  D_TAG2,  D_TAG1,  D_SHOT,
         _______, _______, _______, _______, _______, _______,               _______, _______, _______, _______, _______, _______,
                                             KC_LSFT, _______, KC_NO,        _______, _______, _______
@@ -674,6 +756,45 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         _______, _______, _______, _______, QK_BOOT, _______,               _______, _______, _______, _______, _______, _______,
                                             _______, _______, _______,      _______, _______, _______
     ),
+
+    /*
+     * LAYER 9: tmux  (hold the right lower-row key next to DWM)
+     *
+     * Every key types Ctrl-b and then one of tmux's default keys (section
+     * 3, "TMUX KEYS"), so tmux needs no setup for them. Each key sits in
+     * the same spot as the dwm key that does the nearest thing.
+     *
+     * top      --   Lay  Tile Main Even Ren  --       --   Brk  Spl| Ses> Ses< Spl- Det
+     * home     Copy Kill Cmd  Pne> New  Last --       --   Zoom Left Down Up   Rght Pnes
+     * bottom   Keys Tree Win9 Win8 Win7 Win6               Win5 Win4 Win3 Win2 Win1 Pste
+     * lower    __   __   __   __   __   __          __   __   (held) --   --   --
+     * thumbs                  __   __   --          __   __   __
+     *   (__ = same as layer 0, so Ctrl and Alt still work; -- = nothing)
+     *
+     *   Win1..9  window 1..9 (Ctrl-b 1..9)      Tree  pick a window from a list (w)
+     *   Left Down Up Rght  go to the pane in that direction (arrows; on the
+     *            red layer's arrow keys). Hold Ctrl: resize by 1; hold
+     *            Alt: resize by 5
+     *   Zoom     pane fills the window, and back (z)
+     *   Pnes     show pane numbers (q)          Pne>  next pane (o)
+     *   New      new window (c)                 Last  previous window (l)
+     *   Kill     close the pane, asks y/n (x)   Det   detach (d)
+     *   Cmd      command prompt (:)             Copy  copy mode ([)
+     *   Pste     paste the last copied text (]) Keys  list all keys (?)
+     *   Spl| Spl-  split side by side (%) / one above the other (")
+     *   Brk      move the pane to its own window (!)
+     *   Ses> Ses<  next / previous session ( ) and ( )
+     *   Lay      next layout (Space)            Ren   rename the window (,)
+     *   Tile Main Even  tiled / main-vertical / even-horizontal (Alt+5 4 1)
+     */
+    [L_TMUX] = LAYOUT_moonlander(
+        _______, _______, _______, _______, _______, _______, _______,      _______, _______, _______, _______, _______, _______, _______,
+        KC_NO,   T_LAYOUT, T_TILED, T_MAINV, T_EVEN, T_RENAME, KC_NO,       KC_NO,   T_BREAK, T_SPLITH, T_SESN, T_SESP,  T_SPLITV, T_DETACH,
+        T_COPY,  T_KILL,  T_CMD,   T_NEXTP, T_NEW,   T_LAST,  KC_NO,        KC_NO,   T_ZOOM,  T_LEFT,  T_DOWN,  T_UP,    T_RIGHT, T_PANES,
+        T_KEYS,  T_TREE,  T_WIN9,  T_WIN8,  T_WIN7,  T_WIN6,                T_WIN5,  T_WIN4,  T_WIN3,  T_WIN2,  T_WIN1,  T_PASTE,
+        _______, _______, _______, _______, _______, _______,               _______, _______, _______, _______, _______, _______,
+                                            _______, _______, KC_NO,        _______, _______, _______
+    ),
 };
 
 /* ========================================================================== *
@@ -694,6 +815,7 @@ const uint8_t PROGMEM layermap[][3] = {
     [L_DWM]   = { 213, 255, 255 },  // magenta
     [L_MOUSE] = {  76, 255, 255 },  // green
     [L_RGB]   = {  43, 255, 255 },  // yellow
+    [L_TMUX]  = { 128, 255, 255 },  // cyan
 };
 const uint8_t layermap_size = sizeof(layermap) / (sizeof(uint8_t) * 3);
 
@@ -991,6 +1113,10 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
                 tap_code(KC_PSCR);
                 register_code(DWM_HOLD_MOD);
             }
+            return false;
+
+        case T_FIRST ... T_LAST_KEY - 1:                                         // tmux layer
+            if (down) tmux_send(keycode);
             return false;
 
         case JINGLE:       if (down) jingle_press();                  return false;  // Jingle Bells
