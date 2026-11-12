@@ -2,7 +2,7 @@
  * ==========================================================================
  *  ZSA Moonlander (rev B), keymap "canary"
  *  Canary letter layout, built on optozorax's keymap libraries.
- *  Version 91 (the latest; earlier drafts were numbered 75..90).
+ *  Version 92 (the latest; earlier drafts were numbered 75..91).
  * ==========================================================================
  *
  * HOW TO READ THIS FILE
@@ -318,6 +318,7 @@ enum custom_keycodes {
 #define D_MONO  DWM_MOD(KC_M)            // monocle (one window fills the screen)
 #define D_DECK  DWM_MOD(KC_R)            // doubledeck
 #define D_TFLT  DWM_MOD_SFT(KC_SPC)      // float / unfloat the focused window
+#define D_STKY  DWM_MOD(KC_S)            // pin / unpin the window on every tag (Super+s)
 #define D_BAR   DWM_MOD(KC_B)            // show / hide the bar
 
 // Monitors (hold Shift too to send the window to the other monitor)
@@ -639,8 +640,9 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      * Matches dwm/config.h in the dotfiles (checked 2026-11-12).
      * Layout chosen by Alice key by key (version 90). Version 91: Kill,
      * Menu and the new Tmux key on the home row, Web moved up to the top row.
+     * Version 92: Stky on the empty key left of TFlt.
      *
-     * top      Web  Flt  Tile Deck Mono Bar  --       --   TFlt Mst+ Mon> Mon< Mst- Susp
+     * top      Web  Flt  Tile Deck Mono Bar  --       Stky TFlt Mst+ Mon> Mon< Mst- Susp
      * home     Kill Menu Tmux Scr  Term Lock --       --   Zoom Shrk Next Prev Grow Top
      * bottom   Mix  All  Tag9 Tag8 Tag7 Tag6               Tag5 Tag4 Tag3 Tag2 Tag1 Shot
      * lower    __   __   __   __   __   __          __   (held)
@@ -659,6 +661,8 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      *   Mst+ Mst-  one more / fewer window in master (Super+i / d)
      *   Mon< Mon>  focus previous / next monitor (Super+, .)
      *   TFlt     float / unfloat the window (Super+Shift+Space)
+     *   Stky     pin / unpin the window: on every tag, floating, and
+     *            Next/Prev skip it (Super+s; version 92)
      *   Flt Tile Deck Mono  floating / tiled / doubledeck / monocle (Super+f t r m)
      *   Bar      show/hide bar (Super+b)
      *   Kill     close the window (sends Super+Shift+c itself, no Shift
@@ -688,7 +692,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      */
     [L_DWM] = LAYOUT_moonlander(
         _______, _______, _______, _______, _______, _______, _______,      _______, _______, _______, _______, _______, _______, _______,
-        D_WEB,   D_FLOT,  D_TILE,  D_DECK,  D_MONO,  D_BAR,   KC_NO,        KC_NO,   D_TFLT,  D_NMAI,  D_MONN,  D_MONP,  D_NMAD,  D_SUSP,
+        D_WEB,   D_FLOT,  D_TILE,  D_DECK,  D_MONO,  D_BAR,   KC_NO,        D_STKY,  D_TFLT,  D_NMAI,  D_MONN,  D_MONP,  D_NMAD,  D_SUSP,
         D_KILL,  D_RUN,   D_TMUX,  D_SCRT,  D_TERM,  D_LOCK,  KC_NO,        KC_NO,   D_ZOOM,  D_MSTS,  D_FOCN,  D_FOCP,  D_MSTG,  D_TOP,
         D_MIX,   D_ALL,   D_TAG9,  D_TAG8,  D_TAG7,  D_TAG6,                D_TAG5,  D_TAG4,  D_TAG3,  D_TAG2,  D_TAG1,  D_SHOT,
         _______, _______, _______, _______, _______, _______,               _______, _______, _______, _______, _______, _______,
