@@ -21,7 +21,7 @@ HISTSIZE=1000000
 # keep their plain arrows.
 case ${KSH_VERSION:-} in *93*) eval "$(cat <<'EOF'
 _hs_key() {
-	typeset dir l n
+	typeset dir l n t
 	case ${.sh.edchar} in
 	$'\e[A'|$'\eOA') dir=up ;;
 	$'\e[B'|$'\eOB') dir=down ;;
@@ -31,11 +31,20 @@ _hs_key() {
 	# still what it showed
 	if [[ -z $_hs_on || ${.sh.edtext} != "$_hs_shown" ]]; then
 		_hs_on=1 _hs_i=0 _hs_prefix=${.sh.edtext}
-		unset _hs_list; typeset -ga _hs_list; n=0
-		hist -lnr -$HISTSIZE 2>/dev/null |
-			P=$_hs_prefix awk 'sub(/^\t/, "") && index($0, ENVIRON["P"]) == 1 &&
-				$0 != ENVIRON["P"] && !seen[$0]++' |
-			while IFS= read -r l; do _hs_list[n++]=$l; done
+		unset _hs_list _hs_seen; typeset -a _hs_list; typeset -A _hs_seen
+		n=0
+		# Only ksh's own commands here, no pipes or programs: running
+		# one from this trap (the old "hist | awk") left the terminal
+		# out of line-editing mode in UTF-8, so the next arrow printed
+		# ^[[A instead of doing nothing.
+		t=$(hist -lnr -$HISTSIZE 2>/dev/null)
+		while IFS= read -r l; do
+			[[ $l == $'\t'* ]] || continue     # commands start with a Tab
+			l=${l#$'\t'}
+			[[ $l == "$_hs_prefix"?* && -z ${_hs_seen[$l]-} ]] || continue
+			_hs_seen[$l]=1 _hs_list[n++]=$l
+		done <<< "$t"
+		unset _hs_seen
 	fi
 	if [[ $dir == up ]]; then
 		(( _hs_i < ${#_hs_list[@]} )) || { .sh.edchar= ; return; }
