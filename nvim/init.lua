@@ -90,7 +90,7 @@ o.clipboard = "unnamedplus"    -- yank/paste uses the system clipboard
 o.updatetime = 300
 
 -- Persistent history. Neovim keeps these in its own state folder
--- (~/.local/state/nvim/) so your project folders stay clean.
+-- (~/.system/state/nvim/) so your project folders stay clean.
 local state = vim.fn.stdpath("state")
 o.undofile = true              -- undo survives closing the file
 o.undodir = state .. "/undo//" -- ...stored here, one file per edited file

@@ -10,7 +10,7 @@ script puts the whole configuration back after a fresh install.
 | Directory | What it is | Installed to |
 |---|---|---|
 | `dwm/` | dwm 6.8 source (window manager) | `~/.system/bin/dwm` |
-| `st/` | st 0.9.3 source (terminal): scrollback like Alacritty (Shift+PageUp/PageDown/Home/End, mouse wheel), Symbols Nerd Font for icons | `~/.system/bin/st`, font in `~/.local/share/fonts` |
+| `st/` | st 0.9.3 source (terminal): scrollback like Alacritty (Shift+PageUp/PageDown/Home/End, mouse wheel), Symbols Nerd Font for icons | `~/.system/bin/st`, font in `~/.system/share/fonts` |
 | `dmenu/` | dmenu 5.4 source (launcher), `dmenu_apps` and its list `apps` | `~/.system/bin/dmenu`, `dmenu_apps`, `~/.config/dmenu/apps` |
 | `slock/` | slock 1.7 source (screen locker; Mod+Shift+l locks, Mod+Shift+s suspends) | `~/.system/bin/slock` |
 | `nvim/` | Neovim config (0.11+, no plugin manager) | `~/.config/nvim` (symlink), `~/.system/bin/vim` -> nvim (first in PATH) |
@@ -35,6 +35,15 @@ first in PATH, manuals in `~/.system/share/man`); nothing goes to
 `/usr/local`, and `~/.local/bin` is not used (install.sh moves what was
 there into `~/.system/bin`). `PREFIX=...` overrides this for the
 suckless tools.
+
+What programs keep for you goes there too: `~/.profile` points the XDG
+folders at `~/.system/share` (data: fonts, Neovim plugins, QMK),
+`~/.system/state` (ksh history, Neovim undo, the X cookie) and
+`~/.system/cache`, so `~/.local` and `~/.cache` are not used; install.sh
+moves what was in them, and `~/.ksh_history`, over. Settings stay in
+`~/.config`, and `~/.profile`, `~/.kshrc` and `~/.xinitrc` stay in `~`,
+all as links into this repo. Your own files (books, downloads) stay in
+`~`. Log in again after the first run so programs see the new places.
 
 The suckless tools are the upstream sources from https://git.suckless.org,
 copied at the release tag. Each directory has an `UPSTREAM` file with the
@@ -76,7 +85,7 @@ What the script does:
 - **Private home**: new files are yours alone (umask 077 in `~/.profile`, not for root), and each run of `install.sh` takes group and other permissions off everything already in your home.
 - **Login shell**: ksh becomes the shell of both the user and root (`chsh`, no password asked; root gets copies of `profile` and `kshrc`, owned by root).
 - **Moonlander**: QMK, its Python environment, the ARM compiler and ZSA's
-  QMK source go into the user's `~/.local`, then the firmware is built into
+  QMK source go into `~/.system/share/qmk`, then the firmware is built into
   `moonlander/` for Keymapp. See `moonlander/README.md`.
 - **Plover**: the newest release (its AppImage, unpacked) goes into
   `~/.system/plover`, with Dotterel and its dark theme from

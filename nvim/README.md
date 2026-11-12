@@ -90,7 +90,7 @@ hand: `Ctrl-k - M` types —, `Ctrl-k - N` types –.
 | mini.surround | Add, delete, replace quotes and brackets |
 | which-key.nvim | Shows what keys can follow after a pause |
 
-To update them, delete `~/.local/share/nvim/site/pack/plugins/` and
+To update them, delete `~/.system/share/nvim/site/pack/plugins/` and
 restart Neovim; they download again. Then run `:TSUpdate` once.
 
 ## Tabs and whitespace
@@ -148,7 +148,7 @@ that; `./install.sh --deps` installs both.
 
 ## What Neovim remembers between sessions
 
-Everything is kept in `~/.local/state/nvim/`, out of your project folders:
+Everything is kept in `~/.system/state/nvim/`, out of your project folders:
 
 - `undo/`: full undo history per file, so `u` works even after a restart.
 - `view/`: your folds and cursor position per file.
@@ -197,7 +197,7 @@ Installing sioyek-9999 on Gentoo:
     sudo emerge --ask --update --deep --changed-use @world =app-text/sioyek-9999
 
 (The `@world` part avoids the Qt 6.11.2 / 6.11.3 slot conflict.) Back
-up `~/.local/share/sioyek` first, and move an old `~/.system/bin/sioyek`
+up `~/.system/share/sioyek` first, and move an old `~/.system/bin/sioyek`
 out of the way so the new one starts.
 
 Use: save your text file, then `:TypeTrack ~/books/book.epub` (Tab

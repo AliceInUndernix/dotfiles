@@ -9,7 +9,9 @@ set -o noclobber          # > will not overwrite a file; >| does
 # One history file shared by every open shell: a command run in one
 # terminal can be found with the arrows in the others. ksh has no
 # "unlimited", so a million commands stands in for it.
-HISTFILE=$HOME/.ksh_history
+# It is in ~/.system/state/ksh (install.sh moves an old ~/.ksh_history).
+HISTFILE=${XDG_STATE_HOME:-$HOME/.system/state}/ksh/history
+[ -d "${HISTFILE%/*}" ] || mkdir -p "${HISTFILE%/*}"
 HISTSIZE=1000000
 # Up/Down search history for commands that start with what you typed
 # (all commands if the line is empty), both ways: Down goes back to newer

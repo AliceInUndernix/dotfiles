@@ -52,12 +52,18 @@ USER_GROUP=$(id -gn "$USER_NAME")
 pw=${pw%:*}
 HOME=${pw##*:}
 [ -d "$HOME" ] || die "home folder $HOME of $USER_NAME does not exist"
-# Root's own XDG settings must not leak in; use the user's defaults.
-unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME
-CONFIG=$HOME/.config
-DATA=$HOME/.local/share
 SYSTEM=$HOME/.system          # all installed programs live here
 SYSBIN=$SYSTEM/bin            # ...their commands here (first in PATH)
+# Where programs keep their files, the same as ~/.profile sets for the
+# login: settings in ~/.config, everything else in ~/.system (not ~/.local
+# or ~/.cache). Exported, so what this script runs (nvim, pip, fc-cache)
+# uses them too, and root's own settings don't leak in.
+CONFIG=$HOME/.config
+DATA=$SYSTEM/share
+STATE=$SYSTEM/state
+CACHE=$SYSTEM/cache
+export XDG_CONFIG_HOME="$CONFIG" XDG_DATA_HOME="$DATA" \
+	XDG_STATE_HOME="$STATE" XDG_CACHE_HOME="$CACHE"
 PREFIX=${PREFIX:-$SYSTEM}     # suckless tools: PREFIX/bin = ~/.system/bin
 export HOME
 
@@ -236,13 +242,6 @@ install_ksh() {
 	root_home=${root_home##*:}
 	rootcopy "$DOTFILES/ksh/profile" "$root_home/.profile"
 	rootcopy "$DOTFILES/ksh/kshrc" "$root_home/.kshrc"
-	# History moved from ~/.local/state/ksh/history to ~/.ksh_history.
-	old=$HOME/.local/state/ksh/history
-	if [ -f "$old" ] && [ ! -e "$HOME/.ksh_history" ]; then
-		mv "$old" "$HOME/.ksh_history"
-		rmdir "${old%/*}" 2>/dev/null || :
-		say "move    $old -> $HOME/.ksh_history"
-	fi
 }
 
 # rootcopy <file in repo> <target>: copy owned by root, backing up what is there.
@@ -386,9 +385,9 @@ install_slock() {
 }
 
 # Moonlander: everything goes into your home folder, nothing needs root.
-#   ~/.local/share/qmk/zsa_qmk   ZSA's QMK source (firmware25), with qmk.patch
-#   ~/.local/share/qmk/venv      Python environment for the qmk command
-#   ~/.local/share/qmk/arm-gnu-toolchain   ARM compiler, if none is installed
+#   ~/.system/share/qmk/zsa_qmk   ZSA's QMK source (firmware25), with qmk.patch
+#   ~/.system/share/qmk/venv      Python environment for the qmk command
+#   ~/.system/share/qmk/arm-gnu-toolchain   ARM compiler
 #   ~/.system/bin/qmk, arm-none-eabi-*     symlinks to the two above
 # Each run copies moonlander/canary into QMK fresh (like update.sh did) and
 # builds and flashes. The built .bin is also copied to moonlander/.
@@ -433,6 +432,11 @@ install_moonlander() {
 	fi
 
 	# 3. qmk command in its own Python environment.
+	# A venv can't be moved (its scripts name their old path), so one that
+	# no longer runs, e.g. after moving from ~/.local/share, is made again.
+	if [ -d "$QMK_DIR/venv" ] && ! "$QMK_DIR/venv/bin/qmk" --version >/dev/null 2>&1; then
+		rm -rf "$QMK_DIR/venv"
+	fi
 	if [ ! -x "$QMK_DIR/venv/bin/qmk" ]; then
 		say "python  qmk -> $QMK_DIR/venv"
 		python3 -m venv "$QMK_DIR/venv"
@@ -668,7 +672,7 @@ if [ -d "$old_bin" ] && [ ! -L "$old_bin" ]; then
 		[ -e "$f" ] || [ -L "$f" ] || continue
 		b=$(basename "$f")
 		case $(readlink "$f" 2>/dev/null) in
-		*/nvim|"$DATA"/qmk/*) rm "$f"; continue ;;
+		*/nvim|"$HOME"/.local/share/qmk/*) rm "$f"; continue ;;
 		esac
 		if [ -e "$SYSBIN/$b" ] || [ -L "$SYSBIN/$b" ]; then
 			warn "kept    $f ($SYSBIN/$b already exists)"
@@ -679,6 +683,47 @@ if [ -d "$old_bin" ] && [ ! -L "$old_bin" ]; then
 	done
 	rmdir "$old_bin" 2>/dev/null && say "remove  $old_bin (now empty)" || :
 fi
+
+# ~/.local/share, ~/.local/state and ~/.cache are no longer used: their
+# contents move into ~/.system/share, state and cache (the XDG folders
+# ~/.profile sets), and so does ~/.ksh_history. Nothing is deleted; a
+# name already taken in the new place is kept where it was and reported.
+# moveinto <old dir> <new dir>: move every entry, merging folders.
+moveinto() {
+	[ -d "$1" ] && [ ! -L "$1" ] || return 0
+	userdir "$2"
+	for f in "$1"/* "$1"/.[!.]*; do
+		[ -e "$f" ] || [ -L "$f" ] || continue
+		t=$2/$(basename "$f")
+		if [ ! -e "$t" ] && [ ! -L "$t" ]; then
+			mv "$f" "$t"
+			say "move    $f -> $t"
+		elif [ -d "$f" ] && [ ! -L "$f" ] && [ -d "$t" ] && [ ! -L "$t" ]; then
+			( moveinto "$f" "$t" )
+		else
+			warn "kept    $f ($t already exists)"
+		fi
+	done
+	rmdir "$1" 2>/dev/null || :
+}
+moveinto "$HOME/.local/share" "$DATA"
+moveinto "$HOME/.local/state" "$STATE"
+moveinto "$HOME/.cache" "$CACHE"
+rmdir "$HOME/.local" 2>/dev/null && say "remove  $HOME/.local (now empty)" || :
+if [ -f "$HOME/.ksh_history" ] && [ ! -e "$STATE/ksh/history" ]; then
+	userdir "$STATE/ksh"
+	mv "$HOME/.ksh_history" "$STATE/ksh/history"
+	say "move    $HOME/.ksh_history -> $STATE/ksh/history"
+fi
+# Links in ~/.system/bin into the old ~/.local/share now point at the
+# new place (QMK's toolchain).
+for f in "$SYSBIN"/*; do
+	[ -L "$f" ] || continue
+	case $(readlink "$f") in "$HOME"/.local/share/*)
+		ln -sfn "$DATA/$(readlink "$f" | sed "s|^$HOME/.local/share/||")" "$f"
+		own "$f" ;;
+	esac
+done
 
 for p in $parts; do "install_$p"; done
 # The user's files are theirs alone, like their umask 077 makes new ones:

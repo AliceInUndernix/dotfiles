@@ -10,6 +10,18 @@ export LESS=-iFR
 
 export ENV=$HOME/.kshrc     # ksh reads this for every interactive shell
 
+# Where programs keep their files: settings in ~/.config, everything else
+# in ~/.system, so nothing goes to ~/.local or ~/.cache:
+#   share   data: fonts, Neovim plugins, QMK
+#   state   history and logs: ksh history, Neovim undo, the X login cookie
+#   cache   things that can be thrown away
+export XDG_CONFIG_HOME=$HOME/.config
+export XDG_DATA_HOME=$HOME/.system/share
+export XDG_STATE_HOME=$HOME/.system/state
+export XDG_CACHE_HOME=$HOME/.system/cache
+mkdir -p "$XDG_STATE_HOME"
+export XAUTHORITY=$XDG_STATE_HOME/Xauthority  # startx's cookie, not ~/.Xauthority
+
 # PATH, most important first:
 #   ~/.system/bin   every program installed for you: dwm, st, dmenu,
 #                   slock, qmk, vim -> nvim, ... (wins over all)
