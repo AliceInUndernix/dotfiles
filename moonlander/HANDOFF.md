@@ -110,6 +110,9 @@ suggest them again without asking:
   right into Kill's spot, and the new Tmux key (Super+x: attach to the last
   session or start one; Shift: new session) took Menu's old spot. Web moved
   up to the top-left key.
+  Then the tmux layer's left half was lined up with that: Copy top-left
+  (Web), Kill, Cmd (Menu), Ses: session list (Tmux), Pane> (Scr), New
+  (Term), Last (Lock).
 - **config:** combo key count raised from 20 to 32 (by version 71); debounce
   raised to 12 ms against double letters (version 82). **rules:** unchanged in
   substance since the first numbered version (rules_1).

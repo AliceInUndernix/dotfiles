@@ -249,6 +249,7 @@ enum custom_keycodes {
     T_COPY, T_KILL, T_CMD, T_NEXTP, T_NEW, T_LAST,
     T_LAYOUT, T_TILED, T_MAINV, T_EVEN, T_RENAME,
     T_BREAK, T_SPLITH, T_SESN, T_SESP, T_SPLITV, T_DETACH,
+    T_SESS,
     T_LAST_KEY,
 };
 
@@ -365,6 +366,7 @@ static const uint16_t PROGMEM tmux_keys[] = {
     LSFT(KC_9),                            // Ses<   (  previous session
     LSFT(KC_QUOT),                         // Spl-   "  split one above the other
     KC_D,                                  // Det    detach
+    KC_S,                                  // Ses    choose a session from a list
 };
 _Static_assert(sizeof(tmux_keys) / sizeof(tmux_keys[0]) == T_LAST_KEY - T_FIRST,
                "tmux_keys[] and T_FIRST..T_LAST_KEY must have the same length");
@@ -762,10 +764,11 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      *
      * Every key types Ctrl-b and then one of tmux's default keys (section
      * 3, "TMUX KEYS"), so tmux needs no setup for them. Each key sits in
-     * the same spot as the dwm key that does the nearest thing.
+     * the same spot as the dwm key that does the nearest thing (Kill where
+     * dwm's Kill is, Cmd where dmenu is, Copy where Web is, and so on).
      *
-     * top      --   Lay  Tile Main Even Ren  --       --   Brk  Spl| Ses> Ses< Spl- Det
-     * home     Copy Kill Cmd  Pne> New  Last --       --   Zoom Left Down Up   Rght Pnes
+     * top      Copy Lay  Tile Main Even Ren  --       --   Brk  Spl| Ses> Ses< Spl- Det
+     * home     Kill Cmd  Ses  Pne> New  Last --       --   Zoom Left Down Up   Rght Pnes
      * bottom   Keys Tree Win9 Win8 Win7 Win6               Win5 Win4 Win3 Win2 Win1 Pste
      * lower    __   __   __   __   __   __          __   __   (held) --   --   --
      * thumbs                  __   __   --          __   __   __
@@ -780,6 +783,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      *   New      new window (c)                 Last  previous window (l)
      *   Kill     close the pane, asks y/n (x)   Det   detach (d)
      *   Cmd      command prompt (:)             Copy  copy mode ([)
+     *   Ses      pick a session from a list (s), where dwm has Tmux
      *   Pste     paste the last copied text (]) Keys  list all keys (?)
      *   Spl| Spl-  split side by side (%) / one above the other (")
      *   Brk      move the pane to its own window (!)
@@ -789,8 +793,8 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      */
     [L_TMUX] = LAYOUT_moonlander(
         _______, _______, _______, _______, _______, _______, _______,      _______, _______, _______, _______, _______, _______, _______,
-        KC_NO,   T_LAYOUT, T_TILED, T_MAINV, T_EVEN, T_RENAME, KC_NO,       KC_NO,   T_BREAK, T_SPLITH, T_SESN, T_SESP,  T_SPLITV, T_DETACH,
-        T_COPY,  T_KILL,  T_CMD,   T_NEXTP, T_NEW,   T_LAST,  KC_NO,        KC_NO,   T_ZOOM,  T_LEFT,  T_DOWN,  T_UP,    T_RIGHT, T_PANES,
+        T_COPY,  T_LAYOUT, T_TILED, T_MAINV, T_EVEN, T_RENAME, KC_NO,       KC_NO,   T_BREAK, T_SPLITH, T_SESN, T_SESP,  T_SPLITV, T_DETACH,
+        T_KILL,  T_CMD,   T_SESS,  T_NEXTP, T_NEW,   T_LAST,  KC_NO,        KC_NO,   T_ZOOM,  T_LEFT,  T_DOWN,  T_UP,    T_RIGHT, T_PANES,
         T_KEYS,  T_TREE,  T_WIN9,  T_WIN8,  T_WIN7,  T_WIN6,                T_WIN5,  T_WIN4,  T_WIN3,  T_WIN2,  T_WIN1,  T_PASTE,
         _______, _______, _______, _______, _______, _______,               _______, _______, _______, _______, _______, _______,
                                             _______, _______, KC_NO,        _______, _______, _______
