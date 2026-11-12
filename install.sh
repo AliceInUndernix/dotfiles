@@ -734,10 +734,10 @@ install_plover() {
 	new=$src/plover-dotterel/plover_dotterel/dictionaries
 	old=$(dotterel_dicts)
 	if [ "$(cat "$PLOVER_DIR/plugins/.dotterel" 2>/dev/null)" = "$commit" ] &&
-		[ -n "$old" ] && diff -rq "$new" "$old" >/dev/null 2>&1; then
+		[ -n "$old" ] && diff -rq -x __pycache__ "$new" "$old" >/dev/null 2>&1; then
 		say "ok      Dotterel ($(git -C "$src" log -1 --format=%h))"
 	else
-		if [ -n "$old" ] && ! diff -rq "$new" "$old" >/dev/null 2>&1; then
+		if [ -n "$old" ] && ! diff -rq -x __pycache__ "$new" "$old" >/dev/null 2>&1; then
 			keep=$STATE/plover/dictionaries-$(date +%Y%m%d-%H%M%S)
 			mkdir -p "$STATE/plover" && cp -R "$old" "$keep"
 			say "backup  old Dotterel dictionaries -> $keep"
@@ -749,7 +749,7 @@ install_plover() {
 		PIP_NO_CACHE_DIR=1 "$SYSBIN/plover" -s plover_plugins install \
 			"$src/plover-dotterel" "$src/plover-dotterel/dark-theme"
 		old=$(dotterel_dicts)
-		if [ -n "$old" ] && diff -rq "$new" "$old" >/dev/null 2>&1; then
+		if [ -n "$old" ] && diff -rq -x __pycache__ "$new" "$old" >/dev/null 2>&1; then
 			echo "$commit" > "$PLOVER_DIR/plugins/.dotterel"
 			say "ok      Dotterel dictionaries match the repo; restart Plover to load them"
 		else
