@@ -1,6 +1,9 @@
 #!/bin/sh
-# Install Alice's configuration on a fresh Linux system. Run it as root
-# (log in as root, or su -c ./install.sh); it never calls sudo or doas.
+# Install Alice's configuration on a fresh Linux system. Run it as
+# yourself; only a few steps need root, and then it says so and stops
+# (run those with su -c, never sudo or doas):
+#   --deps   system packages          slock   must be root's to lock
+#   ksh      making ksh the login shell, and root's copies of the files
 #
 #   ./install.sh               link configs and build/install everything
 #   ./install.sh nvim dwm      only the parts named
@@ -31,12 +34,17 @@ say()  { printf '==> %s\n' "$*"; }
 warn() { printf '!!  %s\n' "$*" >&2; }
 die()  { warn "$*"; exit 1; }
 
-[ "$(id -u)" -eq 0 ] || die "run this as root (log in as root, or: su -c ./install.sh)"
-
-# The user the configs are for: INSTALL_USER, else whoever owns this repo.
-USER_NAME=${INSTALL_USER:-$(stat -c %U "$DOTFILES" 2>/dev/null || stat -f %Su "$DOTFILES")}
-[ "$USER_NAME" != root ] ||
-	die "this repo belongs to root: say whose configs these are, e.g. INSTALL_USER=alice ./install.sh"
+# The user the configs are for: you, or as root INSTALL_USER, else
+# whoever owns this repo.
+if [ "$(id -u)" -eq 0 ]; then
+	AS_ROOT=yes
+	USER_NAME=${INSTALL_USER:-$(stat -c %U "$DOTFILES" 2>/dev/null || stat -f %Su "$DOTFILES")}
+	[ "$USER_NAME" != root ] ||
+		die "this repo belongs to root: say whose configs these are, e.g. INSTALL_USER=alice ./install.sh"
+else
+	AS_ROOT=no
+	USER_NAME=$(id -un)
+fi
 pw=$(getent passwd "$USER_NAME" 2>/dev/null || grep "^$USER_NAME:" /etc/passwd) ||
 	die "no such user: $USER_NAME"
 USER_GROUP=$(id -gn "$USER_NAME")
@@ -200,6 +208,21 @@ install_ksh() {
 		warn "ksh is not installed (try ./install.sh --deps)"
 		return
 	fi
+	if [ "$AS_ROOT" = no ]; then
+		now=$(getent passwd "$USER_NAME" 2>/dev/null || grep "^$USER_NAME:" /etc/passwd)
+		case ${now##*:} in
+		*ksh) say "ok      shell ${now##*:} for $USER_NAME" ;;
+		*) warn "your login shell is not ksh yet: su -c '$DOTFILES/install.sh ksh'" ;;
+		esac
+		# root's copies (made by a root run) are only refreshed by root
+		root_home=$(getent passwd root 2>/dev/null || grep '^root:' /etc/passwd)
+		root_home=${root_home%:*}; root_home=${root_home##*:}
+		for f in profile kshrc; do
+			[ ! -r "$root_home/.$f" ] || cmp -s "$DOTFILES/ksh/$f" "$root_home/.$f" ||
+				warn "root's .$f is older than ksh/$f: su -c '$DOTFILES/install.sh ksh'"
+		done
+		return
+	fi
 	# Make ksh the login shell of both the user and root.
 	grep -qx "$ksh" /etc/shells 2>/dev/null || echo "$ksh" >> /etc/shells
 	login_shell "$USER_NAME" "$ksh"
@@ -300,7 +323,7 @@ install_btop() {
 	command -v btop >/dev/null 2>&1 || warn "btop is not installed"
 }
 
-# suckless: build and install as root; make clean leaves nothing behind.
+# suckless: build and install into ~/.system; make clean leaves nothing behind.
 build_suckless() {
 	name=$1
 	say "build   $name"
@@ -468,7 +491,11 @@ install_moonlander() {
 	# Build as the user, not root: the QMK folder is theirs, and git (which
 	# QMK asks for its version string) refuses repositories owned by someone
 	# else when run as root ("dubious ownership"), which breaks the build.
-	su -s /bin/sh "$USER_NAME" -c "cd '$fw' && PATH='$QMK_DIR/venv/bin:$QMK_BIN:$PATH' make '$QMK_TARGET' $nosuffix"
+	if [ "$AS_ROOT" = yes ]; then
+		su -s /bin/sh "$USER_NAME" -c "cd '$fw' && PATH='$QMK_DIR/venv/bin:$QMK_BIN:$PATH' make '$QMK_TARGET' $nosuffix"
+	else
+		( cd "$fw" && PATH=$QMK_DIR/venv/bin:$QMK_BIN:$PATH make "$QMK_TARGET" $nosuffix )
+	fi
 	cp "$fw/$ML_BIN" "$DOTFILES/moonlander/"
 	own "$DOTFILES/moonlander/$ML_BIN"
 	say "built   moonlander/$ML_BIN"
@@ -511,14 +538,32 @@ for arg in "$@"; do
 	case $arg in
 	--deps) want_deps=yes ;;
 	--list) echo "$PARTS"; exit 0 ;;
-	-h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	-h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 	-*) die "unknown option: $arg" ;;
 	*)
 		case " $PARTS " in *" $arg "*) ;; *) die "unknown part: $arg (see --list)" ;; esac
 		parts="$parts $arg" ;;
 	esac
 done
+named=$parts
 [ -n "$parts" ] || parts=$PARTS
+
+# Now that we know what is wanted: does any of it need root?
+skipped=
+if [ "$AS_ROOT" = no ]; then
+	[ "$want_deps" = no ] ||
+		die "--deps installs system packages, which needs root: su -c '$DOTFILES/install.sh --deps'"
+	case " $parts " in *" slock "*)
+		[ -z "$named" ] ||
+			die "slock needs root (it must be root's to lock the screen): su -c '$DOTFILES/install.sh slock'"
+		parts=$(echo " $parts " | sed 's/ slock / /')
+		skipped=slock ;;
+	esac
+elif [ "$want_deps" = no ] && [ -n "$named" ]; then
+	case " $named " in *" slock "*|*" ksh "*) ;; *)
+		say "note    these parts don't need root; next time just run ./install.sh$named" ;;
+	esac
+fi
 
 [ "$want_deps" = yes ] && deps
 
@@ -550,7 +595,9 @@ for p in $parts; do "install_$p"; done
 # take group and other permissions off everything in their home.
 chmod 700 "$HOME"
 # slock is left alone: it is root's, so you could no longer run it.
-n=$(find "$HOME" ! -type l ! -path "$SYSBIN/slock" -perm /077 -print \
-	-exec chmod go= {} + | wc -l)
+n=$(find "$HOME" ! -type l ! -path "$SYSBIN/slock" -user "$USER_NAME" \
+	-perm /077 -print -exec chmod go= {} + | wc -l)
 [ "$n" -eq 0 ] || say "private $n files and folders in $HOME (only $USER_NAME and root)"
+[ -z "$skipped" ] ||
+	say "skipped $skipped (needs root): su -c '$DOTFILES/install.sh $skipped'"
 say "done"

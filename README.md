@@ -41,13 +41,17 @@ tag and commit, and any local change.
 
 ## Fresh install
 
-Clone as yourself, then run the script as root (it never uses sudo or
-doas). It sets up the configs for the user who owns the repo folder, and
+Clone and run it as yourself. Only three things need root, and for those
+the script stops and tells you the `su -c` command (it never uses sudo
+or doas): `--deps` (system packages), `slock` (must be root's to lock
+the screen) and making ksh the login shell (part `ksh`). Run as root, it
+sets up the configs for the user who owns the repo folder, and
 everything it puts in that home belongs to that user, not to root.
 
 ```sh
 git clone https://github.com/AliceInUndernix/dotfiles ~/dotfiles
-su -c '~alice/dotfiles/install.sh --deps'   # dependencies, then everything
+su -c '~alice/dotfiles/install.sh --deps'   # first time: dependencies, then everything
+~/dotfiles/install.sh                       # later: everything that doesn't need root
 ```
 
 `--deps` uses the system's package manager and asks first (emerge --ask on
@@ -58,7 +62,7 @@ dependencies are already there:
 ./install.sh            # everything
 ./install.sh nvim       # only some parts: ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock moonlander
 ./install.sh --list     # the part names
-INSTALL_USER=alice ./install.sh    # if the repo folder belongs to root
+INSTALL_USER=alice ./install.sh    # as root, if the repo folder belongs to root
 ```
 
 What the script does:
@@ -85,7 +89,7 @@ The suckless way: settings are C code in `config.h`, and you rebuild.
 ```sh
 cd ~/dotfiles/dwm
 $EDITOR config.h
-su -c '../install.sh dwm'   # or, as root: make install && make clean
+../install.sh dwm           # no root needed (slock: su -c '../install.sh slock')
 ```
 
 For dwm, then type `dwm restart` in a terminal (or press Super+Shift+r):
