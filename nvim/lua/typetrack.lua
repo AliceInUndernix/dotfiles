@@ -285,24 +285,38 @@ end
 
 local queue, busy = {}, false
 
+-- Is Sioyek open? Without it, `sioyek --execute-command` would start a
+-- new Sioyek every time (it looked like Sioyek reopening by itself).
+local function sioyek_running()
+  vim.fn.system({ "pgrep", "-x", vim.fn.fnamemodify(M.opts.sioyek, ":t") })
+  return vim.v.shell_error == 0
+end
+
+local warned_closed = false
 local function pump()
   if busy or #queue == 0 then return end
+  if not sioyek_running() then
+    queue = {}
+    if not warned_closed then
+      warned_closed = true
+      vim.notify("TypeTrack: Sioyek is not open; open the book in it to see the marks",
+        vim.log.levels.WARN)
+    end
+    return
+  end
+  warned_closed = false
   busy = true
   local job = table.remove(queue, 1)
-  local done = false
-  local id
-  local function finish()
-    if done then return end
-    done = true
-    vim.defer_fn(function() busy = false pump() end, job.wait or 0)
-  end
-  id = vim.fn.jobstart(job.cmd, { on_exit = finish })
-  -- If Sioyek never answers, give up on this one after a few seconds.
-  if id > 0 then
-    vim.defer_fn(function()
-      if not done then pcall(vim.fn.jobstop, id) finish() end
-    end, 8000)
-  end
+  -- One command at a time, each waited for to the end: Sioyek keeps only
+  -- one waiting command (wait_for_search_to_finish), and a new one sent
+  -- while a search runs replaced it under its feet and crashed Sioyek
+  -- (2026-11-12). A search through a whole book can take a while, so
+  -- there is no time limit; nothing is ever killed half way.
+  local id = vim.fn.jobstart(job.cmd, {
+    on_exit = function()
+      vim.defer_fn(function() busy = false pump() end, job.wait or 0)
+    end,
+  })
   if id <= 0 then
     busy = false
     queue = {}
