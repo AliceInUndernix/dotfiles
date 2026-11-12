@@ -14,8 +14,9 @@
 # name ./install.sh). Everything put in that user's home belongs to them,
 # not to root. Configs are symlinked, so editing them in ~/.config edits
 # this repo. Anything already in the way is moved to <name>.bak.<date>,
-# never deleted. suckless tools are installed into PREFIX (default
-# /usr/local). POSIX sh, no bashisms, so it runs on any distro.
+# never deleted. Every program it installs goes into the user's
+# ~/.system (commands in ~/.system/bin, first in PATH); nothing goes to
+# /usr/local. POSIX sh, no bashisms, so it runs on any distro.
 
 set -eu
 # What gets installed system-wide must be readable by everyone, whatever
@@ -23,7 +24,6 @@ set -eu
 umask 022
 
 DOTFILES=$(cd "$(dirname "$0")" && pwd)
-PREFIX=${PREFIX:-/usr/local}
 STAMP=$(date +%Y%m%d-%H%M%S)
 PARTS="ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock moonlander"
 
@@ -47,6 +47,9 @@ HOME=${pw##*:}
 unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME
 CONFIG=$HOME/.config
 DATA=$HOME/.local/share
+SYSTEM=$HOME/.system          # all installed programs live here
+SYSBIN=$SYSTEM/bin            # ...their commands here (first in PATH)
+PREFIX=${PREFIX:-$SYSTEM}     # suckless tools: PREFIX/bin = ~/.system/bin
 export HOME
 
 # own <path>...: give files root made in the user's home to the user.
@@ -181,13 +184,7 @@ install_nvim() {
 	# vim runs Neovim: ~/.system/bin/vim -> nvim. ~/.profile puts
 	# ~/.system/bin first in PATH, ahead of everything, even /usr/bin/vim.
 	if nvim=$(command -v nvim); then
-		link "$nvim" "$HOME/.system/bin/vim"
-		# The old place of this link; remove it if it is ours.
-		old=$HOME/.local/bin/vim
-		if [ -L "$old" ] && [ "$(readlink "$old")" = "$nvim" ]; then
-			rm "$old"
-			say "remove  $old (moved to ~/.system/bin)"
-		fi
+		link "$nvim" "$SYSBIN/vim"
 	else
 		warn "nvim is not installed (needs 0.11+)"
 	fi
@@ -308,10 +305,16 @@ build_suckless() {
 	name=$1
 	say "build   $name"
 	command -v make >/dev/null 2>&1 || die "make not found (try ./install.sh --deps)"
+	case $PREFIX in "$HOME"/*) userdir "$PREFIX/bin"; userdir "$PREFIX/share/man/man1" ;; esac
 	( cd "$DOTFILES/$name" && make PREFIX="$PREFIX" && make PREFIX="$PREFIX" install )
 	( cd "$DOTFILES/$name" && make clean >/dev/null )
-	# PREFIX=~/.local and the like: the installed files belong to the user
-	case $PREFIX in "$HOME"/*) own "$PREFIX/bin/$name" ;; esac
+	# In the user's home, the installed files belong to the user. Except
+	# slock: it must stay root's and setuid to lock the screen (owning it
+	# would drop the setuid bit). This needs a home not mounted nosuid.
+	case $PREFIX in "$HOME"/*)
+		find "$PREFIX/bin" "$PREFIX/share" ! -path "$PREFIX/bin/slock" \
+			-exec chown -h "$USER_NAME:$USER_GROUP" {} + ;;
+	esac
 	say "install $name -> $PREFIX/bin/$name"
 }
 
@@ -362,11 +365,11 @@ install_slock() {
 #   ~/.local/share/qmk/zsa_qmk   ZSA's QMK source (firmware25), with qmk.patch
 #   ~/.local/share/qmk/venv      Python environment for the qmk command
 #   ~/.local/share/qmk/arm-gnu-toolchain   ARM compiler, if none is installed
-#   ~/.local/bin/qmk, arm-none-eabi-*      symlinks to the two above
+#   ~/.system/bin/qmk, arm-none-eabi-*     symlinks to the two above
 # Each run copies moonlander/canary into QMK fresh (like update.sh did) and
 # builds and flashes. The built .bin is also copied to moonlander/.
 QMK_DIR=$DATA/qmk
-QMK_BIN=$HOME/.local/bin
+QMK_BIN=$SYSBIN
 QMK_BRANCH=firmware25
 # Alice's Moonlander is revision B (shipped since December 2025). Rev B has
 # its own bootloader ("Moonlander Bootloader", USB 3297:2003) that starts
@@ -417,7 +420,7 @@ install_moonlander() {
 	# 4. ARM compiler: always our own pinned Arm GNU Toolchain, even when the
 	# system has one. Gentoo's gcc 16 built firmware that froze the
 	# keyboard after a few key presses (2026-11-11); gcc 13 built it fine.
-	# It is linked into ~/.local/bin, which comes first in the build's PATH.
+	# It is linked into ~/.system/bin, which comes first in the build's PATH.
 	{
 		arm=$QMK_DIR/arm-gnu-toolchain
 		if [ ! -x "$arm/bin/arm-none-eabi-gcc" ]; then
@@ -518,10 +521,36 @@ done
 [ -n "$parts" ] || parts=$PARTS
 
 [ "$want_deps" = yes ] && deps
+
+# ~/.local/bin is no longer used: everything lives in ~/.system/bin.
+# Links this script made there are dropped (they are made again in
+# ~/.system/bin); anything else is moved over, never deleted. If a name
+# is already taken in ~/.system/bin, the old one stays and is reported.
+old_bin=$HOME/.local/bin
+if [ -d "$old_bin" ] && [ ! -L "$old_bin" ]; then
+	userdir "$SYSBIN"
+	for f in "$old_bin"/* "$old_bin"/.[!.]*; do
+		[ -e "$f" ] || [ -L "$f" ] || continue
+		b=$(basename "$f")
+		case $(readlink "$f" 2>/dev/null) in
+		*/nvim|"$DATA"/qmk/*) rm "$f"; continue ;;
+		esac
+		if [ -e "$SYSBIN/$b" ] || [ -L "$SYSBIN/$b" ]; then
+			warn "kept    $f ($SYSBIN/$b already exists)"
+		else
+			mv "$f" "$SYSBIN/$b"
+			say "move    $f -> $SYSBIN/$b"
+		fi
+	done
+	rmdir "$old_bin" 2>/dev/null && say "remove  $old_bin (now empty)" || :
+fi
+
 for p in $parts; do "install_$p"; done
 # The user's files are theirs alone, like their umask 077 makes new ones:
 # take group and other permissions off everything in their home.
 chmod 700 "$HOME"
-n=$(find "$HOME" ! -type l -perm /077 -print -exec chmod go= {} + | wc -l)
+# slock is left alone: it is root's, so you could no longer run it.
+n=$(find "$HOME" ! -type l ! -path "$SYSBIN/slock" -perm /077 -print \
+	-exec chmod go= {} + | wc -l)
 [ "$n" -eq 0 ] || say "private $n files and folders in $HOME (only $USER_NAME and root)"
 say "done"

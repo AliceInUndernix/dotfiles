@@ -9,10 +9,10 @@ script puts the whole configuration back after a fresh install.
 
 | Directory | What it is | Installed to |
 |---|---|---|
-| `dwm/` | dwm 6.8 source (window manager) | `PREFIX/bin/dwm` |
-| `st/` | st 0.9.3 source (terminal): scrollback like Alacritty (Shift+PageUp/PageDown/Home/End, mouse wheel), Symbols Nerd Font for icons | `PREFIX/bin/st`, font in `~/.local/share/fonts` |
-| `dmenu/` | dmenu 5.4 source (launcher), `dmenu_apps` and its list `apps` | `PREFIX/bin/dmenu`, `dmenu_apps`, `~/.config/dmenu/apps` |
-| `slock/` | slock 1.7 source (screen locker; Mod+Shift+l locks, Mod+Shift+s suspends) | `PREFIX/bin/slock` |
+| `dwm/` | dwm 6.8 source (window manager) | `~/.system/bin/dwm` |
+| `st/` | st 0.9.3 source (terminal): scrollback like Alacritty (Shift+PageUp/PageDown/Home/End, mouse wheel), Symbols Nerd Font for icons | `~/.system/bin/st`, font in `~/.local/share/fonts` |
+| `dmenu/` | dmenu 5.4 source (launcher), `dmenu_apps` and its list `apps` | `~/.system/bin/dmenu`, `dmenu_apps`, `~/.config/dmenu/apps` |
+| `slock/` | slock 1.7 source (screen locker; Mod+Shift+l locks, Mod+Shift+s suspends) | `~/.system/bin/slock` |
 | `nvim/` | Neovim config (0.11+, no plugin manager) | `~/.config/nvim` (symlink), `~/.system/bin/vim` -> nvim (first in PATH) |
 | `tmux/` | tmux config | `~/.config/tmux/tmux.conf` (symlink) |
 | `ksh/` | Korn shell: `profile` (PATH, EDITOR) and `kshrc` (prompt, emacs keys, aliases) | `~/.profile`, `~/.kshrc` (symlinks); ksh becomes the login shell of the user and root |
@@ -29,7 +29,11 @@ script puts the whole configuration back after a fresh install.
 | `TODO.md` | Things decided but left for later | |
 | `install.sh` | Sets everything up | |
 
-`PREFIX` is `/usr/local` unless you set it.
+Every program goes into your own `~/.system` (commands in `~/.system/bin`,
+first in PATH, manuals in `~/.system/share/man`); nothing goes to
+`/usr/local`, and `~/.local/bin` is not used (install.sh moves what was
+there into `~/.system/bin`). `PREFIX=...` overrides this for the
+suckless tools.
 
 The suckless tools are the upstream sources from https://git.suckless.org,
 copied at the release tag. Each directory has an `UPSTREAM` file with the
@@ -62,7 +66,7 @@ What the script does:
 - **Configs** are symlinked, so `~/.config/nvim` *is* `~/dotfiles/nvim` and
   edits land in the repo. Anything already there is moved to
   `<name>.bak.<date>`, never deleted. Running it again is safe.
-- **suckless tools** are built and installed into `PREFIX`, and the build
+- **suckless tools** are built and installed into `~/.system`, and the build
   files are cleaned up afterwards.
 - **Private home**: new files are yours alone (umask 077 in `~/.profile`, not for root), and each run of `install.sh` takes group and other permissions off everything already in your home.
 - **Login shell**: ksh becomes the shell of both the user and root (`chsh`, no password asked; root gets copies of `profile` and `kshrc`, owned by root).

@@ -25,8 +25,8 @@ Everything goes into your home folder (the script runs as root, but the build ru
 | What | Where |
 |---|---|
 | ZSA's QMK source, `firmware25` branch, with `qmk.patch` applied | `~/.local/share/qmk/zsa_qmk` |
-| `qmk` command, in its own Python environment | `~/.local/share/qmk/venv`, linked as `~/.local/bin/qmk` |
-| ARM compiler, Arm GNU Toolchain 14.2.rel1, always (Gentoo's gcc 16 built firmware that froze) | `~/.local/share/qmk/arm-gnu-toolchain`, linked into `~/.local/bin` |
+| `qmk` command, in its own Python environment | `~/.local/share/qmk/venv`, linked as `~/.system/bin/qmk` |
+| ARM compiler, Arm GNU Toolchain 14.2.rel1, always (Gentoo's gcc 16 built firmware that froze) | `~/.local/share/qmk/arm-gnu-toolchain`, linked into `~/.system/bin` |
 
 Each run copies `canary/` into QMK as `keyboards/zsa/moonlander/keymaps/canary`,
 builds `zsa/moonlander/revb:canary` and puts

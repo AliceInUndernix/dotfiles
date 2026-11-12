@@ -199,7 +199,7 @@ Installing sioyek-9999 on Gentoo:
     sudo emerge --ask --update --deep --changed-use @world =app-text/sioyek-9999
 
 (The `@world` part avoids the Qt 6.11.2 / 6.11.3 slot conflict.) Back
-up `~/.local/share/sioyek` first, and move an old `~/.local/bin/sioyek`
+up `~/.local/share/sioyek` first, and move an old `~/.system/bin/sioyek`
 out of the way so the new one starts.
 
 Use: save your text file, then `:TypeTrack ~/books/book.epub` (Tab

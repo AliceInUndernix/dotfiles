@@ -11,12 +11,13 @@ export LESS=-iFR
 export ENV=$HOME/.kshrc     # ksh reads this for every interactive shell
 
 # PATH, most important first:
-#   ~/.system/bin   this setup's own commands (vim -> nvim), wins over all
-#   ~/.local/bin    your programs (qmk, tools built with PREFIX=~/.local)
+#   ~/.system/bin   every program installed for you: dwm, st, dmenu,
+#                   slock, qmk, vim -> nvim, ... (wins over all)
 #   then the system's
-# Each is moved to the front even if the system already put it in PATH
+# It is moved to the front even if the system already put it in PATH
 # (at the end, say), so `vim` always runs Neovim and not /usr/bin/vim.
-_front() {
+# ~/.local/bin is not used (install.sh moves what was there).
+_drop() {        # take $1 out of PATH, wherever it is
 	_p=:$PATH:
 	while :; do
 		case $_p in
@@ -24,12 +25,12 @@ _front() {
 		*) break ;;
 		esac
 	done
-	_p=${_p#:}; _p=${_p%:}
-	PATH=$1${_p:+:$_p}
+	_p=${_p#:}; PATH=${_p%:}
 }
-_front "$HOME/.local/bin"
-_front "$HOME/.system/bin"
-unset _p; unset -f _front
+_drop "$HOME/.local/bin"
+_drop "$HOME/.system/bin"
+PATH=$HOME/.system/bin${PATH:+:$PATH}
+unset _p; unset -f _drop
 export PATH
 
 # Logging in on the first console (tty1) starts X; logging out of X logs

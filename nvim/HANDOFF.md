@@ -31,7 +31,7 @@ nvim/
 - Terminal: st 0.9.3 (patched, see `st/UPSTREAM`), often with tmux,
   under dwm on X11. Changes go to the dotfiles repo; `~/.config/nvim` is
   a symlink to it, so nothing needs copying.
-- Uses Sioyek as EPUB/PDF reader, 2.0.0 at `~/.local/bin/sioyek`.
+- Uses Sioyek as EPUB/PDF reader, 2.0.0 at `~/.system/bin/sioyek`.
 - Writes short, sometimes cut-off messages (often dictated or stenoed);
   ask what they meant when a message stops mid-sentence.
 - Prefers plain explanations and a config that stays close to default.
@@ -64,7 +64,7 @@ nvim/
    hit a Qt slot conflict (qtbase 6.11.2 installed vs 6.11.3 wanted).
    Suggested fix: `sudo emerge --ask --update --deep --changed-use @world
    =app-text/sioyek-9999`. Outcome unknown. After install they must move
-   `~/.local/bin/sioyek` (2.0.0) aside and back up `~/.local/share/sioyek`.
+   `~/.system/bin/sioyek` (2.0.0) aside and back up `~/.local/share/sioyek`.
 2. **Plover unicode fix: terminal side done.** st and tmux now pass
    Ctrl+Shift+U to Neovim (tested). Not yet confirmed with Plover itself;
    if digits still appear, check that st and tmux were rebuilt/reloaded.
