@@ -742,6 +742,13 @@ install_plover() {
 		say "stop    Plover (start it again when this is done)"
 	fi
 	rm -f "$PLOVER_DIR"/dotterel-*.json "$PLOVER_DIR"/dotterel-*.py "$PLOVER_DIR"/dotterel-*.modal
+	# Plover outside portable mode (no plover.cfg in ~/.system/plover)
+	# writes to ~/.config/plover and ~/.system/share/plover: removed.
+	for d in "$CONFIG/plover" "$DATA/plover"; do
+		[ -e "$d" ] || continue
+		rm -rf "$d"
+		say "delete  $d (Plover only uses ~/.system/plover)"
+	done
 	say "delete  $PLOVER_DIR/dotterel-* (Plover copies them again at start)"
 
 	commit=$(git -C "$src" rev-parse HEAD)

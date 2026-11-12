@@ -19,4 +19,9 @@ if [ -n "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ]; then
 fi
 dir=$HOME/.system/plover
 cd "$dir" || exit 1
+# Without plover.cfg here Plover leaves portable mode and uses
+# ~/.config/plover instead, so put the first settings back if it's gone.
+if [ ! -f plover.cfg ]; then
+	cp "$(dirname "$(readlink -f "$0")")/plover.cfg" plover.cfg || exit 1
+fi
 exec "$dir/app/AppRun" --python -s -m plover.scripts.dist_main "$@"
