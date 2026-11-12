@@ -81,7 +81,11 @@ nvim/
 - Keep everything that must work without plugins above the plugin
   section in init.lua: the file `return`s early if zen-mode or pencil
   fail to download.
-- Leader is Space. Taken: w, p, s, g, f, G, t.
+- Leader is Space. Taken: w, p, s, g, f, G, t, Space, /, b, h.
+- nvim-treesitter is on the frozen `master` branch because the user is on
+  Neovim 0.11; `main` needs 0.12. Highlighting only: the user does not
+  want LSP completion or error checking for code (asked 2026-11-12).
+  Declined for now: gitsigns, vim-fugitive, language servers.
 - Keep the plover-vim-tutor line.
 - Keep `claude` locked down: no tools, `--strict-mcp-config`, empty cwd,
   `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` removed, only the current

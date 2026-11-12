@@ -24,7 +24,9 @@ mention `nvim-config/nvim` now mean this `nvim/` folder.
 
    From the archive instead: unpack it and copy its `nvim` folder to
    `~/.config/nvim` (`cp -r nvim-config/nvim/. ~/.config/nvim/`).
-4. Start `nvim` while online. On first start it downloads its 3 plugins.
+4. Start `nvim` while online. On first start it downloads its 8 plugins (`./install.sh nvim`
+   unpacks them from `archive/` instead) and builds the Tree-sitter
+   parsers for common languages in the background (needs gcc).
 
 ## Keys
 
@@ -37,6 +39,13 @@ mention `nvim-config/nvim` now mean this `nvim/` folder.
 | `Space G` | Clear Claude's marks (`:ClaudeLog` shows its last answer) |
 | `Space t` | Sioyek typing tracker on and off |
 | `Space w` | Save |
+| `Space Space` | Open a file by typing part of its name |
+| `Space /` | Search text in all files (needs `rg` or a git folder) |
+| `Space b` | Pick one of the open files |
+| `Space h` | Search Neovim's help |
+| `saiw"` / `sd"` / `sr"'` | Add / delete / replace quotes or brackets around |
+| `Ctrl+h/j/k/l` | Move to the split or tmux pane left/down/up/right |
+| `Space` and wait | A box lists the keys that can follow (which-key) |
 | `Esc` | Clear search highlight |
 | `]d` / `[d` | Next / previous grammar or Claude mark |
 
@@ -77,9 +86,23 @@ hand: `Ctrl-k - M` types —, `Ctrl-k - N` types –.
 | zen-mode.nvim | The distraction-free centred view |
 | vim-pencil | Proper hard wrapping at 80 for prose |
 | plover-vim-tutor | Help pages for plover-vim (see below) |
+| nvim-treesitter (`master`) | Syntax highlighting for many languages (highlighting only) |
+| mini.pick | Fuzzy finder for files, text, buffers, help |
+| mini.surround | Add, delete, replace quotes and brackets |
+| which-key.nvim | Shows what keys can follow after a pause |
+| vim-tmux-navigator | Same Ctrl+h/j/k/l between Neovim splits and tmux panes |
 
 To update them, delete `~/.local/share/nvim/site/pack/plugins/` and
-restart Neovim; they download again.
+restart Neovim; they download again. Then run `:TSUpdate` once.
+
+## Tabs and whitespace
+
+The Tab key types 4 spaces, and Backspace removes 4 at once, so they
+feel like one tab. Real tab characters in existing files are left alone
+(dwm, st and dmenu keep theirs) and show as a dim `→` filling 4 columns.
+Trailing spaces show as dim `·` (not while you type), no-break spaces
+as `␣`, and `›` / `‹` mark lines that go past the screen edge.
+`:s/old/new` shows its changes live while you type.
 
 ## Grammar check (optional)
 

@@ -15,7 +15,12 @@
 --   Space s  spell check on/off   Space g  proofread file with Claude
 --   Space f  apply Claude's fix   Space G  clear Claude marks (:ClaudeLog)
 --   Space t  Sioyek typing tracker on/off (:TypeTrack, :TypeTrackStop)
+--   Space Space  open a file (fuzzy)    Space /  search text in files
+--   Space b  pick an open buffer      Space h  search help pages
 --   Esc      clear search highlight
+--   sa/sd/sr add/delete/replace surrounding quotes or brackets (mini.surround)
+--   Ctrl+h/j/k/l  move between Neovim splits and tmux panes
+--   Press Space (or g, z, ", ...) and wait: a box lists the keys.
 --
 -- Lives in the dotfiles repo (nvim/), linked to ~/.config/nvim by
 -- install.sh. The user runs it on Neovim 0.11.7 in st (and tmux) under
@@ -46,8 +51,32 @@ o.background = "dark"
 o.tabstop = 4                  -- a tab looks like 4 spaces
 o.shiftwidth = 4               -- >> and << move 4 spaces
 o.expandtab = true             -- Tab key inserts spaces
+o.softtabstop = 4              -- ...and Backspace takes 4 of them away at
+                               -- once, so 4 spaces behave like one tab
+o.shiftround = true            -- >> and << snap to a multiple of 4
+-- Only what you type changes: existing files keep their real tabs.
+-- Makefiles still get real tabs (Neovim's own make settings do that).
 o.smartindent = true
 
+-- Show whitespace that is easy to miss, dimmed (colour set below):
+--   a real tab   →   (an arrow, then spaces to the tab's full width)
+--   trailing spaces ·   no-break space ␣   line goes on past the edge › ‹
+-- Trailing dots are hidden while typing in insert mode (the space before
+-- your next word would flash otherwise). Prose mode hides all of this.
+o.list = true
+local listchars = "tab:→ ,trail:·,nbsp:␣,extends:›,precedes:‹"
+o.listchars = listchars
+vim.api.nvim_create_autocmd("InsertEnter", {
+  callback = function()
+    if vim.wo.list then vim.opt_local.listchars:remove("trail") end
+  end,
+})
+vim.api.nvim_create_autocmd("InsertLeave", {
+  callback = function() vim.opt_local.listchars = listchars end,
+})
+
+o.inccommand = "split"         -- :s/old/new shows the changes while you
+                               -- type, with a list of all hits below
 o.ignorecase = true            -- /foo matches Foo...
 o.smartcase = true             -- ...unless you type a capital letter
 
@@ -92,6 +121,10 @@ vim.api.nvim_create_autocmd("BufWinEnter", {
 
 -- Colour scheme: Habamax, a calm dark theme that ships with Neovim.
 vim.cmd.colorscheme("habamax")
+-- Tabs, trailing spaces etc. (see listchars above) in a dark grey, about
+-- half as bright as normal text, so you see them without being bothered.
+vim.api.nvim_set_hl(0, "Whitespace", { fg = "#4e4e4e" })
+vim.api.nvim_set_hl(0, "NonText", { fg = "#4e4e4e" })
 
 ---------------------------------------------------------------------------
 -- Small key mappings
@@ -368,13 +401,15 @@ end
 -- Everything that must work without plugins sits ABOVE this section,
 -- because the file stops at the `return` below if a download fails.
 local pack_dir = vim.fn.stdpath("data") .. "/site/pack/plugins/opt/"
-local function plugin(repo)
+local function plugin(repo, branch)
   local name = repo:match("[^/]+$")
   local path = pack_dir .. name
   if not vim.uv.fs_stat(path) then
     vim.notify("Installing " .. name .. "...")
-    local out = vim.fn.system({ "git", "clone", "--depth=1",
-      "https://github.com/" .. repo, path })
+    local cmd = { "git", "clone", "--depth=1" }
+    if branch then vim.list_extend(cmd, { "--branch", branch }) end
+    vim.list_extend(cmd, { "https://github.com/" .. repo, path })
+    local out = vim.fn.system(cmd)
     if vim.v.shell_error ~= 0 then
       vim.notify("Could not install " .. name .. ":\n" .. out,
         vim.log.levels.ERROR)
@@ -394,6 +429,68 @@ local have_pencil = plugin("preservim/vim-pencil")   -- wrapping for prose
 -- The user is NOT using plover-vim for now (it needs Emily's modifiers,
 -- which they don't want to learn yet) but asked to keep this line.
 plugin("Josiah-tan/plover-vim-tutor")
+
+-- Syntax highlighting with Tree-sitter: more accurate colours than
+-- Vim's built-in syntax files. Each language needs a small "parser",
+-- compiled once on your computer (needs gcc, which Gentoo has). The
+-- common languages below are built in the background on first start;
+-- any other language is built the first time you open such a file.
+-- Languages without a parser still get Vim's built-in highlighting,
+-- which covers hundreds of file types.
+-- Only highlighting is on: no error checking, no completion.
+-- The "master" branch is the one for Neovim 0.11 (the newer "main"
+-- branch needs 0.12). After moving to Neovim 0.12, switch to "main".
+-- After updating the plugin, run :TSUpdate to rebuild the parsers.
+if plugin("nvim-treesitter/nvim-treesitter", "master") then
+  require("nvim-treesitter.configs").setup({
+    ensure_installed = {
+      "bash", "c", "cpp", "css", "csv", "diff", "dockerfile",
+      "git_config", "git_rebase", "gitcommit", "gitignore", "go", "html",
+      "ini", "java", "javascript", "jsdoc", "json", "lua", "luadoc",
+      "make", "markdown", "markdown_inline", "perl", "php", "python",
+      "query", "regex", "ruby", "rust", "sql", "toml", "tsx",
+      "typescript", "vim", "vimdoc", "xml", "yaml",
+    },
+    auto_install = true,        -- others: built when you open such a file
+    -- These need an extra program (tree-sitter-cli) to build, so they
+    -- keep Vim's built-in highlighting instead.
+    ignore_install = { "latex", "mlir", "ocamllex", "scfg", "swift",
+      "teal", "unison" },
+    highlight = { enable = true },
+  })
+end
+
+-- Fuzzy finder (mini.pick): type a few letters of a name, Enter opens.
+-- Inside the list: Ctrl+n / Ctrl+p (or arrows) move, Esc closes,
+-- Ctrl+s / Ctrl+v open in a split. Space / searches inside files: it
+-- uses ripgrep (rg) if installed, otherwise only works in a git folder.
+if plugin("nvim-mini/mini.pick") then
+  local pick = require("mini.pick")
+  pick.setup()
+  map("n", "<leader><leader>", pick.builtin.files, { desc = "Open file" })
+  map("n", "<leader>/", pick.builtin.grep_live, { desc = "Search text in files" })
+  map("n", "<leader>b", pick.builtin.buffers, { desc = "Pick open buffer" })
+  map("n", "<leader>h", pick.builtin.help, { desc = "Search help" })
+end
+
+-- Surround (mini.surround): add, delete or replace quotes and brackets.
+--   saiw"   add " around the word        sd"   delete the " around
+--   sr"'    replace " with '             sa$)  add ( ) to end of line
+-- (Plain s, "delete letter and type", is still cl.)
+if plugin("nvim-mini/mini.surround") then
+  require("mini.surround").setup()
+end
+
+-- which-key: press Space (or g, z, ", Ctrl+w ...) and wait a moment; a
+-- small box lists what can follow, with the descriptions given here.
+if plugin("folke/which-key.nvim") then
+  require("which-key").setup()
+end
+
+-- Ctrl+h/j/k/l move to the split or tmux pane on the left/down/up/right,
+-- across Neovim and tmux alike (tmux.conf has the other half).
+plugin("christoomey/vim-tmux-navigator")
+
 -- Without zen-mode and pencil there is no prose mode, so stop here.
 if not (have_zen and have_pencil) then return end
 

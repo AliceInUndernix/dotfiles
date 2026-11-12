@@ -1,6 +1,11 @@
 8aefffb90e10fbd63b660c9fa68fef881851e7c8d0491b83f4454030998de326  moonlander/optozorax-moonlander.tar.gz
+5e25f0879e9d47668de4774308a731c5316c0c4f6782b8fe2fea0bf94004dd33  nvim-plugins/mini.pick.tar.gz
+7578e2f42b79ac4205879961980502f2c56b46369fa9c4a9287fb2ac17445ecc  nvim-plugins/mini.surround.tar.gz
+a790dea491b70d3e4e4e37fd254f93ef2ae82c591026dacc6a20d11f9d668957  nvim-plugins/nvim-treesitter.tar.gz
 27c6891ef97aedb2b4e17e93b2c0a1524c234215231e3859ec180fce68620a33  nvim-plugins/plover-vim-tutor.tar.gz
 c700f3da05bb5a3421049d2a5401609c7095f77da96244112efae72b71beaa03  nvim-plugins/vim-pencil.tar.gz
+13b3623d3caf27c1ffc0548d59f5ef6e2f21877b6a2f48b449a9ffa4f137eeea  nvim-plugins/vim-tmux-navigator.tar.gz
+d66a9bd74ae69ee54fcd18fac735ad22ded2d348fdaadbde30fcc5438eb6249c  nvim-plugins/which-key.nvim.tar.gz
 a16564fa2970ca133751ea91fbfc8db4b2f53e52fc4fd2519b70de287964c54f  nvim-plugins/zen-mode.nvim.tar.gz
 8fbace2a0847aa80fe861066b118252dcc7b4ca0a0a8f3a93af02da8fb6cd453  suckless/dmenu-5.4.tar.gz
 bcf540589ad174d4073f4efa658828411e2f5ba63196cfaf6b71363700f590b7  suckless/dwm-6.8.tar.gz

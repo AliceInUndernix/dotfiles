@@ -17,6 +17,11 @@ edited) live in the app directories at the top of the repo.
 | `nvim-plugins/zen-mode.nvim.tar.gz` | prose mode view | https://github.com/folke/zen-mode.nvim | `8564ce6` (2025-10-28) |
 | `nvim-plugins/vim-pencil.tar.gz` | prose wrapping | https://github.com/preservim/vim-pencil | `6d70438` (2023-04-03) |
 | `nvim-plugins/plover-vim-tutor.tar.gz` | plover-vim help pages | https://github.com/Josiah-tan/plover-vim-tutor | `8015ae4` (2026-07-07) |
+| `nvim-plugins/nvim-treesitter.tar.gz` | syntax highlighting (`master` branch, for Neovim 0.11) | https://github.com/nvim-treesitter/nvim-treesitter | `cf12346` (2026-03-23) |
+| `nvim-plugins/mini.pick.tar.gz` | fuzzy finder | https://github.com/nvim-mini/mini.pick | `f1216d7` (2026-11-07) |
+| `nvim-plugins/mini.surround.tar.gz` | surround quotes/brackets | https://github.com/nvim-mini/mini.surround | `5357f00` (2026-10-27) |
+| `nvim-plugins/which-key.nvim.tar.gz` | key hints | https://github.com/folke/which-key.nvim | `3aab214` (2025-10-28) |
+| `nvim-plugins/vim-tmux-navigator.tar.gz` | Ctrl+h/j/k/l across Neovim and tmux | https://github.com/christoomey/vim-tmux-navigator | `e41c431` (2026-01-25) |
 | `moonlander/optozorax-moonlander.tar.gz` | optozorax's keymap and libraries (`lang_shift`, `combo`, `color`, `arbitrary_keycode`, `moonlander_leds.h`, `qmk.patch`) | https://github.com/optozorax/moonlander | `8b725d0` (2026-07-30) |
 
 Full commits:
@@ -24,6 +29,11 @@ Full commits:
 - zen-mode.nvim `8564ce6d29ec7554eb9df578efa882d33b3c23a7`
 - vim-pencil `6d70438a8886eaf933c38a7a43a61adb0a7815ed`
 - plover-vim-tutor `8015ae48fd3cc39ea3682b9094874a688d9f63d9`
+- nvim-treesitter `cf12346a3414fa1b06af75c79faebe7f76df080a`
+- mini.pick `f1216d764d0c2772e88d4e1a0cef3082f5b498e1`
+- mini.surround `5357f00aca51a3b43e7775901b1ad9699f8c2678`
+- which-key.nvim `3aab2147e74890957785941f0c1ad87d0a44c15a`
+- vim-tmux-navigator `e41c431a0c7b7388ae7ba341f01a0d217eb3a432`
 - optozorax/moonlander `8b725d0876b16b788f18ab5530ce6440cf979b3d`
 
 The suckless tarballs match the checksums suckless publishes in each
@@ -34,7 +44,8 @@ folder's `sha256sums.txt`. The git snapshots were made with
 
 - **Neovim plugins:** `./install.sh nvim` unpacks any missing plugin from
   here into `~/.local/share/nvim/site/pack/plugins/opt/`, so Neovim works
-  on first start without internet. Delete that folder to download fresh
+  on first start without internet (Tree-sitter's language parsers are
+  still built on first start; they are not archived). Delete that folder to download fresh
   copies instead.
 - **suckless:** `tar xf suckless/dwm-6.8.tar.gz` gives the pristine
   source, to compare with `../dwm/` or start over from.
