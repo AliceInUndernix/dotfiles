@@ -441,6 +441,11 @@ install_moonlander() {
 	km=$fw/keyboards/zsa/moonlander/keymaps/canary
 	rm -rf "$km"
 	cp -R "$DOTFILES/moonlander/canary" "$km"
+	# The build runs as the user. Files that git wrote under the user's
+	# umask 077 are 600, and root's copy keeps that mode but is root's,
+	# so the user's QMK could not read keymap.c and reported "No rule to
+	# make target 'canary'". The copy belongs to the user.
+	own "$km"
 	say "copy    moonlander/canary -> $km"
 
 	# 6. Build.
