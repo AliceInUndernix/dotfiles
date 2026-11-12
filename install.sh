@@ -168,14 +168,29 @@ deps() (
 		# installed Qt package is updated with it, in one go (--oneshot:
 		# they don't go into your world file).
 		enable_overlay guru
+		# Portage reads package.use/ files in name order and the last one
+		# wins, so ours is zz-dotfiles: an older "-opengl" elsewhere (one
+		# emerge's autounmask had written into package.use/qmkfirmware,
+		# 2026-11-12) can't turn it off again. Qt Quick and Qt Multimedia
+		# (for TextToSpeech) must match qtbase, so they get it too.
 		pu=/etc/portage/package.use
 		if [ -d "$pu" ] || [ ! -e "$pu" ]; then
 			mkdir -p "$pu"
-			pu=$pu/dotfiles
+			# the first version of this file was package.use/dotfiles
+			if [ "$(cat "$pu/dotfiles" 2>/dev/null)" = "dev-qt/qtbase opengl" ]; then
+				rm "$pu/dotfiles"
+			fi
+			pu=$pu/zz-dotfiles
 		fi
-		if ! grep -qs "^dev-qt/qtbase[[:space:]].*opengl" "$pu"; then
-			echo "dev-qt/qtbase opengl" >> "$pu"
-			say "use     dev-qt/qtbase opengl -> $pu (Sioyek's qt3d needs it)"
+		for atom in dev-qt/qtbase dev-qt/qtdeclarative dev-qt/qtmultimedia; do
+			grep -qs "^$atom[[:space:]].*opengl" "$pu" && continue
+			echo "$atom opengl" >> "$pu"
+			say "use     $atom opengl -> $pu (Sioyek needs Qt with OpenGL)"
+		done
+		if grep -rqs -- "dev-qt/qtbase.*[[:space:]]-opengl" /etc/portage/package.use; then
+			warn "another package.use file turns OpenGL off for qtbase:"
+			grep -rn -- "dev-qt/qtbase.*[[:space:]]-opengl" /etc/portage/package.use >&2 || :
+			warn "if emerge still wants qtbase without opengl, delete that line"
 		fi
 		vdb=$(portageq vdb_path)
 		qt=
