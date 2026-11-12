@@ -82,6 +82,7 @@ What the script does:
   `<name>.bak.<date>`, never deleted. Running it again is safe.
 - **suckless tools** are built and installed into `~/.system`, and the build
   files are cleaned up afterwards.
+- **Log**: each run writes what it did, any errors and facts about the system (distro, kernel, which tools are installed) to `~/.system/state/install/latest.log`, yours even when root ran it. Paste it to Claude to check a run.
 - **Private home**: new files are yours alone (umask 077 in `~/.profile`, not for root), and each run of `install.sh` takes group and other permissions off everything already in your home.
 - **Login shell**: ksh becomes the shell of both the user and root (`chsh`, no password asked; root gets copies of `profile` and `kshrc`, owned by root).
 - **Moonlander**: QMK, its Python environment, the ARM compiler and ZSA's

@@ -21,6 +21,8 @@
 # never deleted. Every program it installs goes into the user's
 # ~/.system (commands in ~/.system/bin, first in PATH); nothing goes to
 # /usr/local. POSIX sh, no bashisms, so it runs on any distro.
+# Each run is logged, with facts about the system, to
+# ~/.system/state/install/latest.log: paste it to Claude to check a run.
 
 set -eu
 # What gets installed system-wide must be readable by everyone, whatever
@@ -562,7 +564,7 @@ install_plover() {
 			usermod -aG "$port_group" "$USER_NAME"
 			say "group   $USER_NAME in $port_group (the Moonlander's serial port; log in again)"
 		fi
-		su -s /bin/sh "$USER_NAME" -c "'$DOTFILES/install.sh' plover"
+		su -s /bin/sh "$USER_NAME" -c "INSTALL_LOG='$INSTALL_LOG' '$DOTFILES/install.sh' plover"
 		return
 	fi
 	[ "$in_group" = yes ] ||
@@ -632,7 +634,7 @@ for arg in "$@"; do
 	case $arg in
 	--deps) want_deps=yes ;;
 	--list) echo "$PARTS"; exit 0 ;;
-	-h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	-h|--help) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 	-*) die "unknown option: $arg" ;;
 	*)
 		case " $PARTS " in *" $arg "*) ;; *) die "unknown part: $arg (see --list)" ;; esac
@@ -641,6 +643,49 @@ for arg in "$@"; do
 done
 named=$parts
 [ -n "$parts" ] || parts=$PARTS
+
+# The log: the script runs itself again with everything it prints also
+# copied (by tee) to ~/.system/state/install/<date>.log, after a header of
+# facts about the system, and ends it with the exit status. latest.log is
+# the newest. A run started by this one (plover as the user) adds to it.
+LOG_DIR=$STATE/install
+if [ -z "${INSTALL_LOG:-}" ]; then
+	userdir "$LOG_DIR"
+	chmod 700 "$LOG_DIR"
+	INSTALL_LOG=$LOG_DIR/$STAMP.log
+	( umask 077; : > "$INSTALL_LOG" )
+	ln -sfn "$STAMP.log" "$LOG_DIR/latest.log"
+	own "$INSTALL_LOG" "$LOG_DIR/latest.log"
+	export INSTALL_LOG
+	start=$(date +%s)
+	{
+		echo "install.sh $* ($(date '+%Y-%m-%d %H:%M:%S %z'))"
+		echo "repo     $DOTFILES $(git -c safe.directory="$DOTFILES" -C "$DOTFILES" log -1 --format='%h %cd' --date=short 2>/dev/null)" \
+			"$(git -c safe.directory="$DOTFILES" -C "$DOTFILES" status --porcelain 2>/dev/null | grep -q . && echo '(uncommitted changes)')"
+		echo "system   $( (. /etc/os-release; echo "$PRETTY_NAME") 2>/dev/null), $(uname -srm)"
+		echo "run by   $(id -un) (uid $(id -u)), for $USER_NAME ($(id -nG "$USER_NAME")), home $HOME"
+		echo "shell    $(getent passwd "$USER_NAME" 2>/dev/null | cut -d: -f7), sh is $(readlink -f /bin/sh)"
+		echo "PATH     $PATH"
+		found= missing=
+		for t in ksh mksh git make cc pkg-config curl python3 nvim tmux xclip xsel \
+			mpv flameshot sioyek wiremix btop feh dfu-util fc-cache loginctl; do
+			if command -v "$t" >/dev/null 2>&1; then found="$found $t"; else missing="$missing $t"; fi
+		done
+		echo "found   $found"
+		echo "missing $missing"
+		! command -v nvim >/dev/null 2>&1 || echo "nvim     $(nvim --version | head -n 1)"
+		! command -v cc >/dev/null 2>&1 || echo "cc       $(cc --version | head -n 1)"
+		echo "------------------------------------------------------------------"
+	} >> "$INSTALL_LOG" 2>&1
+	exec 3>&1
+	rc=$( { { /bin/sh "$DOTFILES/install.sh" "$@" 2>&1 || echo $? >&4; } |
+		tee -a "$INSTALL_LOG" >&3; } 4>&1 )
+	rc=${rc:-0}
+	echo "------------------------------------------------------------------" >> "$INSTALL_LOG"
+	echo "exit status $rc after $(( $(date +%s) - start ))s" >> "$INSTALL_LOG"
+	say "log     $LOG_DIR/latest.log"
+	exit "$rc"
+fi
 
 # Now that we know what is wanted: does any of it need root?
 skipped=
@@ -659,7 +704,7 @@ elif [ "$want_deps" = no ] && [ -n "$named" ]; then
 	esac
 fi
 
-[ "$want_deps" = yes ] && deps
+if [ "$want_deps" = yes ]; then say "part    deps ($(date +%H:%M:%S))"; deps; fi
 
 # ~/.local/bin is no longer used: everything lives in ~/.system/bin.
 # Links this script made there are dropped (they are made again in
@@ -725,7 +770,7 @@ for f in "$SYSBIN"/*; do
 	esac
 done
 
-for p in $parts; do "install_$p"; done
+for p in $parts; do say "part    $p ($(date +%H:%M:%S))"; "install_$p"; done
 # The user's files are theirs alone, like their umask 077 makes new ones:
 # take group and other permissions off everything in their home.
 chmod 700 "$HOME"
