@@ -39,5 +39,13 @@ applied in this order; dwm.c already has them, so don't apply again):
                      hints applied before the edge moves, so terminals
                      don't drift). Corner cursors for each direction.
                      patches/dwm-resizecorners-local.diff.
+  sticky             local, the idea of the suckless sticky patch:
+                     Mod+s pins the focused window to every tag of its
+                     monitor and floats it. Mod+j/k, tag changes and
+                     closing windows never focus it; click it to. Kept
+                     over dwm restart. patches/dwm-sticky-local.diff.
+  startrules         local: startrules[] in config.h, rules that place
+                     only the first matching window in the first minute
+                     after login (for apps x/xinitrc starts).
 Their config.def.h hunks are not applied (config.def.h stays upstream);
 the settings are in config.h.
