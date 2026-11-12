@@ -734,6 +734,16 @@ install_plover() {
 	# plugin is installed fresh. (Plover copies the plugin's dictionaries
 	# into ~/.system/plover the first time it starts and never updates the
 	# copies, so they have to go for a new Dotterel to be used.)
+	# Every run: stop Plover and delete the dictionary copies it made in
+	# ~/.system/plover (no backup). Plover makes them again from the
+	# installed Dotterel when it starts, so they are always the newest.
+	if pkill -u "$USER_NAME" -f "python.* -m plover\.scripts" 2>/dev/null; then
+		sleep 2
+		say "stop    Plover (start it again when this is done)"
+	fi
+	rm -f "$PLOVER_DIR"/dotterel-*.json "$PLOVER_DIR"/dotterel-*.py "$PLOVER_DIR"/dotterel-*.modal
+	say "delete  $PLOVER_DIR/dotterel-* (Plover copies them again at start)"
+
 	commit=$(git -C "$src" rev-parse HEAD)
 	new=$src/plover-dotterel/plover_dotterel/dictionaries
 	old=$(dotterel_dicts)
@@ -742,10 +752,6 @@ install_plover() {
 		[ -n "$old" ] && diff -rq -x __pycache__ "$new" "$old" >/dev/null 2>&1; then
 		say "ok      Dotterel ($(git -C "$src" log -1 --format=%h))"
 	else
-		if pkill -u "$USER_NAME" -f "python.* -m plover\.scripts" 2>/dev/null; then
-			sleep 2
-			say "stop    Plover (start it again when this is done)"
-		fi
 		PIP_NO_CACHE_DIR=1 "$SYSBIN/plover" -s plover_plugins uninstall -y \
 			plover-dotterel plover-dotterel-dark-theme >/dev/null 2>&1 || :
 		find "$PLOVER_DIR/plugins" -depth -name 'plover_dotterel*' -exec rm -rf {} + 2>/dev/null || :
