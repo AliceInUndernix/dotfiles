@@ -67,9 +67,12 @@ static char dmenumon[2] = "0"; /* component of dmenucmd, manipulated in spawn() 
  * and size are in dmenu/config.h */
 static const char *dmenucmd[] = { "dmenu_apps", "-m", dmenumon, NULL };
 static const char *termcmd[]  = { "st", NULL };
-/* scratchpad: one floating st, Mod+` shows/hides it on any tag */
+/* scratchpad: one floating st, Mod+` shows/hides it on any tag. It runs
+ * tmux session "scratchpad": attaches if the session exists, else starts it,
+ * so closing the window keeps the shells. Separate from Mod+x's sessions. */
 static const char scratchpadname[] = "scratchpad";
-static const char *scratchpadcmd[] = { "st", "-t", scratchpadname, "-g", "120x34", NULL };
+static const char *scratchpadcmd[] = { "st", "-t", scratchpadname, "-g", "120x34",
+	"-e", "tmux", "new-session", "-A", "-s", "scratchpad", NULL };
 static const char *lockcmd[]  = { "slock", NULL };
 /* xss-lock (x/xinitrc) locks with slock before the suspend happens */
 static const char *suspendcmd[] = { "loginctl", "suspend", NULL };
