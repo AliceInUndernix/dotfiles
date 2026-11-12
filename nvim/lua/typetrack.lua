@@ -307,11 +307,10 @@ local function pump()
   warned_closed = false
   busy = true
   local job = table.remove(queue, 1)
-  -- One command at a time, each waited for to the end: Sioyek keeps only
-  -- one waiting command (wait_for_search_to_finish), and a new one sent
-  -- while a search runs replaced it under its feet and crashed Sioyek
-  -- (2026-11-12). A search through a whole book can take a while, so
-  -- there is no time limit; nothing is ever killed half way.
+  -- One command at a time. Each is a macro that Sioyek runs in one go,
+  -- with no waiting step in it: wait_for_search_to_finish, together with
+  -- --wait-for-response or a second macro arriving while it waited,
+  -- crashed Sioyek ("Memory fault", 2026-11-12).
   local id = vim.fn.jobstart(job.cmd, {
     on_exit = function()
       vim.defer_fn(function() busy = false pump() end, job.wait or 0)
@@ -326,11 +325,7 @@ end
 
 local function sioyek(macro, wait)
   queue[#queue + 1] = {
-    -- --wait-for-response: the command returns only when Sioyek has done
-    -- the whole macro, so the next search can't start in the middle of
-    -- this one (that lost every other highlight, 2026-11-12)
-    cmd = { M.opts.sioyek, "--nofocus", "--wait-for-response",
-            "--execute-command", macro },
+    cmd = { M.opts.sioyek, "--nofocus", "--execute-command", macro },
     wait = wait,
   }
   pump()
@@ -391,10 +386,11 @@ end
 local function highlight(book, first, last, good)
   local kind = good and M.opts.good or M.opts.bad
   -- search, go to the match, select it and highlight it: one macro, so
-  -- nothing else runs in between
+  -- nothing else runs in between. Once Sioyek has indexed the book (in
+  -- the background, right after opening it) a search finishes at once,
+  -- so the macro needs no waiting step.
   sioyek("regex_search(" .. quote(pattern(book, first, last)) ..
-    ");wait_for_search_to_finish;next_item;select_current_search_match;" ..
-    "add_highlight(" .. kind .. ")")
+    ");next_item;select_current_search_match;add_highlight(" .. kind .. ")", 50)
 end
 
 ---------------------------------------------------------------------------
