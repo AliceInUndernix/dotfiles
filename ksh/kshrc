@@ -21,7 +21,7 @@ HISTSIZE=1000000
 # keep their plain arrows.
 case ${KSH_VERSION:-} in *93*) eval "$(cat <<'EOF'
 _hs_key() {
-	typeset dir l n t
+	typeset dir l n t pend
 	case ${.sh.edchar} in
 	$'\e[A'|$'\eOA') dir=up ;;
 	$'\e[B'|$'\eOB') dir=down ;;
@@ -42,9 +42,20 @@ _hs_key() {
 		# out of line-editing mode in UTF-8, so the next arrow printed
 		# ^[[A instead of doing nothing.
 		t=$(hist -lnr -$HISTSIZE 2>/dev/null)
+		pend=
 		while IFS= read -r l; do
 			[[ $l == $'\t'* ]] || continue     # commands start with a Tab
 			l=${l#$'\t'}
+			# a command split over lines with \ at the ends comes back
+			# as one line, the way the shell reads it: shown with the
+			# \ at its end, the next arrow key was taken literally
+			# (it printed ^[[A and the arrows stopped working)
+			if [[ -n $pend ]]; then l=${pend%\\}$l pend=; fi
+			if [[ $l == *\\ ]]; then pend=$l; continue; fi
+			# leave out lines with control characters (Esc, Ctrl+C...):
+			# pasted terminal junk, not commands, and putting them back
+			# on the line confused the editor
+			[[ $l == *[[:cntrl:]]* ]] && continue
 			[[ $l == "$_hs_prefix"?* && -z ${_hs_seen[$l]-} ]] || continue
 			_hs_seen[$l]=1 _hs_list[n++]=$l
 		done <<< "$t"
