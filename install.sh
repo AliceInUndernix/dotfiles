@@ -726,44 +726,54 @@ install_plover() {
 		say "clone   $PLOVER_REPO -> $src"
 		git clone --quiet --depth 1 "$PLOVER_REPO" "$src"
 	fi
-	# Installed again when the commit is new or the installed dictionaries
-	# differ from the repo's in any way. The old installed ones are kept in
-	# ~/.system/state/plover/dictionaries-<date> first, in case words were
-	# added straight into them.
+	# A clean install when the commit is new, the installed dictionaries
+	# differ from the repo's, or DOTTEREL_CLEAN=yes: Plover is stopped,
+	# Dotterel is uninstalled, every Dotterel dictionary file anywhere in
+	# ~/.system/plover is deleted (no backup), the dictionary list saved in
+	# plover.cfg is dropped so Plover uses the plugin's own list, and the
+	# plugin is installed fresh.
 	commit=$(git -C "$src" rev-parse HEAD)
 	new=$src/plover-dotterel/plover_dotterel/dictionaries
 	old=$(dotterel_dicts)
-	if [ "$(cat "$PLOVER_DIR/plugins/.dotterel" 2>/dev/null)" = "$commit" ] &&
+	if [ "${DOTTEREL_CLEAN:-no}" != yes ] &&
+		[ "$(cat "$PLOVER_DIR/plugins/.dotterel" 2>/dev/null)" = "$commit" ] &&
 		[ -n "$old" ] && diff -rq -x __pycache__ "$new" "$old" >/dev/null 2>&1; then
 		say "ok      Dotterel ($(git -C "$src" log -1 --format=%h))"
 	else
-		if [ -n "$old" ] && ! diff -rq -x __pycache__ "$new" "$old" >/dev/null 2>&1; then
-			keep=$STATE/plover/dictionaries-$(date +%Y%m%d-%H%M%S)
-			mkdir -p "$STATE/plover" && cp -R "$old" "$keep"
-			say "backup  old Dotterel dictionaries -> $keep"
+		if pkill -u "$USER_NAME" -f plover.scripts.dist_main 2>/dev/null; then
+			sleep 2
+			say "stop    Plover (start it again when this is done)"
 		fi
-		say "plugin  Dotterel and its dark theme ($(git -C "$src" log -1 --format=%h))"
-		PIP_NO_CACHE_DIR=1 "$SYSBIN/plover" -s plover_plugins install \
-			--force-reinstall --no-deps \
-			"$src/plover-dotterel" "$src/plover-dotterel/dark-theme"
+		PIP_NO_CACHE_DIR=1 "$SYSBIN/plover" -s plover_plugins uninstall -y \
+			plover-dotterel plover-dotterel-dark-theme >/dev/null 2>&1 || :
+		find "$PLOVER_DIR/plugins" -depth -name 'plover_dotterel*' -exec rm -rf {} + 2>/dev/null || :
+		find "$PLOVER_DIR" -path "$src" -prune -o -type f \
+			\( -name 'dotterel-*.json' -o -name 'dotterel-*.py' -o -name 'dotterel-*.modal' \) \
+			-print -exec rm -f {} + 2>/dev/null | sed 's/^/==> delete  /'
+		rm -rf "$STATE/plover"/dictionaries-*
+		cfg=$PLOVER_DIR/plover.cfg
+		if [ -f "$cfg" ] && grep -q '^dictionaries *=' "$cfg"; then
+			awk '/^\[/ { sec = $0 } !(sec == "[System: Dotterel]" && /^dictionaries *=/)' \
+				"$cfg" > "$cfg.tmp" && mv "$cfg.tmp" "$cfg"
+			say "reset   Dotterel's dictionary list in plover.cfg (Plover uses the plugin's)"
+		fi
+		say "plugin  Dotterel and its dark theme, fresh ($(git -C "$src" log -1 --format=%h))"
 		PIP_NO_CACHE_DIR=1 "$SYSBIN/plover" -s plover_plugins install \
 			"$src/plover-dotterel" "$src/plover-dotterel/dark-theme"
 		old=$(dotterel_dicts)
 		if [ -n "$old" ] && diff -rq -x __pycache__ "$new" "$old" >/dev/null 2>&1; then
 			echo "$commit" > "$PLOVER_DIR/plugins/.dotterel"
-			say "ok      Dotterel dictionaries match the repo; restart Plover to load them"
+			say "ok      Dotterel dictionaries match the repo; start Plover again"
 		else
-			warn "Dotterel's installed dictionaries still differ from $new"
+			warn "Dotterel's installed dictionaries differ from $new"
 		fi
 	fi
 
-	# Plover only uses the plugin's dictionaries while its dictionary list
-	# is the default one. A list saved in plover.cfg that points at copies
-	# elsewhere keeps those copies, whatever is installed.
-	if grep -q '^dictionaries *=' "$PLOVER_DIR/plover.cfg" 2>/dev/null &&
-		grep '^dictionaries *=' "$PLOVER_DIR/plover.cfg" |
+	# Any other dictionary list in plover.cfg that still names Dotterel
+	# files outside the plugin (another system's section, say).
+	if grep '^dictionaries *=' "$PLOVER_DIR/plover.cfg" 2>/dev/null |
 		grep -o '"path": *"[^"]*"' | grep -v 'asset:plover_dotterel:' | grep -q dotterel; then
-		warn "plover.cfg lists Dotterel dictionaries outside the plugin; Plover uses those copies, not the new ones"
+		warn "plover.cfg still lists Dotterel dictionaries outside the plugin"
 	fi
 }
 
