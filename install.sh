@@ -116,7 +116,7 @@ deps() (
 		enable_overlay() {
 			portageq get_repo_path / "$1" >/dev/null 2>&1 && return
 			say "enable  overlay $1"
-			emerge --ask --noreplace app-eselect/eselect-repository
+			emerge -qav --noreplace app-eselect/eselect-repository
 			eselect repository enable "$1"
 			emerge --sync "$1"
 		}
@@ -141,8 +141,8 @@ deps() (
 		# PipeWire first, on its own: wiremix needs its libpipewire-0.3 to
 		# build, but its ebuild doesn't say so, so emerge may build wiremix
 		# before PipeWire is in.
-		emerge --ask --noreplace media-video/pipewire media-video/wireplumber
-		emerge --ask --noreplace x11-libs/libX11 x11-libs/libXft \
+		emerge -qav --noreplace media-video/pipewire media-video/wireplumber
+		emerge -qav --noreplace x11-libs/libX11 x11-libs/libXft \
 			x11-libs/libXinerama x11-libs/libXrandr x11-libs/libXext \
 			media-libs/fontconfig media-libs/freetype \
 			dev-vcs/git net-misc/curl app-editors/neovim app-misc/tmux \
@@ -209,24 +209,24 @@ deps() (
 			b=${d%/}; b=${b##*/}
 			qt="$qt dev-qt/${b%%-[0-9]*}"
 		done
-		[ -z "$qt" ] || emerge --ask --oneshot --update --deep --changed-use $qt
+		[ -z "$qt" ] || emerge -qav --oneshot --update --deep --changed-use $qt
 		# The development branch also uses Qt Quick Widgets and Qt
 		# TextToSpeech, which GURU's ebuild doesn't list yet (qmake:
 		# "Unknown module(s) in QT: quickwidgets texttospeech",
 		# 2026-11-12), so they go in first, on their own.
-		emerge --ask --update --deep --changed-use --noreplace \
+		emerge -qav --update --deep --changed-use --noreplace \
 			dev-qt/qtdeclarative dev-qt/qtspeech
 		had_sioyek=no
 		portageq has_version / app-text/sioyek && had_sioyek=yes
-		emerge --ask --update --deep --changed-use app-text/sioyek
-		[ "$had_sioyek" = no ] || emerge --ask --oneshot app-text/sioyek
+		emerge -qav --update --deep --changed-use app-text/sioyek
+		[ "$had_sioyek" = no ] || emerge -qav --oneshot app-text/sioyek
 		# Browsers only with BROWSERS=yes: both build from source and take
 		# hours. They are not in the main tree: IceCat comes from
 		# parona-overlay, ungoogled-chromium from pf4public.
 		if [ "${BROWSERS:-no}" = yes ]; then
 			enable_overlay parona-overlay
 			enable_overlay pf4public
-			emerge --ask --noreplace www-client/icecat \
+			emerge -qav --noreplace www-client/icecat \
 				www-client/ungoogled-chromium
 		else
 			say "skip    IceCat and Chromium (BROWSERS=yes ./install.sh --deps builds them)"
