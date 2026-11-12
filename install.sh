@@ -731,7 +731,9 @@ install_plover() {
 	# Dotterel is uninstalled, every Dotterel dictionary file anywhere in
 	# ~/.system/plover is deleted (no backup), the dictionary list saved in
 	# plover.cfg is dropped so Plover uses the plugin's own list, and the
-	# plugin is installed fresh.
+	# plugin is installed fresh. (Plover copies the plugin's dictionaries
+	# into ~/.system/plover the first time it starts and never updates the
+	# copies, so they have to go for a new Dotterel to be used.)
 	commit=$(git -C "$src" rev-parse HEAD)
 	new=$src/plover-dotterel/plover_dotterel/dictionaries
 	old=$(dotterel_dicts)
@@ -740,7 +742,7 @@ install_plover() {
 		[ -n "$old" ] && diff -rq -x __pycache__ "$new" "$old" >/dev/null 2>&1; then
 		say "ok      Dotterel ($(git -C "$src" log -1 --format=%h))"
 	else
-		if pkill -u "$USER_NAME" -f plover.scripts.dist_main 2>/dev/null; then
+		if pkill -u "$USER_NAME" -f "python.* -m plover\.scripts" 2>/dev/null; then
 			sleep 2
 			say "stop    Plover (start it again when this is done)"
 		fi
