@@ -726,15 +726,50 @@ install_plover() {
 		say "clone   $PLOVER_REPO -> $src"
 		git clone --quiet --depth 1 "$PLOVER_REPO" "$src"
 	fi
+	# Installed again when the commit is new or the installed dictionaries
+	# differ from the repo's in any way. The old installed ones are kept in
+	# ~/.system/state/plover/dictionaries-<date> first, in case words were
+	# added straight into them.
 	commit=$(git -C "$src" rev-parse HEAD)
-	if [ "$(cat "$PLOVER_DIR/plugins/.dotterel" 2>/dev/null)" = "$commit" ]; then
+	new=$src/plover-dotterel/plover_dotterel/dictionaries
+	old=$(dotterel_dicts)
+	if [ "$(cat "$PLOVER_DIR/plugins/.dotterel" 2>/dev/null)" = "$commit" ] &&
+		[ -n "$old" ] && diff -rq "$new" "$old" >/dev/null 2>&1; then
 		say "ok      Dotterel ($(git -C "$src" log -1 --format=%h))"
 	else
+		if [ -n "$old" ] && ! diff -rq "$new" "$old" >/dev/null 2>&1; then
+			keep=$STATE/plover/dictionaries-$(date +%Y%m%d-%H%M%S)
+			mkdir -p "$STATE/plover" && cp -R "$old" "$keep"
+			say "backup  old Dotterel dictionaries -> $keep"
+		fi
 		say "plugin  Dotterel and its dark theme ($(git -C "$src" log -1 --format=%h))"
 		PIP_NO_CACHE_DIR=1 "$SYSBIN/plover" -s plover_plugins install \
+			--force-reinstall --no-deps \
 			"$src/plover-dotterel" "$src/plover-dotterel/dark-theme"
-		echo "$commit" > "$PLOVER_DIR/plugins/.dotterel"
+		PIP_NO_CACHE_DIR=1 "$SYSBIN/plover" -s plover_plugins install \
+			"$src/plover-dotterel" "$src/plover-dotterel/dark-theme"
+		old=$(dotterel_dicts)
+		if [ -n "$old" ] && diff -rq "$new" "$old" >/dev/null 2>&1; then
+			echo "$commit" > "$PLOVER_DIR/plugins/.dotterel"
+			say "ok      Dotterel dictionaries match the repo; restart Plover to load them"
+		else
+			warn "Dotterel's installed dictionaries still differ from $new"
+		fi
 	fi
+
+	# Plover only uses the plugin's dictionaries while its dictionary list
+	# is the default one. A list saved in plover.cfg that points at copies
+	# elsewhere keeps those copies, whatever is installed.
+	if grep -q '^dictionaries *=' "$PLOVER_DIR/plover.cfg" 2>/dev/null &&
+		grep '^dictionaries *=' "$PLOVER_DIR/plover.cfg" |
+		grep -o '"path": *"[^"]*"' | grep -v 'asset:plover_dotterel:' | grep -q dotterel; then
+		warn "plover.cfg lists Dotterel dictionaries outside the plugin; Plover uses those copies, not the new ones"
+	fi
+}
+
+# The installed plugin's dictionaries folder, or nothing.
+dotterel_dicts() {
+	find "$PLOVER_DIR/plugins" -type d -path '*/plover_dotterel/dictionaries' 2>/dev/null | head -n 1
 }
 
 # --- main -----------------------------------------------------------------
