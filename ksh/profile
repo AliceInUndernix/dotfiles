@@ -10,19 +10,26 @@ export LESS=-iFR
 
 export ENV=$HOME/.kshrc     # ksh reads this for every interactive shell
 
-# Your own programs (qmk, and suckless tools built with PREFIX=~/.local),
-# and ~/.local/bin/vim -> nvim. Always FIRST in PATH, even if the system
-# already added it at the end, so `vim` runs Neovim and not /usr/bin/vim.
-_p=:$PATH:
-while :; do
-	case $_p in
-	*":$HOME/.local/bin:"*) _p=${_p%%":$HOME/.local/bin:"*}:${_p#*":$HOME/.local/bin:"} ;;
-	*) break ;;
-	esac
-done
-_p=${_p#:}; _p=${_p%:}
-PATH=$HOME/.local/bin${_p:+:$_p}
-unset _p
+# PATH, most important first:
+#   ~/.system/bin   this setup's own commands (vim -> nvim), wins over all
+#   ~/.local/bin    your programs (qmk, tools built with PREFIX=~/.local)
+#   then the system's
+# Each is moved to the front even if the system already put it in PATH
+# (at the end, say), so `vim` always runs Neovim and not /usr/bin/vim.
+_front() {
+	_p=:$PATH:
+	while :; do
+		case $_p in
+		*":$1:"*) _p=${_p%%":$1:"*}:${_p#*":$1:"} ;;
+		*) break ;;
+		esac
+	done
+	_p=${_p#:}; _p=${_p%:}
+	PATH=$1${_p:+:$_p}
+}
+_front "$HOME/.local/bin"
+_front "$HOME/.system/bin"
+unset _p; unset -f _front
 export PATH
 
 # Logging in on the first console (tty1) starts X; logging out of X logs

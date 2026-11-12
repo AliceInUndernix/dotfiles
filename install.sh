@@ -178,10 +178,16 @@ install_nvim() {
 		own "$pack/$name"
 		say "plugin  $name (from archive)"
 	done
-	# vim runs Neovim: ~/.local/bin/vim -> nvim (~/.local/bin is in PATH
-	# through ~/.profile, ahead of any real vim).
+	# vim runs Neovim: ~/.system/bin/vim -> nvim. ~/.profile puts
+	# ~/.system/bin first in PATH, ahead of everything, even /usr/bin/vim.
 	if nvim=$(command -v nvim); then
-		link "$nvim" "$HOME/.local/bin/vim"
+		link "$nvim" "$HOME/.system/bin/vim"
+		# The old place of this link; remove it if it is ours.
+		old=$HOME/.local/bin/vim
+		if [ -L "$old" ] && [ "$(readlink "$old")" = "$nvim" ]; then
+			rm "$old"
+			say "remove  $old (moved to ~/.system/bin)"
+		fi
 	else
 		warn "nvim is not installed (needs 0.11+)"
 	fi
