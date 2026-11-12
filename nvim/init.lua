@@ -80,7 +80,11 @@ o.ignorecase = true            -- /foo matches Foo...
 o.smartcase = true             -- ...unless you type a capital letter
 
 o.scrolloff = 5                -- keep a few lines visible above/below cursor
-o.wrap = false                 -- code: long lines scroll, they do not wrap
+o.wrap = true                  -- long lines fold onto the next screen row
+o.linebreak = true             -- ...between words, not mid-word
+o.breakindent = true           -- ...indented like the line they continue
+                               -- (still one line in the file; the screen
+                               -- never scrolls sideways)
 o.splitright = true
 o.splitbelow = true
 o.mouse = "a"

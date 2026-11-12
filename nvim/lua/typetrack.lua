@@ -49,8 +49,9 @@ M.opts = {
   lag = 2,               -- wait this many words before judging a word,
                          -- so a quick steno correction is not marked red
   pause_ms = 1500,       -- after this long without typing, judge them all
-  max_run = 4,           -- longest single highlight, in words (short, so
-                         -- one search that doesn't match loses few words)
+  max_run = 12,          -- longest single highlight, in words (each one
+                         -- is a search through the whole book, so fewer
+                         -- and longer is faster)
 }
 
 local ns = vim.api.nvim_create_namespace("typetrack")
@@ -288,11 +289,20 @@ local function pump()
   if busy or #queue == 0 then return end
   busy = true
   local job = table.remove(queue, 1)
-  local id = vim.fn.jobstart(job.cmd, {
-    on_exit = function()
-      vim.defer_fn(function() busy = false pump() end, job.wait or 0)
-    end,
-  })
+  local done = false
+  local id
+  local function finish()
+    if done then return end
+    done = true
+    vim.defer_fn(function() busy = false pump() end, job.wait or 0)
+  end
+  id = vim.fn.jobstart(job.cmd, { on_exit = finish })
+  -- If Sioyek never answers, give up on this one after a few seconds.
+  if id > 0 then
+    vim.defer_fn(function()
+      if not done then pcall(vim.fn.jobstop, id) finish() end
+    end, 8000)
+  end
   if id <= 0 then
     busy = false
     queue = {}
@@ -302,7 +312,11 @@ end
 
 local function sioyek(macro, wait)
   queue[#queue + 1] = {
-    cmd = { M.opts.sioyek, "--nofocus", "--execute-command", macro },
+    -- --wait-for-response: the command returns only when Sioyek has done
+    -- the whole macro, so the next search can't start in the middle of
+    -- this one (that lost every other highlight, 2026-11-12)
+    cmd = { M.opts.sioyek, "--nofocus", "--wait-for-response",
+            "--execute-command", macro },
     wait = wait,
   }
   pump()
@@ -362,12 +376,11 @@ end
 
 local function highlight(book, first, last, good)
   local kind = good and M.opts.good or M.opts.bad
-  -- 1) search; Sioyek scrolls to the match
+  -- search, go to the match, select it and highlight it: one macro, so
+  -- nothing else runs in between
   sioyek("regex_search(" .. quote(pattern(book, first, last)) ..
-    ");wait_for_search_to_finish;next_item", 150)
-  -- 2) select that match and highlight it (a separate step, after
-  --    Sioyek has drawn the match)
-  sioyek("select_current_search_match;add_highlight(" .. kind .. ")")
+    ");wait_for_search_to_finish;next_item;select_current_search_match;" ..
+    "add_highlight(" .. kind .. ")")
 end
 
 ---------------------------------------------------------------------------
