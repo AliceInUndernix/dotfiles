@@ -168,6 +168,16 @@ deps() (
 		# installed Qt package is updated with it, in one go (--oneshot:
 		# they don't go into your world file).
 		enable_overlay guru
+		# Our patch for it (sioyek/gentoo-patches): its default key
+		# bindings from /etc/sioyek, where the ebuild puts them (without it
+		# no key works, only the mouse), and its data in ~/.system/share.
+		pd=/etc/portage/patches/app-text/sioyek
+		mkdir -p "$pd"
+		for f in "$DOTFILES"/sioyek/gentoo-patches/*.patch; do
+			cmp -s "$f" "$pd/dotfiles-${f##*/}" && continue
+			cp "$f" "$pd/dotfiles-${f##*/}"
+			say "patch   ${f##*/} -> $pd (applied when Sioyek is built)"
+		done
 		# Portage reads package.use/ files in name order and the last one
 		# wins, so ours is zz-dotfiles: an older "-opengl" elsewhere (one
 		# emerge's autounmask had written into package.use/qmkfirmware,
