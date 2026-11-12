@@ -49,7 +49,8 @@ M.opts = {
   lag = 2,               -- wait this many words before judging a word,
                          -- so a quick steno correction is not marked red
   pause_ms = 1500,       -- after this long without typing, judge them all
-  max_run = 10,          -- longest single highlight, in words
+  max_run = 4,           -- longest single highlight, in words (short, so
+                         -- one search that doesn't match loses few words)
 }
 
 local ns = vim.api.nvim_create_namespace("typetrack")
@@ -310,7 +311,17 @@ end
 -- A search pattern (ECMAScript regex, as Sioyek uses) for book words
 -- first..last, followed by enough of the next words to be the only
 -- such place in the book. Only the words themselves get highlighted.
-local function word_rx(w) return table.concat(w.parts, "\\W*") end
+-- A big first letter (a drop cap, like the "T" opening a chapter) comes
+-- out of the page as a separate piece of text, so a space may follow a
+-- word's first letter.
+local function word_rx(w)
+  local parts = { unpack(w.parts) }
+  local first = parts[1]
+  if first:match("^%w") and #first > 1 then
+    parts[1] = first:sub(1, 1) .. "\\s*" .. first:sub(2)
+  end
+  return table.concat(parts, "\\W*")
+end
 
 local function count_from(book, first, n)
   local c = 0
