@@ -160,10 +160,34 @@ deps() (
 		# live ebuild is never "out of date", so when it is already there
 		# it is built again (--oneshot: world already has it), to get the
 		# newest commit every time --deps runs.
+		#
+		# Its qt3d needs Qt built with OpenGL (qtbase[opengl]) and the same
+		# Qt version as qtbase. Updating only Sioyek's own dependencies
+		# gave a slot conflict (2026-11-12): qtbase 6.11.3 for qt3d, while
+		# the installed qtsvg, qttranslations, ... kept 6.11.2. So every
+		# installed Qt package is updated with it, in one go (--oneshot:
+		# they don't go into your world file).
 		enable_overlay guru
+		pu=/etc/portage/package.use
+		if [ -d "$pu" ] || [ ! -e "$pu" ]; then
+			mkdir -p "$pu"
+			pu=$pu/dotfiles
+		fi
+		if ! grep -qs "^dev-qt/qtbase[[:space:]].*opengl" "$pu"; then
+			echo "dev-qt/qtbase opengl" >> "$pu"
+			say "use     dev-qt/qtbase opengl -> $pu (Sioyek's qt3d needs it)"
+		fi
+		vdb=$(portageq vdb_path)
+		qt=
+		for d in "$vdb"/dev-qt/*/; do
+			[ -d "$d" ] || continue
+			b=${d%/}; b=${b##*/}
+			qt="$qt dev-qt/${b%%-[0-9]*}"
+		done
+		[ -z "$qt" ] || emerge --ask --oneshot --update --deep --changed-use $qt
 		had_sioyek=no
 		portageq has_version / app-text/sioyek && had_sioyek=yes
-		emerge --ask --update --deep app-text/sioyek
+		emerge --ask --update --deep --changed-use app-text/sioyek
 		[ "$had_sioyek" = no ] || emerge --ask --oneshot app-text/sioyek
 		# Browsers only with BROWSERS=yes: both build from source and take
 		# hours. They are not in the main tree: IceCat comes from
