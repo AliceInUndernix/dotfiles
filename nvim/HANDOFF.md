@@ -60,11 +60,11 @@ nvim/
 
 1. **Sioyek tracker has never run against Sioyek.** It needs the
    development Sioyek (`select_current_search_match` command), not 2.0.0
-   or sioyek3-alpha0. The user was installing GURU's `sioyek-9999` and
-   hit a Qt slot conflict (qtbase 6.11.2 installed vs 6.11.3 wanted).
-   Suggested fix: `sudo emerge --ask --update --deep --changed-use @world
-   =app-text/sioyek-9999`. Outcome unknown. After install they must move
-   `~/.system/bin/sioyek` (2.0.0) aside and back up `~/.system/share/sioyek` (install.sh moved it from `~/.local/share`).
+   or sioyek3-alpha0. `install.sh --deps` now builds it on Gentoo
+   (GURU's `sioyek-9999`, newest commit each run, with `--update --deep`
+   for the earlier Qt slot conflict), and `install.sh sioyek` moves the
+   hand-installed `~/.system/bin/sioyek` (2.0.0) aside after backing up
+   `~/.system/share/sioyek`. Not yet run on her machine.
 2. **Plover unicode fix: terminal side done.** st and tmux now pass
    Ctrl+Shift+U to Neovim (tested). Not yet confirmed with Plover itself;
    if digits still appear, check that st and tmux were rebuilt/reloaded.

@@ -112,8 +112,17 @@ deps() (
 	[ -r /etc/os-release ] && id=$(. /etc/os-release; echo "${ID_LIKE:-} ${ID:-}")
 	case $id in
 	*gentoo*)
+		# enable_overlay <name>: add an overlay with eselect repository.
+		enable_overlay() {
+			portageq get_repo_path / "$1" >/dev/null 2>&1 && return
+			say "enable  overlay $1"
+			emerge --ask --noreplace app-eselect/eselect-repository
+			eselect repository enable "$1"
+			emerge --sync "$1"
+		}
 		# wiremix and the two browsers are only in testing (~amd64): allow
-		# just those three, in a file of our own.
+		# just those three, in a file of our own. Sioyek is the live
+		# ebuild (9999, no keywords at all), so it needs "**".
 		kw=/etc/portage/package.accept_keywords
 		if [ -d "$kw" ] || [ ! -e "$kw" ]; then
 			mkdir -p "$kw"
@@ -125,6 +134,10 @@ deps() (
 			echo "$atom ~$arch" >> "$kw"
 			say "keyword $atom ~$arch -> $kw"
 		done
+		if ! grep -qs "^app-text/sioyek[[:space:]]" "$kw"; then
+			echo "app-text/sioyek **" >> "$kw"
+			say "keyword app-text/sioyek ** -> $kw"
+		fi
 		# PipeWire first, on its own: wiremix needs its libpipewire-0.3 to
 		# build, but its ebuild doesn't say so, so emerge may build wiremix
 		# before PipeWire is in.
@@ -140,17 +153,24 @@ deps() (
 			media-sound/wiremix \
 			sys-process/btop media-gfx/feh \
 			app-mobilephone/dfu-util
+		# Sioyek: the development version (GURU's sioyek-9999, built from
+		# the newest commit of its development branch), which TypeTrack
+		# needs (select_current_search_match). --update --deep also updates
+		# its Qt, so a newer Qt doesn't clash with the installed one. A
+		# live ebuild is never "out of date", so when it is already there
+		# it is built again (--oneshot: world already has it), to get the
+		# newest commit every time --deps runs.
+		enable_overlay guru
+		had_sioyek=no
+		portageq has_version / app-text/sioyek && had_sioyek=yes
+		emerge --ask --update --deep app-text/sioyek
+		[ "$had_sioyek" = no ] || emerge --ask --oneshot app-text/sioyek
 		# Browsers only with BROWSERS=yes: both build from source and take
 		# hours. They are not in the main tree: IceCat comes from
 		# parona-overlay, ungoogled-chromium from pf4public.
 		if [ "${BROWSERS:-no}" = yes ]; then
-			for repo in parona-overlay pf4public; do
-				portageq get_repo_path / "$repo" >/dev/null 2>&1 && continue
-				say "enable  overlay $repo"
-				emerge --ask --noreplace app-eselect/eselect-repository
-				eselect repository enable "$repo"
-				emerge --sync "$repo"
-			done
+			enable_overlay parona-overlay
+			enable_overlay pf4public
 			emerge --ask --noreplace www-client/icecat \
 				www-client/ungoogled-chromium
 		else
@@ -316,9 +336,30 @@ install_mpv() {
 	command -v mpv >/dev/null 2>&1 || warn "mpv is not installed"
 }
 
+# Sioyek itself comes from the distro (on Gentoo: --deps builds the
+# development version, sioyek-9999 from GURU). An old sioyek put in
+# ~/.system/bin by hand (2.0.0) would win over it in PATH, so once the
+# system has one, the old one is moved aside, and its data
+# (~/.system/share/sioyek: bookmarks, highlights) copied to a backup
+# first, in case the new version changes it.
 install_sioyek() {
 	link "$DOTFILES/sioyek/prefs_user.config" "$CONFIG/sioyek/prefs_user.config"
-	command -v sioyek >/dev/null 2>&1 || warn "sioyek is not installed"
+	sys=
+	for d in /usr/bin /usr/local/bin; do [ -x "$d/sioyek" ] && sys=$d/sioyek && break; done
+	if [ -n "$sys" ] && [ -e "$SYSBIN/sioyek" ] && [ ! -L "$SYSBIN/sioyek" ]; then
+		if [ -d "$DATA/sioyek" ]; then
+			cp -Rp "$DATA/sioyek" "$DATA/sioyek.bak.$STAMP"
+			own "$DATA/sioyek.bak.$STAMP"
+			say "backup  $DATA/sioyek -> $DATA/sioyek.bak.$STAMP"
+		fi
+		mv "$SYSBIN/sioyek" "$SYSBIN/sioyek.old.$STAMP"
+		say "aside   $SYSBIN/sioyek -> sioyek.old.$STAMP ($sys is used now)"
+	fi
+	if command -v sioyek >/dev/null 2>&1 || [ -n "$sys" ]; then
+		say "ok      sioyek ${sys:-$(command -v sioyek)}"
+	else
+		warn "sioyek is not installed (on Gentoo: su -c '$DOTFILES/install.sh --deps')"
+	fi
 }
 
 install_wiremix() {

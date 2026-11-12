@@ -18,7 +18,7 @@ script puts the whole configuration back after a fresh install.
 | `ksh/` | Korn shell: `profile` (PATH, EDITOR) and `kshrc` (prompt, emacs keys, aliases) | `~/.profile`, `~/.kshrc` (symlinks); ksh becomes the login shell of the user and root |
 | `flameshot/` | Screenshots: Print selects, Mod+Print copies the screen | `~/.config/flameshot/flameshot.ini` (symlink) |
 | `mpv/` | Video player: resume, Habamax OSD, vim seek keys | `~/.config/mpv` (symlink) |
-| `sioyek/` | Book/PDF reader in Habamax colours (TypeTrack's green/red too) | `~/.config/sioyek/prefs_user.config` (symlink) |
+| `sioyek/` | Book/PDF reader in Habamax colours (TypeTrack's green/red too); on Gentoo `--deps` builds its development version (GURU `sioyek-9999`) | `~/.config/sioyek/prefs_user.config` (symlink) |
 | `wiremix/` | PipeWire mixer in the terminal (like pavucontrol), Habamax theme | `~/.config/wiremix/wiremix.toml` (symlink) |
 | `btop/` | btop with a Habamax theme and vim keys | `~/.config/btop/` files (symlinks) |
 | `xdg/` | Download, Pictures, Music etc. all set to `~` (no capitalised folders) | `~/.config/user-dirs.dirs`, `user-dirs.conf` (symlinks) |
