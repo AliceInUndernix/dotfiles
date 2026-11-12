@@ -1,0 +1,107 @@
+diff --git a/dwm/dwm.c b/dwm/dwm.c
+index 4d44f81..62340a9 100644
+--- a/dwm/dwm.c
++++ b/dwm/dwm.c
+@@ -58,7 +58,8 @@
+ #define TEXTW(X)                (drw_fontset_getwidth(drw, (X)) + lrpad)
+ 
+ /* enums */
+-enum { CurNormal, CurResize, CurMove, CurLast }; /* cursor */
++enum { CurNormal, CurResize, CurResizeTL, CurResizeTR, CurResizeBL,
++       CurMove, CurLast }; /* cursor */
+ enum { SchemeNorm, SchemeSel }; /* color schemes */
+ enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
+        NetWMFullscreen, NetActiveWindow, NetWMWindowType,
+@@ -1679,7 +1680,9 @@ resizeclient(Client *c, int x, int y, int w, int h)
+ void
+ resizemouse(const Arg *arg)
+ {
+-	int ocx, ocy, nw, nh;
++	int px, py, nx, ny, nw, nh, ex, ey, left, top, di;
++	unsigned int dui;
++	Window dummy;
+ 	Client *c;
+ 	Monitor *m;
+ 	XEvent ev;
+@@ -1690,12 +1693,20 @@ resizemouse(const Arg *arg)
+ 	if (c->isfullscreen) /* no support resizing fullscreen windows by mouse */
+ 		return;
+ 	restack(selmon);
+-	ocx = c->x;
+-	ocy = c->y;
++	/* resize from the corner nearest the pointer; the opposite corner stays */
++	if (!XQueryPointer(dpy, c->win, &dummy, &dummy, &di, &di, &px, &py, &dui))
++		return;
++	left = px < c->w / 2;
++	top = py < c->h / 2;
++	ex = c->x + c->w + 2 * c->bw; /* opposite outer edges */
++	ey = c->y + c->h + 2 * c->bw;
+ 	if (XGrabPointer(dpy, root, False, MOUSEMASK, GrabModeAsync, GrabModeAsync,
+-		None, cursor[CurResize]->cursor, CurrentTime) != GrabSuccess)
++		None, cursor[top ? (left ? CurResizeTL : CurResizeTR)
++		                 : (left ? CurResizeBL : CurResize)]->cursor,
++		CurrentTime) != GrabSuccess)
+ 		return;
+-	XWarpPointer(dpy, None, c->win, 0, 0, 0, 0, c->w + c->bw - 1, c->h + c->bw - 1);
++	XWarpPointer(dpy, None, c->win, 0, 0, 0, 0,
++		left ? -c->bw : c->w + c->bw - 1, top ? -c->bw : c->h + c->bw - 1);
+ 	do {
+ 		XMaskEvent(dpy, MOUSEMASK|ExposureMask|SubstructureRedirectMask, &ev);
+ 		switch(ev.type) {
+@@ -1709,8 +1720,16 @@ resizemouse(const Arg *arg)
+ 				continue;
+ 			lasttime = ev.xmotion.time;
+ 
+-			nw = MAX(ev.xmotion.x - ocx - 2 * c->bw + 1, 1);
+-			nh = MAX(ev.xmotion.y - ocy - 2 * c->bw + 1, 1);
++			if (left) {
++				ex = c->x + c->w + 2 * c->bw;
++				nw = MAX(ex - ev.xmotion.x - 2 * c->bw, 1);
++			} else
++				nw = MAX(ev.xmotion.x - c->x - 2 * c->bw + 1, 1);
++			if (top) {
++				ey = c->y + c->h + 2 * c->bw;
++				nh = MAX(ey - ev.xmotion.y - 2 * c->bw, 1);
++			} else
++				nh = MAX(ev.xmotion.y - c->y - 2 * c->bw + 1, 1);
+ 			if (c->mon->wx + nw >= selmon->wx && c->mon->wx + nw <= selmon->wx + selmon->ww
+ 			&& c->mon->wy + nh >= selmon->wy && c->mon->wy + nh <= selmon->wy + selmon->wh)
+ 			{
+@@ -1718,12 +1737,22 @@ resizemouse(const Arg *arg)
+ 				&& (abs(nw - c->w) > snap || abs(nh - c->h) > snap))
+ 					togglefloating(NULL);
+ 			}
+-			if (!selmon->lt[selmon->sellt]->arrange || c->isfloating)
+-				resize(c, c->x, c->y, nw, nh, 1);
++			if (!selmon->lt[selmon->sellt]->arrange || c->isfloating) {
++				/* apply size hints first, then move the dragged
++				 * edge so the opposite corner does not drift */
++				nx = c->x;
++				ny = c->y;
++				applysizehints(c, &nx, &ny, &nw, &nh, 1);
++				nx = left ? ex - nw - 2 * c->bw : c->x;
++				ny = top ? ey - nh - 2 * c->bw : c->y;
++				if (nx != c->x || ny != c->y || nw != c->w || nh != c->h)
++					resizeclient(c, nx, ny, nw, nh);
++			}
+ 			break;
+ 		}
+ 	} while (ev.type != ButtonRelease);
+-	XWarpPointer(dpy, None, c->win, 0, 0, 0, 0, c->w + c->bw - 1, c->h + c->bw - 1);
++	XWarpPointer(dpy, None, c->win, 0, 0, 0, 0,
++		left ? -c->bw : c->w + c->bw - 1, top ? -c->bw : c->h + c->bw - 1);
+ 	XUngrabPointer(dpy, CurrentTime);
+ 	while (XCheckMaskEvent(dpy, EnterWindowMask, &ev));
+ 	if ((m = recttomon(c->x, c->y, c->w, c->h)) != selmon) {
+@@ -1991,7 +2020,10 @@ setup(void)
+ 	dwmatom[DwmMons] = XInternAtom(dpy, "_DWM_RESTART_MONITORS", False);
+ 	/* init cursors */
+ 	cursor[CurNormal] = drw_cur_create(drw, XC_left_ptr);
+-	cursor[CurResize] = drw_cur_create(drw, XC_sizing);
++	cursor[CurResize] = drw_cur_create(drw, XC_bottom_right_corner);
++	cursor[CurResizeTL] = drw_cur_create(drw, XC_top_left_corner);
++	cursor[CurResizeTR] = drw_cur_create(drw, XC_top_right_corner);
++	cursor[CurResizeBL] = drw_cur_create(drw, XC_bottom_left_corner);
+ 	cursor[CurMove] = drw_cur_create(drw, XC_fleur);
+ 	/* init appearance */
+ 	scheme = ecalloc(LENGTH(colors), sizeof(Clr *));

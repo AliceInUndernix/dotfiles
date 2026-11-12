@@ -33,5 +33,11 @@ applied in this order; dwm.c already has them, so don't apply again):
                      focused window); the new dwm reads them back. `dwm
                      restart` sends a _DWM_RESTART ClientMessage to the
                      root window. patches/dwm-restart-local.diff.
+  resizecorners      local, the idea of the suckless resizecorners patch:
+                     Mod+right-drag resizes from the corner nearest the
+                     pointer and the opposite corner stays put (size
+                     hints applied before the edge moves, so terminals
+                     don't drift). Corner cursors for each direction.
+                     patches/dwm-resizecorners-local.diff.
 Their config.def.h hunks are not applied (config.def.h stays upstream);
 the settings are in config.h.

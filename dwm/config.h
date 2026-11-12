@@ -26,10 +26,12 @@ static const Rule rules[] = {
 	 *	WM_NAME(STRING) = title
 	 */
 	/* class      instance    title       tags mask     isfloating   monitor */
-	/* No rules yet. C needs at least one entry: this one matches every
-	 * window and changes nothing. Example rule (IceCat on tag 2):
+	/* Plover and btop open on tag 9 (x/xinitrc starts both). btop runs
+	 * in an st started with -c btop, so only that st matches, not every
+	 * terminal. Another rule, e.g. IceCat on tag 2:
 	 * { "Icecat",   NULL,       NULL,       1 << 1,       0,           -1 }, */
-	{ NULL,       NULL,       NULL,       0,            0,           -1 },
+	{ "Plover",   NULL,       NULL,       1 << 8,       0,           -1 },
+	{ "btop",     NULL,       NULL,       1 << 8,       0,           -1 },
 };
 
 /* layout(s) */

@@ -40,6 +40,11 @@ while $STATUS_CLOCK; do
 	sleep $((60 - $(date +%S | sed 's/^0//')))
 done &
 
+# Started at login; dwm's rules (dwm/config.h) put them on tag 9.
+# dwm restart keeps them where they are, they only start again with X.
+plover &
+st -c btop -e btop &
+
 # dwm runs until you quit it (Mod+Shift+q), which ends the X session.
 # dwm restart (or Mod+Shift+r) restarts dwm in place, as the same
 # process, so this needs no loop and X keeps running.
