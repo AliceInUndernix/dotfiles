@@ -44,6 +44,16 @@ applied in this order; dwm.c already has them, so don't apply again):
                      monitor and floats it. Mod+j/k, tag changes and
                      closing windows never focus it; click it to. Kept
                      over dwm restart. patches/dwm-sticky-local.diff.
+  snapwindows        local: moving (Mod+left-drag) and resizing
+                     (Mod+right-drag) snap window edges to the edges of
+                     other visible windows when they come within winsnap
+                     pixels (config.h, 16), as upstream snaps to the
+                     screen edges within snap (32). Each edge snaps to
+                     both sides of a window it is level with: top to
+                     bottom, left to left, and so on. Resizing also snaps
+                     the dragged edges to the screen edges, and a snapped
+                     edge ignores size increments so it lines up exactly.
+                     patches/dwm-snapwindows-local.diff.
   startrules         local: startrules[] in config.h, rules that place
                      only the first matching window in the first minute
                      after login (for apps x/xinitrc starts).
