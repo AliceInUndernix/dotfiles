@@ -2,7 +2,7 @@
  * ==========================================================================
  *  ZSA Moonlander (rev B), keymap "canary"
  *  Canary letter layout, built on optozorax's keymap libraries.
- *  Version 93 (the latest; earlier drafts were numbered 75..92).
+ *  Version 94 (the latest; earlier drafts were numbered 75..93).
  * ==========================================================================
  *
  * HOW TO READ THIS FILE
@@ -818,17 +818,20 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      * top      --   F21  F22  F23  F24  --   --       --   --   --   --   --   --   --
      * home     --   F11  F12  F13  F14  F15  --       --   F16  F17  F18  F19  F20  --
      * bottom   --   F1   F2   F3   F4   F5                 F6   F7   F8   F9   F10  --
-     * lower    __   held __   __   __   __          __   __   __   __   __   __
+     * lower    __   held __   __   __   __          __   C+A  __   __   __   __
      * thumbs                  __   __   --          __   __   __
      *   (__ = same as layer 0, so Ctrl, Alt and Shift still work for
      *    Ctrl+F5 and the like; -- = nothing, so no letter can slip in)
+     *
+     *   C+A   hold: Ctrl+Alt together, on the DWM key (version 94). With
+     *         it, F1..F12 switch the Linux console (Ctrl+Alt+F2 = tty2).
      */
     [L_FKEYS] = LAYOUT_moonlander(
         KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,        KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,
         KC_NO,   KC_F21,  KC_F22,  KC_F23,  KC_F24,  KC_NO,   KC_NO,        KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,
         KC_NO,   KC_F11,  KC_F12,  KC_F13,  KC_F14,  KC_F15,  KC_NO,        KC_NO,   KC_F16,  KC_F17,  KC_F18,  KC_F19,  KC_F20,  KC_NO,
         KC_NO,   KC_F1,   KC_F2,   KC_F3,   KC_F4,   KC_F5,                 KC_F6,   KC_F7,   KC_F8,   KC_F9,   KC_F10,  KC_NO,
-        _______, _______, _______, _______, _______, _______,               _______, _______, _______, _______, _______, _______,
+        _______, _______, _______, _______, _______, _______,               _______, CTAL_0,  _______, _______, _______, _______,
                                             _______, _______, KC_NO,        _______, _______, _______
     ),
 };
