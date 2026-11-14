@@ -106,7 +106,7 @@ as `␣`, and `›` / `‹` mark lines that go past the screen edge.
 ## Grammar check (optional)
 
 The config uses Harper, an offline grammar checker, when it's installed.
-Install it once with Rust's cargo (as root: `emerge dev-lang/rust-bin`
+Install it once with Rust's cargo (as root: `emerge -qv dev-lang/rust-bin`
 if you don't have cargo):
 
     cargo install harper-ls --locked
@@ -240,11 +240,11 @@ release 2.0.0 cannot do it), Sioyek also highlights each book word green
 (right) or red (wrong or skipped). Installing sioyek-9999 on Gentoo:
 
     # as root (su -):
-    emerge --ask app-eselect/eselect-repository
+    emerge -qv app-eselect/eselect-repository
     eselect repository enable guru
     emaint sync -r guru
     echo "app-text/sioyek **" > /etc/portage/package.accept_keywords/sioyek
-    emerge --ask --update --deep --changed-use @world =app-text/sioyek-9999
+    emerge -qv --update --deep --changed-use @world =app-text/sioyek-9999
 
 Text already in the file is not sent to Sioyek the first time unless you
 start with `:TypeTrack!`. Colours are Sioyek's highlight types `g` and

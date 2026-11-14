@@ -9,7 +9,8 @@
 #   ./install.sh               link configs and build/install everything
 #   ./install.sh nvim dwm      only the parts named
 #   ./install.sh --deps        first install build dependencies with the
-#                              distro's package manager (asks before it does)
+#                              distro's package manager (emerge -qv)
+#   ./install.sh -a --deps     the same, but emerge asks first (-qva)
 #   ./install.sh --list        show the parts
 #   BROWSERS=yes ./install.sh --deps   also build IceCat and Chromium
 #                              (Gentoo; from source, takes hours)
@@ -116,9 +117,10 @@ deps() (
 		enable_overlay() {
 			portageq get_repo_path / "$1" >/dev/null 2>&1 && return
 			say "enable  overlay $1"
-			emerge -qav --noreplace app-eselect/eselect-repository
+			emerge $EMERGE_OPTS --noreplace \
+				app-eselect/eselect-repository
 			eselect repository enable "$1"
-			emerge --sync "$1"
+			emerge $EMERGE_OPTS --sync "$1"
 		}
 		# wiremix and the two browsers are only in testing (~amd64): allow
 		# just those three, in a file of our own. Sioyek is the live
@@ -141,8 +143,10 @@ deps() (
 		# PipeWire first, on its own: wiremix needs its libpipewire-0.3 to
 		# build, but its ebuild doesn't say so, so emerge may build wiremix
 		# before PipeWire is in.
-		emerge -qav --noreplace media-video/pipewire media-video/wireplumber
-		emerge -qav --noreplace x11-libs/libX11 x11-libs/libXft \
+		emerge $EMERGE_OPTS --noreplace media-video/pipewire \
+			media-video/wireplumber
+		emerge $EMERGE_OPTS --noreplace x11-libs/libX11 \
+			x11-libs/libXft \
 			x11-libs/libXinerama x11-libs/libXrandr x11-libs/libXext \
 			media-libs/fontconfig media-libs/freetype \
 			dev-vcs/git net-misc/curl net-misc/wget app-editors/neovim app-misc/tmux \
@@ -213,24 +217,27 @@ deps() (
 			b=${d%/}; b=${b##*/}
 			qt="$qt dev-qt/${b%%-[0-9]*}"
 		done
-		[ -z "$qt" ] || emerge -qav --oneshot --update --deep --changed-use $qt
+		[ -z "$qt" ] || emerge $EMERGE_OPTS --oneshot --update --deep \
+			--changed-use $qt
 		# The development branch also uses Qt Quick Widgets and Qt
 		# TextToSpeech, which GURU's ebuild doesn't list yet (qmake:
 		# "Unknown module(s) in QT: quickwidgets texttospeech",
 		# 2026-11-12), so they go in first, on their own.
-		emerge -qav --update --deep --changed-use --noreplace \
+		emerge $EMERGE_OPTS --update --deep --changed-use --noreplace \
 			dev-qt/qtdeclarative dev-qt/qtspeech
 		had_sioyek=no
 		portageq has_version / app-text/sioyek && had_sioyek=yes
-		emerge -qav --update --deep --changed-use app-text/sioyek
-		[ "$had_sioyek" = no ] || emerge -qav --oneshot app-text/sioyek
+		emerge $EMERGE_OPTS --update --deep --changed-use \
+			app-text/sioyek
+		[ "$had_sioyek" = no ] ||
+			emerge $EMERGE_OPTS --oneshot app-text/sioyek
 		# Browsers only with BROWSERS=yes: both build from source and take
 		# hours. They are not in the main tree: IceCat comes from
 		# parona-overlay, ungoogled-chromium from pf4public.
 		if [ "${BROWSERS:-no}" = yes ]; then
 			enable_overlay parona-overlay
 			enable_overlay pf4public
-			emerge -qav --noreplace www-client/icecat \
+			emerge $EMERGE_OPTS --noreplace www-client/icecat \
 				www-client/ungoogled-chromium
 		else
 			say "skip    IceCat and Chromium (BROWSERS=yes ./install.sh --deps builds them)"
@@ -814,11 +821,13 @@ dotterel_dicts() {
 
 want_deps=no
 parts=
+EMERGE_OPTS=-qv  # -a: -qva, so emerge asks before it builds anything
 for arg in "$@"; do
 	case $arg in
 	--deps) want_deps=yes ;;
+	-a) EMERGE_OPTS=-qva ;;
 	--list) echo "$PARTS"; exit 0 ;;
-	-h|--help) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	-h|--help) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 	-*) die "unknown option: $arg" ;;
 	*)
 		case " $PARTS " in *" $arg "*) ;; *) die "unknown part: $arg (see --list)" ;; esac

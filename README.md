@@ -65,9 +65,10 @@ su -c '~user/dotfiles/install.sh --deps'    # first time: dependencies, then eve
 ~/dotfiles/install.sh                       # later: everything that doesn't need root
 ```
 
-`--deps` uses the system's package manager and asks first (emerge --ask on
-Gentoo; apt, pacman, dnf and xbps are also known). Leave it out when the
-dependencies are already there:
+`--deps` uses the system's package manager (emerge -qv on Gentoo; apt,
+pacman, dnf and xbps are also known). Add `-a` to make emerge ask first
+(-qva): `su -c '~user/dotfiles/install.sh -a --deps'`. Leave `--deps` out
+when the dependencies are already there:
 
 ```sh
 ./install.sh            # everything
