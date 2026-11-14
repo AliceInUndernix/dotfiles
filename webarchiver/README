@@ -1,0 +1,129 @@
+WebArchiver - archive whole websites with wget
+=============================================
+
+WebArchiver copies websites into a directory you can browse offline. It runs
+wget for the downloading and does the rest itself:
+
+- several sites at the same time, with a live progress table
+- every file stored once: copies, symlinks and aliases on a site are
+  detected (big files before they are downloaded, the rest by content)
+- links rewritten to relative paths, so a site works from any directory
+- safe to stop at any time (Ctrl+C, network loss, crash) and to resume
+- updates download only what changed and keep the old versions; any old
+  version can be rebuilt
+- an archive page (archive.html) and a history page, plain XHTML 1.0
+  without scripts
+- a request pace that slows down by itself when a site asks for it
+
+
+Build and install
+-----------------
+
+In the dotfiles, install.sh builds it and installs it into ~/.system/bin
+(no root needed):
+
+    ~/dotfiles/install.sh webarchiver
+
+By hand:
+
+    make
+    make PREFIX=$HOME/.system install
+
+The result is one statically linked program. It needs wget at run time.
+Defaults are in config.h (made from config.def.h on the first build);
+edit config.h and run the install again to change them.
+
+
+Use
+---
+
+    webarchiver LINKS_FILE [ARCHIVE_DIR]
+
+        LINKS_FILE has one link per line; empty lines and text after # are
+        ignored. Links without http:// or https:// are tried over https
+        first, then over plain http. Each domain gets its own directory:
+            webarchiver sites.txt          ->  ./example.org/
+            webarchiver sites.txt archive  ->  ./archive/example.org/
+        Run the same command again at any time: unfinished sites are
+        resumed, finished ones are updated.
+
+    webarchiver ARCHIVE_DIR
+
+        Update the whole archive: every link ever archived into it
+        (remembered in ARCHIVE_DIR/.archive-sites.txt).
+
+    webarchiver --versions [DOMAIN] [ARCHIVE_DIR]
+
+        List the saved versions; with DOMAIN also the changed files.
+
+    webarchiver --restore DOMAIN VERSION [ARCHIVE_DIR]
+
+        Rebuild an old version as ARCHIVE_DIR/DOMAIN@VERSION/.
+        VERSION is a number from --versions (1 = oldest), an id, or
+        "latest".
+
+    webarchiver --serve [ARCHIVE_DIR] [PORT]
+
+        Show the archive page at http://127.0.0.1:8800/ with a form to add
+        websites and a button to update everything. It listens on this
+        computer only.
+
+
+Progress table
+--------------
+
+    downloading / resuming / updating   wget fetches pages and images
+    big files                           videos, PDFs, archives: checked
+                                        for duplicates, then downloaded
+    linking                             duplicates, links, version
+    ready / updated                     done (updated = it existed before)
+    partial                             stopped early; run again to finish
+    failed                              see .archive-logs/<site>.linking.log
+
+
+Settings (environment variables, defaults in config.h)
+------------------------------------------------------
+
+    JOBS=10            sites downloaded at the same time
+    WAIT=1             a fixed pause between requests to one site; without
+                       it the pace is automatic (WAIT_STEPS)
+    WAIT_STEPS="0.2 1 3"
+    REFRESH=2          seconds between progress updates
+    BIG_EXT=mp4,...    extensions treated as big files
+    UA=...             browser identity sent to sites
+    IPV4=1             use IPv4 only
+
+
+Files in an archive directory
+-----------------------------
+
+    <domain>/              the current version of each site
+    <domain>@<version>/    rebuilt old versions (delete them any time)
+    archive.html           the archive page
+    history.html           every version of every site
+    .archive-sites.txt     the links of the archive
+    .archive-history/      old copies of changed files, stored once, and
+                           the file list of each version
+    .archive-state/        flat text files: url maps, hashes, state
+    .archive-logs/         the newest wget log and linking log per site
+
+All data files are plain text, one "key<TAB>value" record per line.
+
+
+Privacy
+-------
+
+WebArchiver sends nothing anywhere except the requests wget makes to the
+sites you list. Sites see a common browser identity (UA in config.h)
+instead of a program name. Times in the pages and version names are UTC,
+so they do not reveal a time zone. The pages contain no absolute paths,
+so they do not reveal your user name if you share them.
+
+Everything it keeps stays in the archive directory: wget's list of sites
+that asked for https (HSTS) is in .archive-state/wget-hsts instead of
+~/.wget-hsts, and only the newest run's wget log is kept for each site.
+Deleting the archive directory deletes every trace.
+
+Plain http requests show which pages you fetch to anyone on the network;
+that is why https is tried first. To hide your address from the sites,
+run it through Tor, for example "torsocks webarchiver ARCHIVE_DIR".

@@ -31,7 +31,7 @@ umask 022
 
 DOTFILES=$(cd "$(dirname "$0")" && pwd)
 STAMP=$(date +%Y%m%d-%H%M%S)
-PARTS="ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock moonlander plover"
+PARTS="ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver moonlander plover"
 
 say()  { printf '==> %s\n' "$*"; }
 warn() { printf '!!  %s\n' "$*" >&2; }
@@ -145,7 +145,7 @@ deps() (
 		emerge -qav --noreplace x11-libs/libX11 x11-libs/libXft \
 			x11-libs/libXinerama x11-libs/libXrandr x11-libs/libXext \
 			media-libs/fontconfig media-libs/freetype \
-			dev-vcs/git net-misc/curl app-editors/neovim app-misc/tmux \
+			dev-vcs/git net-misc/curl net-misc/wget app-editors/neovim app-misc/tmux \
 			x11-apps/xinit x11-apps/xsetroot x11-apps/xset x11-misc/xss-lock \
 			app-shells/ksh media-fonts/liberation-fonts \
 			x11-misc/xclip x11-misc/xsel \
@@ -238,25 +238,25 @@ deps() (
 	*debian*|*ubuntu*)
 		apt-get install build-essential pkg-config libx11-dev \
 			libxft-dev libxinerama-dev libxrandr-dev libxext-dev \
-			libfontconfig-dev libfreetype-dev git curl neovim tmux \
+			libfontconfig-dev libfreetype-dev git curl wget neovim tmux \
 			xinit x11-xserver-utils xss-lock ksh fonts-liberation xclip xsel \
 			flameshot mpv yt-dlp pipewire wireplumber wiremix btop \
 			python3-venv dfu-util ;;
 	*arch*)
 		pacman -S --needed base-devel libx11 libxft libxinerama \
-			libxrandr libxext fontconfig freetype2 git curl neovim tmux dfu-util \
+			libxrandr libxext fontconfig freetype2 git curl wget neovim tmux dfu-util \
 			xorg-xinit xorg-xsetroot xorg-xset xss-lock ttf-liberation xclip xsel \
 			flameshot mpv yt-dlp pipewire wireplumber wiremix btop ;;
 	*fedora*|*rhel*)
 		dnf install gcc make pkgconf-pkg-config libX11-devel \
 			libXft-devel libXinerama-devel libXrandr-devel libXext-devel \
-			fontconfig-devel freetype-devel git curl neovim tmux dfu-util \
+			fontconfig-devel freetype-devel git curl wget neovim tmux dfu-util \
 			xorg-x11-xinit xsetroot xset xss-lock ksh liberation-mono-fonts \
 			liberation-sans-fonts xclip xsel flameshot mpv yt-dlp pipewire wireplumber btop ;;
 	*void*)
 		xbps-install base-devel pkg-config libX11-devel libXft-devel \
 			libXinerama-devel libXrandr-devel libXext-devel \
-			fontconfig-devel freetype-devel git curl neovim tmux dfu-util \
+			fontconfig-devel freetype-devel git curl wget neovim tmux dfu-util \
 			xinit xsetroot xset xss-lock mksh liberation-fonts-ttf xclip xsel \
 			flameshot mpv yt-dlp pipewire wireplumber btop ;;
 	*)
@@ -451,6 +451,14 @@ build_suckless() {
 }
 
 install_dwm()   { build_suckless dwm; }
+
+# WebArchiver: archives whole websites (see webarchiver/README). Built
+# and installed like the suckless tools; it runs wget for every download.
+install_webarchiver() {
+	build_suckless webarchiver
+	command -v wget >/dev/null 2>&1 ||
+		warn "wget is not installed; webarchiver needs it (su -c '$DOTFILES/install.sh --deps')"
+}
 # st's font2 falls back to Symbols Nerd Font Mono for icons and symbols
 # Liberation Mono lacks. It goes into your home folder, nothing needs root;
 # delete the folder and run ./install.sh st again to get the newest release.
@@ -838,7 +846,7 @@ if [ -z "${INSTALL_LOG:-}" ]; then
 		echo "shell    $(getent passwd "$USER_NAME" 2>/dev/null | cut -d: -f7), sh is $(readlink -f /bin/sh)"
 		echo "PATH     $PATH"
 		found= missing=
-		for t in ksh mksh git make cc pkg-config curl python3 nvim tmux xclip xsel \
+		for t in ksh mksh git make cc pkg-config curl wget python3 nvim tmux xclip xsel \
 			mpv flameshot sioyek wiremix btop feh dfu-util fc-cache loginctl; do
 			if command -v "$t" >/dev/null 2>&1; then found="$found $t"; else missing="$missing $t"; fi
 		done

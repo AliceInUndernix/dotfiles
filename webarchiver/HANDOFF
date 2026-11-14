@@ -1,0 +1,239 @@
+WebArchiver - handoff notes
+===========================
+
+These notes carry the work over to a new conversation. The owner's general
+rules (tech rules, C subset, coding style, privacy, values) are already
+known there and are not repeated here.
+
+
+1. What the owner wants
+-----------------------
+
+A small program that archives whole websites for offline use and keeps
+them up to date, with version history. In detail:
+
+Downloading
+- Input: a text file with one link per line (blank lines and text after
+  "#" ignored). A link without a scheme is tried over https first and
+  falls back to plain http if https does not answer (privacy was chosen
+  over the "no HTTPS" rule here, by the owner).
+- Each domain gets its own directory, named after the domain (lower case,
+  ":port" becomes "_port"). Without an archive directory argument the
+  domain directories go into the current directory; with one, into it.
+  Several links on one domain share its directory.
+- Giving only a directory updates the whole archive (every link ever
+  archived there is remembered in .archive-sites.txt).
+- Up to 10 domains download at the same time; links of one domain run one
+  after another.
+- Request pace is automatic: 0.2 s between requests; if a site pushes back
+  (HTTP 429, 503, or requests needing retries) it drops to 1 s, then 3 s,
+  and stays slow for 7 days. A finer ladder (0.1, 0.2, ...) was rejected
+  on purpose: repeatedly hitting a site's limit risks IP bans.
+
+Storage
+- Every file stored once. Big files (video, audio, archives, disk images,
+  PDF) are identified before downloading (same URL after redirects, same
+  ETag + size, or same size + first 1 MiB) so a file reachable under
+  several paths/symlinks is downloaded once. Other files are compared by
+  SHA-256 after download. Duplicates are deleted; no symlinks anywhere;
+  links are pointed at the kept copy.
+- Every link and CSS path is rewritten to a relative path, so a site
+  directory works from any location. Links like "/css/x.css" and
+  "http://site/page" must become relative. Links to pages that were not
+  archived point to the live site. CSS/JS/images/fonts that wget missed
+  (e.g. on a CDN) are fetched afterwards into _external/<host>/.
+- Each domain directory is self-contained (duplicates are removed within
+  a domain; a big file already downloaded for another domain is copied,
+  not downloaded again).
+
+Safety
+- Stopping is safe at any time: Ctrl+C, network loss, crash, power cut.
+  Ctrl+C stops the downloads, then still fixes links for what was
+  downloaded; a second Ctrl+C quits at once. The next run repairs
+  half-written files and continues without downloading finished files
+  again. No wget process may be left running after a stop.
+
+Updates and versions
+- An update re-fetches every page (HTML/CSS) and compares it, so a change
+  on any page is found even if the home page did not change. Other files
+  are downloaded only if they changed.
+- The domain directory is always the current version. When an update
+  replaces a file, only the old copy is kept, once, in .archive-history/
+  (content-addressed). Any old version can be rebuilt as a normal
+  directory DOMAIN@VERSION/. The owner did not want index.v2.html style
+  copies next to the current files.
+
+Progress display (terminal)
+- One header line with counts, then one line per domain: name, step,
+  amount downloaded, files downloaded this run, speed in files per minute
+  (one unit only - the owner asked for a single, simple figure), elapsed
+  time, errors, and the current URL or status. Colours on a terminal,
+  plain text otherwise.
+- Steps: downloading / resuming / updating (with the pace, e.g. "@0.2s"),
+  big files (with file name and percentage), linking, ready (new or
+  resumed site) / updated (existing site), partial (stopped early),
+  failed (with the log to read). Queued sites say whether they are new,
+  unfinished or will be updated. The final status of a site shows what
+  changed and the site's total size in the archive, so an update that
+  downloaded only 2 files is clearly not a site with only 2 files.
+- Each site is linked and its version saved as soon as its own download
+  finishes, while others keep downloading.
+
+Pages (no JavaScript, XHTML 1.0 Transitional, CSS1/CSS2)
+- archive.html in the archive directory: every site with status, files,
+  size, number of versions, last saved time, links to the site, its
+  history and the live original; totals at the top. Relative links only.
+- history.html: every version of every site with the changed files.
+- --serve: a tiny local web server (127.0.0.1 only, one process, no
+  threads) showing the same page plus a form to add links, a button to
+  update the whole archive, a progress page and "Rebuild" buttons for
+  old versions.
+
+Privacy
+- A common browser User-Agent instead of a program name; times in UTC;
+  no absolute paths (which contain the user name) in pages; nothing is
+  sent anywhere except wget's requests to the listed sites; no telemetry.
+- Tor: optional and not wanted for now ("torsocks webarchiver ..." works).
+
+Other decisions by the owner
+- Name: WebArchiver (one word), command: webarchiver.
+- No license for now.
+- Plain C, suckless-like: readable first, minimal second. Functionality
+  and look must stay as they are.
+- Must run on 64-bit; the Eee PC reference means "be efficient", not
+  "the owner uses a 32-bit machine". The code is portable to 32-bit too.
+- The owner is not a programmer yet: explain technical choices simply.
+- The owner will start with a fresh archive, so no converter for data of
+  the earlier script versions is needed (it was removed).
+
+
+2. What was done
+----------------
+
+History: it started as a bash script around wget, grew an embedded Python
+helper (dedupe, links, versions, pages, server) and was then rewritten in
+plain C89 (+ long long) as WebArchiver, keeping behaviour and look.
+
+The program still uses wget for every network access (pages, probing big
+files with "wget -S --spider", partial reads with a Range header, and
+resumable downloads with "wget --continue"). It has no network or TLS code
+of its own. Allowed by the owner's scope rule: wget is a tool.
+
+Files
+  main.c     command line, settings, preparing each domain (repair after a
+             crash, choosing new/resume/update, snapshot), the parallel
+             loop (fork per domain), progress table, Ctrl+C handling
+  fetch.c    running wget: worker per domain, https->http choice, pace and
+             push-back detection, probing and downloading big files
+  finish.c   after wget: repair of interrupted runs, duplicate removal,
+             big files, link rewriting (byte-level scanners for
+             attributes, srcset, url(), @import, URLs in scripts),
+             versions, everything run per domain as "finalize"
+  store.c    data files: state, url map, indexes, hash cache, versions,
+             history objects
+  page.c     archive.html, history.html, --versions, --restore
+  serve.c    --serve (select() loop, forms, static files; hidden
+             .archive-* files are not served)
+  url.c      URL join/split (RFC 3986 style), percent coding, paths
+  util.c     buffers, string lists, hash table, files, time (UTC), sort
+  sha256.c   SHA-256
+  config.def.h  defaults (copied to config.h by make)
+
+Archive directory layout
+  <domain>/              current version of each site
+  <domain>@<id>/         rebuilt old versions
+  archive.html, history.html
+  .archive-sites.txt     all links of the archive
+  .archive-logs/<d>.log          wget log (appended, read for url->file)
+  .archive-logs/<d>.linking.log  finishing log of the last run
+  .archive-state/<d>.state       complete, phase (idle/crawl/finalize),
+                                 mode, log_offset
+  .archive-state/<d>.pre         snapshot "size mtime" before wget ran
+  .archive-state/<d>.urlmap      url -> file
+  .archive-state/<d>.index       url:/sha:/etag:/head: keys -> file,
+                                 dup:<file> -> kept copy
+  .archive-state/<d>.hashes      file -> "sha size mtime"
+  .archive-state/<d>.base/.wait/.slow/.status/.rc  small run files
+  .archive-state/global.index    big-file keys across domains (mkdir
+                                 used as a lock)
+  .archive-state/STOP            exists while stopping
+  .archive-history/<d>/<id>.files    file -> "sha size" of a version
+  .archive-history/<d>/<id>.changes  "+/~/-<TAB>file"
+  .archive-history/<d>/<id>.info     partial 0/1
+  .archive-history/objects/xx/<sha>  old copies, stored once
+  .archive-lock/pid              one run per archive at a time
+All own data is flat text, "key<TAB>value" per line.
+
+How the safety works
+- Before wget runs, a snapshot of every file's size and time is saved and
+  the phase becomes "crawl". wget runs with --no-clobber (new/resume) or
+  --timestamping --no-if-modified-since --backups=1 (update; the old copy
+  becomes name.1). After a stop or crash, files that changed since the
+  snapshot but are not logged as finished by wget are deleted (or their
+  .1 backup is put back). Backups needed by old versions move into
+  history objects. Page mtimes are kept when links are rewritten, so
+  wget's update check stays correct; on update all page mtimes are set to
+  0 so every page is fetched again.
+
+Testing done (all against local test servers, on 64-bit x86-64)
+- duplicates, symlinked videos, root-relative and CDN links, srcset,
+  CSS url() and fonts, malformed links, windows-1251 file names
+- Ctrl+C (no wget left), resume, kill -9 during an update and recovery
+- update, versions, restore giving back the exact original files
+- pace stepping 0.2 -> 1 -> 3 s against a rate-limiting server
+- https -> http fallback; big-file progress and continued download
+- --serve form, refresh while running, Rebuild button, one thread
+- generated pages are well-formed XHTML; build has no warnings with
+  -std=c89 -pedantic -Wno-long-long -Wall -Wextra, static binary; no
+  line over 79 columns; ASCII only
+
+Library functions used beyond the owner's allowed list: opendir/readdir/
+closedir, sigaction, socket/bind/listen/accept/select/setsockopt, ioctl,
+utimensat, readlink, pipe, dup2, fork/waitpid/kill, getcwd, fsync. All are
+system-call wrappers; the owner accepted keeping them because replacing
+them would fit the rules worse. htons/htonl, isatty and signal() were
+replaced.
+
+
+3. Open points
+--------------
+
+- The C version has not yet been run against real websites. The earlier
+  script version was, on the owner's list of sites, which found real
+  problems (sites that only answer plain http, pages in windows-1251,
+  malformed links); all of them are handled and tested locally now.
+- Pages removed from a site stay in the current version (wget never
+  deletes files).
+- Links that scripts build at run time are not rewritten.
+- An update re-checks every file with a HEAD request at the site's pace;
+  large sites take a while to update even when little changed.
+- Duplicate links rewritten in pages that did not change on the server can
+  point at a copy that later changed (rare; fixed by the next update of
+  that page).
+- No license chosen yet.
+- Possible later work: shrinking the code, an optional Tor setting.
+
+
+4. Added to the dotfiles
+------------------------
+
+The program now lives in dotfiles/webarchiver/ and install.sh builds it
+like the suckless tools: "./install.sh webarchiver" installs it into
+~/.system/bin, no root needed. config.h is kept in the repo (as for dwm).
+Changes made for the newer version of the owner's rules:
+
+- Build: x86-64 is the default target (the machine it is built on); the
+  Eee PC stays a yardstick for speed and memory only. Linked static and
+  stripped (-s), so the binary carries no symbol names or build paths.
+- Privacy: wget is given --hsts-file inside .archive-state, so it no
+  longer writes ~/.wget-hsts (a list of every https site visited, kept
+  outside the archive). Each site's wget log is started fresh when a new
+  run begins after a finished one (the url map already holds what it
+  found), and web-run.log keeps only the newest --serve run, so logs
+  hold only what is needed and do not grow forever.
+- Efficiency: the push-back check (every 2 s per downloading site) read
+  the whole wget log each time; it now reads only the lines added since
+  the last check.
+- Keyboard: the --serve page has access keys (a: links box, u: update
+  everything, h: all versions, p: progress) and says so on the page.
+- Code was already 4-space indented, no tabs, under 80 columns.
