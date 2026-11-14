@@ -757,7 +757,10 @@ local function show_ghost(buf, tr, typed, cur_b, next_b)
     b = b + 1
   end
   while #rows > M.opts.ghost_lines + 1 do table.remove(rows) end
-  local opts = { right_gravity = false }
+  -- right_gravity = true: Neovim draws inline text of such a mark after
+  -- the cursor standing on its column (with false the cursor ended up
+  -- after the ghost text, reported 2026-11-14).
+  local opts = { right_gravity = true }
   if rows[1].text ~= "" then
     opts.virt_text = { { rows[1].text, "TypeTrackGhost" } }
     opts.virt_text_pos = INLINE and "inline" or "eol"
