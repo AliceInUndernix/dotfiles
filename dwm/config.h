@@ -3,6 +3,7 @@
 /* appearance */
 static const unsigned int borderpx  = 1;        /* border pixel of windows */
 static const unsigned int snap      = 32;       /* snap pixel */
+static const unsigned int winsnap   = 16;       /* snap to other windows' edges, pixel */
 static const int showbar            = 0;        /* 0 means no bar (Mod+b shows it) */
 static const int topbar             = 1;        /* 0 means bottom bar */
 static const char *fonts[]          = { "Liberation Mono:pixelsize=25" };
