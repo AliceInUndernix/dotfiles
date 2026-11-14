@@ -6,7 +6,7 @@
 -- Files in this config:
 --   init.lua            this file (options, keys, Harper, Claude proofread,
 --                       Plover unicode fix, plugins, prose mode)
---   lua/typetrack.lua   optional: marks typed words green/red in Sioyek
+--   lua/typetrack.lua   optional: type a book over grey ghost text, mistakes red
 -- See README.md for the user guide and HANDOFF.md for history, decisions
 -- and open issues (read HANDOFF.md first if you are picking this work up).
 --
@@ -14,7 +14,8 @@
 --   Space w  save                 Space p  prose mode on/off  (:Prose)
 --   Space s  spell check on/off   Space g  proofread file with Claude
 --   Space f  apply Claude's fix   Space G  clear Claude marks (:ClaudeLog)
---   Space t  book typing tracker on/off (:TypeTrack, :TypeTrackStop)
+--   Space t  book typing check on/off   Space T  same with ghost text
+--            (:TypeTrack, :TypeGhost, :TypeChapter, :TypeTrackStop)
 --   Space Space  open a file (fuzzy)    Space /  search text in files
 --   Space b  pick an open buffer      Space h  search help pages
 --   Esc      clear search highlight
@@ -370,28 +371,41 @@ vim.api.nvim_create_autocmd("FileType", {
 })
 
 ---------------------------------------------------------------------------
--- Type a book along in Sioyek (the code is in lua/typetrack.lua)
---   :TypeTrack ~/books/book.epub   underlines words you typed wrong
---                                  green (typed right) or red (wrong)
---   Space t                        start/stop for this file (remembers
---                                  which book goes with it)
---   :TypeTrack! book.epub          also mark text already in the file
+-- Type a book out (the code is in lua/typetrack.lua)
+--   :TypeGhost ~/books/book.epub   ghost mode: the book's next words are
+--                                  grey after the cursor; type over them
+--   :TypeTrack ~/books/book.epub   check mode: same checks, no ghosts
+--   Both: wrong letters and extra words red, skipped words and letters
+--   shown crossed out in red.
+--   :TypeChapter                   pick the chapter you start at
+--   Space t / Space T              check / ghost mode on/off for this file
+--                                  (remembers the book and the place)
 --   :TypeTrackStop                 stop
 --   Optional: if lua/typetrack.lua is missing, none of this is defined
---   and the rest of the config works as usual. Needs a development
---   Sioyek (see the top of typetrack.lua).
+--   and the rest of the config works as usual. Needs unzip (EPUB) or
+--   pdftotext (PDF).
 ---------------------------------------------------------------------------
 local has_typetrack, typetrack = pcall(require, "typetrack")
 if has_typetrack then
   vim.api.nvim_create_user_command("TypeTrack", function(a)
-    typetrack.start(a.args, a.bang)
+    typetrack.start(a.args, a.bang, "check")
   end, { nargs = "?", bang = true, complete = "file" })
+  vim.api.nvim_create_user_command("TypeGhost", function(a)
+    typetrack.start(a.args, a.bang, "ghost")
+  end, { nargs = "?", bang = true, complete = "file" })
+  vim.api.nvim_create_user_command("TypeChapter", function()
+    typetrack.choose_start()
+  end, {})
   vim.api.nvim_create_user_command("TypeTrackStop", function()
     typetrack.stop()
   end, {})
-  map("n", "<leader>t", function()
-    if typetrack.is_on() then typetrack.stop() else typetrack.start() end
-  end, { desc = "Mark typed words in Sioyek" })
+  local function toggle(mode)
+    return function()
+      if typetrack.mode() == mode then typetrack.stop() else typetrack.start(nil, false, mode) end
+    end
+  end
+  map("n", "<leader>t", toggle("check"), { desc = "Check typing against the book" })
+  map("n", "<leader>T", toggle("ghost"), { desc = "Type over the book's ghost text" })
 end
 
 ---------------------------------------------------------------------------

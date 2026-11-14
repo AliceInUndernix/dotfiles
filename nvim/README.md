@@ -1,7 +1,7 @@
 # Minimal Neovim config
 
 Two files: `nvim/init.lua` (the config) and `nvim/lua/typetrack.lua`
-(optional, the Sioyek typing tracker). It keeps Neovim close to default
+(optional, the book typing checker). It keeps Neovim close to default
 and adds a colour column at 80, line numbers, a dark theme and a prose
 mode for writing with stenography.
 
@@ -37,7 +37,8 @@ mention `nvim-config/nvim` now mean this `nvim/` folder.
 | `Space g` | Proofread the file with Claude |
 | `Space f` | Apply Claude's fix under the cursor |
 | `Space G` | Clear Claude's marks (`:ClaudeLog` shows its last answer) |
-| `Space t` | Sioyek typing tracker on and off |
+| `Space t` | Book typing check on and off |
+| `Space T` | Book typing with ghost text on and off |
 | `Space w` | Save |
 | `Space Space` | Open a file by typing part of its name |
 | `Space /` | Search text in all files (needs `rg` or a git folder) |
@@ -175,20 +176,68 @@ the line stays so it's ready later. The steno side lives in Plover:
 
 The tutor expects Emily's modifiers before its modifier lessons.
 
-## Type a book along in Sioyek (optional)
+## Type a book out (optional)
 
-Open a book in Sioyek, type it out in a text file in Neovim, and Sioyek
-marks each word of the book: **green** when you typed it right, **red**
-when you typed it wrong or skipped it. Wrong words are also underlined in
-your text file. It needs `lua/typetrack.lua` (see Install).
+Read a book in Sioyek and type it out in a text file in Neovim. Neovim
+checks every word against the book as you type. It needs
+`lua/typetrack.lua` (see Install) and `unzip` for EPUB books, or
+`pdftotext` (`app-text/poppler`) for PDFs. Sioyek itself is not needed
+for the checking.
 
-You need:
+Two modes:
 
-- A **development** Sioyek (Gentoo GURU's `app-text/sioyek-9999`).
-  Release 2.0.0 cannot do it. Check with `sioyek --version`.
-- `unzip` for EPUB books, or `pdftotext` (`app-text/poppler`) for PDFs.
+- **Ghost mode** (`:TypeGhost ~/books/book.epub`, then `Space T`): the
+  book's next words are shown in grey after your cursor, with a few more
+  lines below. They are not in your file and cannot be edited; you type
+  over them. Paragraph breaks in the book show as a blank line.
+- **Check mode** (`:TypeTrack ~/books/book.epub`, then `Space t`): the
+  same checks, no grey text.
 
-Installing sioyek-9999 on Gentoo:
+What you see in both:
+
+- A wrong letter turns **red** (underlined) as soon as you type it.
+- A word that is not in the book turns red.
+- A letter you left out appears crossed out in red where it belongs.
+- A book word you **skipped** appears crossed out in red, in front of
+  the word you typed after it. A skipped word shows up once you have
+  typed the word after it (until then it looks like a typo).
+
+Choosing where to start: the first time, a list of the book's chapters
+(from its table of contents) opens, so you can pick "Chapter 1" and skip
+the cover, copyright page and foreword. `:TypeChapter` opens the list
+again. For a PDF the list has one entry per page. In check mode the list
+also offers "Find the place from what I type", which looks for your
+first five words in the book. If the file already has text, it lines up
+from where that text is in the chosen chapter; otherwise what you type
+next starts at the chapter.
+
+The book, the mode and the start are remembered per text file, so
+`Space t` / `Space T` carry on next time. `:TypeTrackStop` stops it.
+
+How it judges: capitals and punctuation count; curly and straight
+quotes, `...` and `…`, and `--` and `—` count as the same. To check
+letters only, add `require("typetrack").opts.strict = false` to
+init.lua. The ghost lines wrap at 'textwidth' (80 in prose files).
+
+Colours: the groups are `TypeTrackBad`, `TypeTrackMissing` and
+`TypeTrackGhost` (grey, like comments). For example
+`vim.api.nvim_set_hl(0, "TypeTrackGhost", { fg = "#5f5f5f" })`.
+
+Good to know:
+
+- Ghost text sits in front of the cursor at the end of the file, so
+  type at the end; fixing an earlier word works as usual.
+- Ghost text needs Neovim 0.10 or newer to sit in the line (0.11 is
+  fine). It was tested headless; how it looks while typing in st has not
+  been seen yet, so tell Claude if it lines up wrong.
+
+### Marking the words in Sioyek too (off)
+
+The old Sioyek part is still there but off, because Sioyek's development
+version crashed doing it. With `require("typetrack").opts.sioyek_marks =
+true` and a **development** Sioyek (Gentoo GURU's `app-text/sioyek-9999`;
+release 2.0.0 cannot do it), Sioyek also highlights each book word green
+(right) or red (wrong or skipped). Installing sioyek-9999 on Gentoo:
 
     sudo emerge --ask app-eselect/eselect-repository
     sudo eselect repository enable guru
@@ -196,36 +245,8 @@ Installing sioyek-9999 on Gentoo:
     echo "app-text/sioyek **" | sudo tee /etc/portage/package.accept_keywords/sioyek
     sudo emerge --ask --update --deep --changed-use @world =app-text/sioyek-9999
 
-(The `@world` part avoids the Qt 6.11.2 / 6.11.3 slot conflict.) Back
-up `~/.system/share/sioyek` first, and move an old `~/.system/bin/sioyek`
-out of the way so the new one starts.
-
-Use: save your text file, then `:TypeTrack ~/books/book.epub` (Tab
-completes the path). After that `Space t` starts and stops it, and it
-remembers which book goes with the file and how far it has marked, so
-it carries on next time. Text already in the file is left alone the
-first time unless you use `:TypeTrack!`. `:TypeTrackStop` stops it.
-
-How it judges: it finds where your first words are in the book and
-then follows along word by word. Capitals and punctuation count; curly
-and straight quotes, and `--` and `—`, count as the same. It waits two
-words (or a 1.5 second pause) before judging, so a quick steno
-correction is not marked red.
-
-Colours: Sioyek's highlight types `g` and `r`. To change them, add to
-`~/.config/sioyek/prefs_user.config`, for example:
-
-    highlight_color_g 0.30 0.80 0.35
-    highlight_color_r 0.95 0.25 0.25
-
-Good to know:
-
-- This has not been tried with a real Sioyek yet, so the first run may
-  need fixing.
-- Keep the Sioyek window open (not minimised). It scrolls along with
-  your typing, and it doesn't take the keyboard away from Neovim.
-- Marks are real Sioyek highlights and stay in the book. A word fixed
-  after it was marked keeps its old colour in Sioyek (the underline in
-  Neovim does update). Delete highlights in Sioyek as usual.
-- Changing the EPUB font size in Sioyek moves the text, so old marks
-  may no longer sit on the right words.
+Text already in the file is not sent to Sioyek the first time unless you
+start with `:TypeTrack!`. Colours are Sioyek's highlight types `g` and
+`r` (`highlight_color_g 0.30 0.80 0.35` in
+`~/.config/sioyek/prefs_user.config`). Marks are real Sioyek highlights
+and stay in the book; this has never been tried with a real Sioyek.

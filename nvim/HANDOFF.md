@@ -15,7 +15,7 @@ nvim/
   HANDOFF.md            this file
   README.md             user guide: install, keys, every feature
   init.lua              the config
-  lua/typetrack.lua     Sioyek tracker
+  lua/typetrack.lua     book typing checker (ghost/check modes)
 ```
 
 ## The user and their setup
@@ -54,24 +54,26 @@ nvim/
 | plover-vim | only plover-vim-tutor help pages installed; user is NOT using plover-vim yet (doesn't want to learn Emily's modifiers) but wants the line kept | `:help plover-vim-tutorial` opened in a test |
 | Em dash etc. from Plover arrived as "2014" | insert-mode `<C-S-u>` expr map reads hex digits and inserts the character; st sends Ctrl+Shift+U as CSI u, tmux has extended-keys on | key tested reaching Neovim in st and st+tmux; real Plover symbol not confirmed |
 | System clipboard | `clipboard=unnamedplus`; xclip and xsel installed by `install.sh --deps` | not confirmed |
-| Mark typed words green/red in Sioyek | lua/typetrack.lua, `:TypeTrack`, `Space t` | Neovim side tested; never run against Sioyek |
+| Mark typed words green/red in Sioyek | lua/typetrack.lua, `:TypeTrack`, `Space t` | Neovim side tested; never run against Sioyek; Sioyek part now off (crashed) |
+| Skipped words were never flagged; ghost mode (grey book text to type over, wrong letters red) and check mode (no ghosts); letter-by-letter and word-by-word; skip front matter (2026-11-14) | typetrack.lua rewritten around align() + char_diff(); `:TypeGhost`/`Space T`, `:TypeTrack`/`Space t`, `:TypeChapter` (TOC picker) | tested headless on Neovim 0.9.5 only; inline ghosts not seen in a real terminal. Her request ended at "skip chapters if": asked what she meant |
 
 ## Open issues (pick these up first)
 
-1. **Sioyek tracker has never run against Sioyek.** It needs the
+1. **Ghost mode not yet seen in a real terminal** (inline virt text, Neovim 0.10+). Ask how it looks and whether skipped words are flagged right.
+2. **Sioyek tracker has never run against Sioyek** (now off by default). It needs the
    development Sioyek (`select_current_search_match` command), not 2.0.0
    or sioyek3-alpha0. `install.sh --deps` now builds it on Gentoo
    (GURU's `sioyek-9999`, newest commit each run, with `--update --deep`
    for the earlier Qt slot conflict), and `install.sh sioyek` moves the
    hand-installed `~/.system/bin/sioyek` (2.0.0) aside after backing up
    `~/.system/share/sioyek`. Not yet run on her machine.
-2. **Plover unicode fix: terminal side done.** st and tmux now pass
+3. **Plover unicode fix: terminal side done.** st and tmux now pass
    Ctrl+Shift+U to Neovim (tested). Not yet confirmed with Plover itself;
    if digits still appear, check that st and tmux were rebuilt/reloaded.
-3. **Claude proofreading accuracy.** After the prompt was tightened, it
+4. **Claude proofreading accuracy.** After the prompt was tightened, it
    has not been re-tested. `:ClaudeLog` shows the raw answer; ask the
    user to paste it if marks look wrong.
-4. **init.lua itself has not been run by Claude** (only the Ctrl+Shift+U
+5. **init.lua itself has not been run by Claude** (only the Ctrl+Shift+U
    key test, on an older Neovim). The user's reports confirm the rest.
    Ask for `:messages` output if anything errors on start.
 
@@ -81,7 +83,7 @@ nvim/
 - Keep everything that must work without plugins above the plugin
   section in init.lua: the file `return`s early if zen-mode or pencil
   fail to download.
-- Leader is Space. Taken: w, p, s, g, f, G, t, Space, /, b, h.
+- Leader is Space. Taken: w, p, s, g, f, G, t, T, Space, /, b, h.
 - nvim-treesitter is on the frozen `master` branch because the user is on
   Neovim 0.11; `main` needs 0.12. Highlighting only: the user does not
   want LSP completion or error checking for code (asked 2026-11-12).
