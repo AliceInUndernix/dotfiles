@@ -20,6 +20,7 @@ script puts the whole configuration back after a fresh install.
 | `mpv/` | Video player: resume, Habamax OSD, vim seek keys | `~/.config/mpv` (symlink) |
 | `sioyek/` | Book/PDF reader in Habamax colours (TypeTrack's green/red too); on Gentoo `--deps` builds its development version (GURU `sioyek-9999`) | `~/.config/sioyek/prefs_user.config` (symlink) |
 | (no directory) | Claude Code, Anthropic's coding assistant in the terminal: on Gentoo `--deps` emerges `dev-util/claude-code` (their official binary, updated with emerge, its self-updater off); the `claude` part moves an old `~/.system/bin/claude` from their curl installer aside | `/opt/bin/claude` |
+| `claude-desktop/` | Claude desktop app (beta; Chat, Claude Code, Cowork). Anthropic only makes a `.deb` for Debian/Ubuntu, so the part unpacks the newest one, checked against their signing key, into your home; its libraries come from `--deps`. Each run updates it | `~/.system/claude-desktop/app`, `~/.system/bin/claude-desktop` |
 | `wiremix/` | PipeWire mixer in the terminal (like pavucontrol), Habamax theme | `~/.config/wiremix/wiremix.toml` (symlink) |
 | `btop/` | btop with a Habamax theme and vim keys | `~/.config/btop/` files (symlinks) |
 | `xdg/` | Download, Pictures, Music etc. all set to `~` (no capitalised folders) | `~/.config/user-dirs.dirs`, `user-dirs.conf` (symlinks) |
@@ -71,7 +72,7 @@ dependencies are already there:
 
 ```sh
 ./install.sh            # everything
-./install.sh nvim       # only some parts: ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh claude dwm st dmenu slock moonlander plover
+./install.sh nvim       # only some parts: ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh claude claude-desktop dwm st dmenu slock moonlander plover
 ./install.sh --list     # the part names
 INSTALL_USER=alice ./install.sh    # as root, if the repo folder belongs to root
 ```

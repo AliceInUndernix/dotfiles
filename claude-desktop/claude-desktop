@@ -1,0 +1,21 @@
+#!/bin/sh
+# Start the Claude desktop app from ~/.system/claude-desktop (install.sh
+# unpacks Anthropic's .deb there and links this to
+# ~/.system/bin/claude-desktop).
+#
+# Chromium's sandbox: on Debian the package's chrome-sandbox is root's and
+# setuid. Unpacked in your home it can't be, so the app uses the kernel's
+# user namespaces instead, which Gentoo's kernels allow by default. It is
+# never started with --no-sandbox.
+app=$HOME/.system/claude-desktop/app/usr/lib/claude-desktop/claude-desktop
+if [ ! -x "$app" ]; then
+	echo "claude-desktop: not installed: ~/dotfiles/install.sh claude-desktop" >&2
+	exit 1
+fi
+n=$(cat /proc/sys/user/max_user_namespaces 2>/dev/null || echo 1)
+if [ "$n" = 0 ]; then
+	echo "claude-desktop: user namespaces are off (user.max_user_namespaces=0)," >&2
+	echo "which its sandbox needs: turn on CONFIG_USER_NS in the kernel/sysctl" >&2
+	exit 1
+fi
+exec "$app" "$@"

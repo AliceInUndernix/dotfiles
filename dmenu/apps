@@ -6,5 +6,8 @@
 icecat	icecat
 chromium	chromium-browser
 
+# Claude
+claude	claude-desktop
+
 # Steno
 plover	plover

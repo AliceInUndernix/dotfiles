@@ -31,7 +31,7 @@ umask 022
 
 DOTFILES=$(cd "$(dirname "$0")" && pwd)
 STAMP=$(date +%Y%m%d-%H%M%S)
-PARTS="ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh claude dwm st dmenu slock moonlander plover"
+PARTS="ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh claude claude-desktop dwm st dmenu slock moonlander plover"
 
 say()  { printf '==> %s\n' "$*"; }
 warn() { printf '!!  %s\n' "$*" >&2; }
@@ -255,6 +255,14 @@ deps() (
 			fi
 		fi
 		[ "$claude_ok" = no ] || emerge -qav --update dev-util/claude-code
+		# The Claude desktop app (part claude-desktop) is Anthropic's .deb,
+		# unpacked in your home; these are the libraries its package
+		# "Depends" on (GTK 3, NSS, libsecret, ...), from Gentoo. binutils
+		# (ar) and gnupg unpack and check the .deb.
+		emerge -qav --noreplace x11-libs/gtk+:3 x11-libs/libnotify dev-libs/nss \
+			x11-misc/xdg-utils app-accessibility/at-spi2-core x11-libs/libdrm \
+			media-libs/mesa x11-libs/libxcb app-crypt/libsecret x11-libs/libXtst \
+			sys-apps/util-linux sys-devel/binutils app-crypt/gnupg
 		# Browsers only with BROWSERS=yes: both build from source and take
 		# hours. They are not in the main tree: IceCat comes from
 		# parona-overlay, ungoogled-chromium from pf4public.
@@ -478,6 +486,96 @@ install_claude() {
 	else
 		warn "Claude Code is not installed (on Gentoo: su -c '$DOTFILES/install.sh --deps')"
 	fi
+}
+
+# Claude desktop app (beta), Anthropic's own build. They only make it for
+# Debian and Ubuntu (a .deb in their apt repository), and Gentoo has no
+# package, so it is unpacked into your home folder, like Plover, and
+# nothing needs root:
+#   ~/.system/claude-desktop/app    what the .deb would put in /
+#   ~/.system/bin/claude-desktop    starts it (claude-desktop/claude-desktop)
+# Each run checks the repository for a newer version. Every download is
+# checked the way apt does: the repository's index is signed with
+# Anthropic's key (fingerprint below), the index gives the .deb's SHA256.
+CD_DIR=$SYSTEM/claude-desktop
+CD_REPO=https://downloads.claude.ai/claude-desktop/apt/stable
+CD_KEY=https://downloads.claude.ai/claude-desktop/key.asc
+CD_FPR=31DDDE24DDFAB679F42D7BD2BAA929FF1A7ECACE
+
+install_claude_desktop() {
+	if [ "$AS_ROOT" = yes ]; then
+		su -s /bin/sh "$USER_NAME" -c "INSTALL_LOG='$INSTALL_LOG' '$DOTFILES/install.sh' claude-desktop"
+		return
+	fi
+	for t in curl gpg ar sha256sum; do
+		command -v $t >/dev/null 2>&1 || die "$t not found (claude-desktop needs curl, gnupg, binutils' ar)"
+	done
+	case $(uname -m) in
+	x86_64) a=amd64 ;; aarch64) a=arm64 ;;
+	*) warn "no Claude desktop app for $(uname -m)"; return 0 ;;
+	esac
+	mkdir -p "$CD_DIR" "$SYSBIN"
+	tmp=$CD_DIR/download.tmp
+	rm -rf "$tmp" && mkdir "$tmp"
+
+	# 1. The signed index: Anthropic's key, its fingerprint checked, in a
+	# keyring of its own (yours is not touched), then InRelease's signature.
+	curl -fsSL -o "$tmp/key.asc" "$CD_KEY" &&
+		curl -fsSL -o "$tmp/InRelease" "$CD_REPO/dists/stable/InRelease" || {
+		rm -rf "$tmp"
+		[ -x "$CD_DIR/app/usr/lib/claude-desktop/claude-desktop" ] || die "could not reach $CD_REPO"
+		warn "could not check for a newer Claude desktop app; keeping the one there"
+		return 0
+	}
+	export GNUPGHOME="$tmp/gnupg"
+	mkdir -m 700 "$GNUPGHOME"
+	gpg -q --import "$tmp/key.asc" 2>/dev/null
+	gpg --with-colons --fingerprint 2>/dev/null | grep -q "^fpr:::::::::$CD_FPR:" ||
+		{ rm -rf "$tmp"; die "Anthropic's signing key is not $CD_FPR: not installing"; }
+	gpg -q --status-fd 1 --verify "$tmp/InRelease" 2>/dev/null | grep -q "VALIDSIG $CD_FPR" ||
+		{ rm -rf "$tmp"; die "the repository index is not signed by Anthropic's key: not installing"; }
+	gpg -q --decrypt "$tmp/InRelease" > "$tmp/Release" 2>/dev/null
+	gpgconf --kill all 2>/dev/null || :
+	unset GNUPGHOME
+
+	# 2. Packages (its SHA256 from the signed Release), then the newest
+	# claude-desktop in it, with the .deb's SHA256.
+	p=main/binary-$a/Packages
+	want=$(awk -v p="$p" '/^SHA256:/ { s = 1; next } /^[^ ]/ { s = 0 } s && $3 == p { print $1 }' "$tmp/Release")
+	curl -fsSL -o "$tmp/Packages" "$CD_REPO/dists/stable/$p"
+	[ -n "$want" ] && [ "$(sha256sum < "$tmp/Packages" | cut -d' ' -f1)" = "$want" ] ||
+		{ rm -rf "$tmp"; die "the package list does not match the signed index: not installing"; }
+	set -- $(awk '/^Package:/ { p = $2 } p == "claude-desktop" && /^Version:/ { v = $2 }
+		p == "claude-desktop" && /^Filename:/ { f = $2 } p == "claude-desktop" && /^SHA256:/ { h = $2 }
+		/^$/ { if (f) print v, f, h; p = f = "" } END { if (f) print v, f, h }' "$tmp/Packages" |
+		sort -V | tail -n 1)
+	[ $# -eq 3 ] || { rm -rf "$tmp"; die "no claude-desktop for $a in $CD_REPO"; }
+	ver=$1 file=$2 sum=$3
+
+	# 3. The .deb, unpacked into app/ (replaced whole, only when new).
+	app=$CD_DIR/app
+	if [ "$(cat "$app/.release" 2>/dev/null)" = "$ver" ]; then
+		say "ok      Claude desktop $ver"
+	else
+		say "fetch   claude-desktop $ver"
+		curl -fL -o "$tmp/claude-desktop.deb" "$CD_REPO/$file"
+		[ "$(sha256sum < "$tmp/claude-desktop.deb" | cut -d' ' -f1)" = "$sum" ] ||
+			{ rm -rf "$tmp"; die "claude-desktop $ver does not match its SHA256: not installing"; }
+		( cd "$tmp" && ar x claude-desktop.deb )
+		mkdir "$tmp/app"
+		# As you, tar drops the setuid bit of chrome-sandbox (see
+		# claude-desktop/claude-desktop for the sandbox it uses instead).
+		tar -xf "$tmp"/data.tar.* -C "$tmp/app"
+		echo "$ver" > "$tmp/app/.release"
+		rm -rf "$app" && mv "$tmp/app" "$app"
+		say "install Claude desktop $ver -> $app"
+	fi
+	rm -rf "$tmp"
+	link "$DOTFILES/claude-desktop/claude-desktop" "$SYSBIN/claude-desktop"
+	# It keeps your sign-in in a keyring (the Secret Service: GNOME
+	# Keyring, KeePassXC, ...); without one you sign in at every start.
+	command -v gnome-keyring-daemon >/dev/null 2>&1 || command -v keepassxc >/dev/null 2>&1 ||
+		warn "no keyring found: the Claude desktop app will ask you to sign in at every start"
 }
 
 install_wiremix() {
@@ -898,7 +996,7 @@ if [ -z "${INSTALL_LOG:-}" ]; then
 		echo "PATH     $PATH"
 		found= missing=
 		for t in ksh mksh git make cc pkg-config curl python3 nvim tmux xclip xsel \
-			mpv flameshot sioyek wiremix btop feh claude dfu-util fc-cache loginctl; do
+			mpv flameshot sioyek wiremix btop feh claude claude-desktop dfu-util fc-cache loginctl; do
 			if command -v "$t" >/dev/null 2>&1; then found="$found $t"; else missing="$missing $t"; fi
 		done
 		echo "found   $found"
@@ -1014,7 +1112,7 @@ for f in "$SYSBIN"/*; do
 	esac
 done
 
-for p in $parts; do say "part    $p ($(date +%H:%M:%S))"; "install_$p"; done
+for p in $parts; do say "part    $p ($(date +%H:%M:%S))"; "install_$(echo "$p" | tr - _)"; done
 # A root run leaves files of root's behind where programs it ran wrote
 # their caches and state (fc-cache, pip, nvim): they belong to the user,
 # or the user's programs can't update them. slock stays root's.
