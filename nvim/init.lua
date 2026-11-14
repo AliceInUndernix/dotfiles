@@ -31,6 +31,11 @@
 -- confirmed by the user: the tightened Claude prompt, and a full Plover
 -- symbol typed for real.
 
+-- Keep the compiled form of every Lua file Neovim loads (this file, the
+-- plugins) in ~/.system/cache/nvim/luac, so starting does not compile
+-- them again. A file that changed is compiled again by itself.
+vim.loader.enable()
+
 vim.g.mapleader = " "          -- Space is the leader key
 
 ---------------------------------------------------------------------------
@@ -463,15 +468,22 @@ plugin("Josiah-tan/plover-vim-tutor")
 -- branch needs 0.12). After moving to Neovim 0.12, switch to "main".
 -- After updating the plugin, run :TSUpdate to rebuild the parsers.
 if plugin("nvim-treesitter/nvim-treesitter", "master") then
+  -- Only the parsers that are not built yet are handed to the plugin:
+  -- asking it about all of them took about 3 ms of every start.
+  local missing = {}
+  for _, lang in ipairs({
+    "bash", "c", "cpp", "css", "csv", "diff", "dockerfile",
+    "git_config", "git_rebase", "gitcommit", "gitignore", "go", "html",
+    "ini", "java", "javascript", "jsdoc", "json", "lua", "luadoc",
+    "make", "markdown", "markdown_inline", "perl", "php", "python",
+    "query", "regex", "ruby", "rust", "sql", "toml", "tsx",
+    "typescript", "vim", "vimdoc", "xml", "yaml",
+  }) do
+    local so = pack_dir .. "nvim-treesitter/parser/" .. lang .. ".so"
+    if not vim.uv.fs_stat(so) then missing[#missing + 1] = lang end
+  end
   require("nvim-treesitter.configs").setup({
-    ensure_installed = {
-      "bash", "c", "cpp", "css", "csv", "diff", "dockerfile",
-      "git_config", "git_rebase", "gitcommit", "gitignore", "go", "html",
-      "ini", "java", "javascript", "jsdoc", "json", "lua", "luadoc",
-      "make", "markdown", "markdown_inline", "perl", "php", "python",
-      "query", "regex", "ruby", "rust", "sql", "toml", "tsx",
-      "typescript", "vim", "vimdoc", "xml", "yaml",
-    },
+    ensure_installed = missing,
     -- No auto_install: a parser for another language is downloaded and
     -- built only when you ask for it with :TSInstall <language>.
     auto_install = false,

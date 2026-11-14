@@ -27,7 +27,10 @@
 --   2. On every change, the buffer's words are lined up with the book
 --      from the chosen start: align() walks along word by word; where a
 --      word does not match it weighs "typo", "skipped book words" and
---      "extra typed word" by how well the next few words agree.
+--      "extra typed word" by how well the next few words agree. Only
+--      the part from the first changed line on is read, lined up and
+--      drawn again (process()), so a key costs the same on page 300 as
+--      on page 1.
 --   3. Each typed word is compared letter by letter with its book word
 --      (char_diff): wrong or extra letters are red, missing letters are
 --      shown crossed out in red. The word you are still typing is
@@ -148,17 +151,22 @@ local function words_of(text)
   return list
 end
 
--- Words of the buffer, with where each one sits.
+-- Adds the words of one buffer line to list, with where each one sits.
+local function line_words(list, line, lnum)
+  for s, _, e in blank_dashes(line):gmatch("()(%S+)()") do
+    local w = make_word(line:sub(s, e - 1))
+    if w then
+      w.lnum, w.col, w.ecol = lnum, s - 1, e - 1
+      list[#list + 1] = w
+    end
+  end
+end
+
+-- Words of the buffer.
 local function buffer_words(buf)
   local list = {}
   for lnum, line in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
-    for s, _, e in blank_dashes(line):gmatch("()(%S+)()") do
-      local w = make_word(line:sub(s, e - 1))
-      if w then
-        w.lnum, w.col, w.ecol = lnum - 1, s - 1, e - 1
-        list[#list + 1] = w
-      end
-    end
+    line_words(list, line, lnum - 1)
   end
   return list
 end
@@ -484,8 +492,13 @@ end
 --   missed    { {t =, b =}, ... }: book word b was skipped, before typed t
 --   cur_b     book word for the word being typed (nil if none)
 --   next_b    the book word that comes next
-local function align(book, typed, b, t, done)
-  local match, missed = {}, {}
+-- With `keep` (process() below) it carries on an earlier run: match and
+-- missed are keep's, and every time it reaches the first word of a line
+-- it notes where it is in keep.ck_t, ck_b and ck_m (typed word, book
+-- word, number of missed), so a later run can start from there.
+local function align(book, typed, b, t, done, keep)
+  local match, missed = keep and keep.match or {}, keep and keep.missed or {}
+  local ck_t = keep and keep.ck_t
   local function eq(ti, bi)
     return ti <= done and typed[ti] and book[bi] and typed[ti].key == book[bi].key
   end
@@ -503,6 +516,11 @@ local function align(book, typed, b, t, done)
   end
 
   while t <= done and b <= #book do
+    if ck_t and ck_t[#ck_t] ~= t
+        and (t == 1 or typed[t].lnum ~= typed[t - 1].lnum) then
+      local n = #ck_t + 1
+      ck_t[n], keep.ck_b[n], keep.ck_m[n] = t, b, #missed
+    end
     if eq(t, b) then
       match[t] = b
       b, t = b + 1, t + 1
@@ -788,10 +806,33 @@ end
 -- Following a buffer
 ---------------------------------------------------------------------------
 
+-- The typed words. With the buffer attached (start() does that), only
+-- the lines from the first changed one on are read again: tr.dirty is
+-- that line (nil: nothing changed), tr.count[i] the number of words
+-- before line i. Returns the words and how many of them are as before.
+local function typed_words(buf, tr)
+  if not tr.attached or not tr.typed then
+    tr.typed, tr.count, tr.dirty = {}, { 0 }, 0
+  end
+  local typed, count = tr.typed, tr.count
+  local from = tr.dirty
+  if not from then return typed, #typed end
+  tr.dirty = nil
+  if from > #count - 1 then from = #count - 1 end
+  local same_words = count[from + 1]
+  for i = #typed, same_words + 1, -1 do typed[i] = nil end
+  for i = #count, from + 2, -1 do count[i] = nil end
+  for i, line in ipairs(vim.api.nvim_buf_get_lines(buf, from, -1, false)) do
+    line_words(typed, line, from + i - 1)
+    count[from + i + 1] = #typed
+  end
+  return typed, same_words
+end
+
 local function process(buf, flush)
   local tr = tracked[buf]
   if not tr or not vim.api.nvim_buf_is_valid(buf) then return end
-  local typed = buffer_words(buf)
+  local typed, same_words = typed_words(buf, tr)
   local book = tr.book
 
   if not tr.start then
@@ -801,9 +842,12 @@ local function process(buf, flush)
       remember(buf)
     end
   end
-  vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
   local s = tr.start
-  if not s then return end
+  if not s then
+    tr.al = nil
+    vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+    return
+  end
   local t0 = math.min(s.t, #typed + 1)
 
   -- The last word is still being typed while nothing comes after it.
@@ -818,21 +862,48 @@ local function process(buf, flush)
   end
   if done < t0 - 1 then done = t0 - 1 end
 
-  local match, missed, cur_b, next_b = align(book, typed, s.b, t0, done)
+  -- Carry on from the last run where that gives the same result: align()
+  -- looks at most 6 typed words ahead, so a place it noted (the first
+  -- word of a line) can be used again if the 6 words after it are as
+  -- they were and were finished words then and now. Everything from
+  -- that line on is lined up and drawn again; the lines before it keep
+  -- their marks. Without such a place, all of it is done again.
+  local al = tr.al
+  if not (al and al.book == book and al.b0 == s.b and al.t0 == t0
+      and al.strict == M.opts.strict) then
+    al = { book = book, b0 = s.b, t0 = t0, strict = M.opts.strict,
+           match = {}, missed = {}, ck_t = {}, ck_b = {}, ck_m = {},
+           done = -1, ntyped = 0 }
+    tr.al = al
+  end
+  local limit = math.min(same_words, al.done, done)
+  local n = #al.ck_t
+  while n > 0 and al.ck_t[n] + 6 > limit do n = n - 1 end
+  local b, t, first_missed = s.b, t0, 1
+  if n > 0 then b, t, first_missed = al.ck_b[n], al.ck_t[n], al.ck_m[n] + 1 end
+  for i = #al.ck_t, math.max(n, 1), -1 do
+    al.ck_t[i], al.ck_b[i], al.ck_m[i] = nil, nil, nil
+  end
+  for i = #al.missed, first_missed, -1 do al.missed[i] = nil end
+  for i = al.ntyped, #typed + 1, -1 do al.match[i] = nil end
+  vim.api.nvim_buf_clear_namespace(buf, ns, n > 0 and typed[t].lnum or 0, -1)
 
-  for t = t0, #typed do
-    local bi = match[t]
-    show_word(buf, typed[t], bi and book[bi] or nil, t > done)
+  local match, missed, cur_b, next_b = align(book, typed, b, t, done, al)
+  al.done, al.ntyped = done, #typed
+
+  for q = t, #typed do
+    local bi = match[q]
+    show_word(buf, typed[q], bi and book[bi] or nil, q > done)
   end
   -- Skipped book words, crossed out, where they should have been.
-  local k = 1
+  local k = first_missed
   while missed[k] do
-    local t, words = missed[k].t, {}
-    while missed[k] and missed[k].t == t do
+    local at, words = missed[k].t, {}
+    while missed[k] and missed[k].t == at do
       words[#words + 1] = book[missed[k].b].raw
       k = k + 1
     end
-    virtual(buf, typed[t].lnum, typed[t].col, table.concat(words, " ") .. " ",
+    virtual(buf, typed[at].lnum, typed[at].col, table.concat(words, " ") .. " ",
       "TypeTrackMissing")
   end
   if tr.ghost then show_ghost(buf, tr, typed, cur_b, next_b) end
@@ -968,6 +1039,19 @@ function M.start(book_path, all, mode)
                skip_existing = upto == 0 and not all and #buffer_words(buf) > 3 }
   tracked[buf] = tr
   remember(buf)
+
+  -- Neovim reports the first line of every change, so process() reads
+  -- and checks again only from there (typed_words). If the buffer is
+  -- reloaded or the report stops, everything is read again as before.
+  tr.dirty = 0
+  tr.attached = vim.api.nvim_buf_attach(buf, false, {
+    on_lines = function(_, _, _, first)
+      if tracked[buf] ~= tr then return true end
+      if not tr.dirty or first < tr.dirty then tr.dirty = first end
+    end,
+    on_reload = function() tr.dirty = 0 end,
+    on_detach = function() tr.attached = false end,
+  })
 
   tr.group = vim.api.nvim_create_augroup("TypeTrack" .. buf, { clear = true })
   vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
