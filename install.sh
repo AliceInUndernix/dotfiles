@@ -31,7 +31,7 @@ umask 022
 
 DOTFILES=$(cd "$(dirname "$0")" && pwd)
 STAMP=$(date +%Y%m%d-%H%M%S)
-PARTS="ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock moonlander plover"
+PARTS="ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh claude dwm st dmenu slock moonlander plover"
 
 say()  { printf '==> %s\n' "$*"; }
 warn() { printf '!!  %s\n' "$*" >&2; }
@@ -224,6 +224,37 @@ deps() (
 		portageq has_version / app-text/sioyek && had_sioyek=yes
 		emerge -qav --update --deep --changed-use app-text/sioyek
 		[ "$had_sioyek" = no ] || emerge -qav --oneshot app-text/sioyek
+		# Claude Code: Gentoo's own package (dev-util/claude-code, stable),
+		# so it updates with emerge like everything else. It is Anthropic's
+		# official native binary, the same one their curl | bash installer
+		# fetches, put in /opt/bin (on Gentoo's PATH), with a settings file
+		# in /etc/claude-code that turns its self-updater off and stops it
+		# copying itself into your home. It is closed source, so there is
+		# nothing to build. Its licence isn't a free one, so it is accepted
+		# for this one package; the ebuild also requires the CPU's AVX and
+		# AVX2 flags, set here for this package only when the CPU has them.
+		lc=/etc/portage/package.license
+		if [ -d "$lc" ] || [ ! -e "$lc" ]; then
+			mkdir -p "$lc"
+			lc=$lc/dotfiles
+		fi
+		if ! grep -qs "^dev-util/claude-code[[:space:]]" "$lc"; then
+			echo "dev-util/claude-code all-rights-reserved" >> "$lc"
+			say "license dev-util/claude-code all-rights-reserved -> $lc"
+		fi
+		claude_ok=yes
+		if [ "$arch" = amd64 ]; then
+			if grep -qw avx2 /proc/cpuinfo; then
+				if ! grep -qs "^dev-util/claude-code[[:space:]]" "$pu"; then
+					echo "dev-util/claude-code cpu_flags_x86_avx cpu_flags_x86_avx2" >> "$pu"
+					say "use     dev-util/claude-code cpu_flags_x86_avx cpu_flags_x86_avx2 -> $pu"
+				fi
+			else
+				claude_ok=no
+				warn "this CPU has no AVX2, which Claude Code's binary needs: skipping it"
+			fi
+		fi
+		[ "$claude_ok" = no ] || emerge -qav --update dev-util/claude-code
 		# Browsers only with BROWSERS=yes: both build from source and take
 		# hours. They are not in the main tree: IceCat comes from
 		# parona-overlay, ungoogled-chromium from pf4public.
@@ -418,6 +449,34 @@ install_sioyek() {
 		say "ok      sioyek ${sys:-$(command -v sioyek)}"
 	else
 		warn "sioyek is not installed (on Gentoo: su -c '$DOTFILES/install.sh --deps')"
+	fi
+}
+
+# Claude Code comes from the distro (on Gentoo: --deps emerges
+# dev-util/claude-code into /opt/bin). One that Anthropic's own installer
+# put in ~/.local/bin (moved to ~/.system/bin by this script, with its
+# versions in ~/.system/share/claude) would win over it in PATH and keep
+# updating itself, so once the system has one, the old one is moved aside.
+# Its versions folder is left where it is, never deleted. Your login and
+# settings (~/.claude, ~/.claude.json) are not touched.
+install_claude() {
+	sys=
+	for d in /opt/bin /usr/bin; do [ -x "$d/claude" ] && sys=$d/claude && break; done
+	if [ -n "$sys" ] && { [ -e "$SYSBIN/claude" ] || [ -L "$SYSBIN/claude" ]; }; then
+		mv "$SYSBIN/claude" "$SYSBIN/claude.old.$STAMP"
+		say "aside   $SYSBIN/claude -> claude.old.$STAMP ($sys is used now)"
+		[ ! -d "$DATA/claude" ] ||
+			say "note    $DATA/claude holds the old installer's versions; delete it when you like"
+	fi
+	if [ -n "$sys" ]; then
+		say "ok      claude $sys ($("$sys" --version 2>/dev/null | head -n 1))"
+		case ":$PATH:" in *":${sys%/*}:"*) ;; *)
+			warn "${sys%/*} is not in PATH: log in again (on Gentoo, env-update sets it)" ;;
+		esac
+	elif command -v claude >/dev/null 2>&1; then
+		say "ok      claude $(command -v claude)"
+	else
+		warn "Claude Code is not installed (on Gentoo: su -c '$DOTFILES/install.sh --deps')"
 	fi
 }
 
@@ -839,7 +898,7 @@ if [ -z "${INSTALL_LOG:-}" ]; then
 		echo "PATH     $PATH"
 		found= missing=
 		for t in ksh mksh git make cc pkg-config curl python3 nvim tmux xclip xsel \
-			mpv flameshot sioyek wiremix btop feh dfu-util fc-cache loginctl; do
+			mpv flameshot sioyek wiremix btop feh claude dfu-util fc-cache loginctl; do
 			if command -v "$t" >/dev/null 2>&1; then found="$found $t"; else missing="$missing $t"; fi
 		done
 		echo "found   $found"
