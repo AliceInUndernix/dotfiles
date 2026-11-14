@@ -1,6 +1,6 @@
 # Moonlander "canary" layout: handoff
 
-This archive lets a new Claude project pick up Alice's custom QMK layout for
+This archive lets a new Claude project pick up the owner's custom QMK layout for
 the **ZSA Moonlander rev B**. Start by reading `canary/keymap.c` from the top:
 its header comment explains every layer, the keycode rules and where the
 libraries come from. This file adds the background and the history.
@@ -94,11 +94,11 @@ suggest them again without asking:
 - **89:** dwm layer brought up to date with `dwm/config.h`: dmenu is
   Super+p, focus/master use h j k l (Shift+j/k moves the window), Super+`
   is the scratchpad, Enter is zoom and Shift+Enter the terminal. The
-  previous-tag key (Back) was removed: Alice doesn't use it. New keys:
+  previous-tag key (Back) was removed: the owner doesn't use it. New keys:
   master count (i/d), doubledeck (r), IceCat/Chromium (w), wiremix (a),
   btop (Escape), Flameshot (Print), lock (Super+Shift+l) and suspend
   (Super+Shift+s).
-- **90:** dwm layer laid out again by Alice, key by key: tags on
+- **90:** dwm layer laid out again by the owner, key by key: tags on
   the bottom row counted from the right (Tag1 right pinky, All left
   pinky), Shrk/Next/Prev/Grow on the red layer's arrow keys, Zoom left of
   them, layouts on the left top row, apps on the left home row. Kill only
@@ -129,15 +129,15 @@ suggest them again without asking:
 
 ## Open notes for the next project
 
-- The build target is `zsa/moonlander/revb:canary`: Alice's keyboard is
+- The build target is `zsa/moonlander/revb:canary`: the owner's keyboard is
   revision B. Until 2026-11-11 the script built `reva` by mistake; rev A
   firmware doesn't run on rev B (other bootloader, other flash address).
 - Version 90 compiles for revb with `./install.sh moonlander` (checked 2026-11-11,
-  ARM gcc 13.2, no warnings). Flashed on Alice's rev B and working
+  ARM gcc 13.2, no warnings). Flashed on the owner's rev B and working
   (2026-11-11).
 - Build with the pinned Arm GNU Toolchain 14.2 (install.sh does). Built
   with Gentoo's arm-none-eabi-gcc 16 the firmware froze after 3-4 key
-  presses on Alice's rev B; the same code built with gcc 13 works.
+  presses on the owner's rev B; the same code built with gcc 13 works.
 - If double letters come back, raise `DEBOUNCE` in `config.h` (15 or 20).
 - USB endpoints are used up exactly (keyboard 1 + mouse 1 + Oryx raw HID 2 +
   steno 3 = 7). Turning on NKRO, console, WebUSB or media keys needs one freed first.

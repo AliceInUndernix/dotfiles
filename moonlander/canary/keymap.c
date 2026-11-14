@@ -641,7 +641,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      * Holding the layer key also holds Super (see section 3), so every key
      * here is Super + that key, and each dwm shortcut is one key.
      * Matches dwm/config.h in the dotfiles (checked 2026-11-12).
-     * Layout chosen by Alice key by key (version 90). Version 91: Kill,
+     * Layout chosen by the owner key by key (version 90). Version 91: Kill,
      * Menu and the new Tmux key on the home row, Web moved up to the top row.
      * Version 92: Stky on the empty key left of TFlt.
      *

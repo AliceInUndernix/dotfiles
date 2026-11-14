@@ -61,7 +61,7 @@ everything it puts in that home belongs to that user, not to root.
 
 ```sh
 git clone https://github.com/AliceInUndernix/dotfiles ~/dotfiles
-su -c '~alice/dotfiles/install.sh --deps'   # first time: dependencies, then everything
+su -c '~user/dotfiles/install.sh --deps'    # first time: dependencies, then everything
 ~/dotfiles/install.sh                       # later: everything that doesn't need root
 ```
 
@@ -73,7 +73,7 @@ dependencies are already there:
 ./install.sh            # everything
 ./install.sh nvim       # only some parts: ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver moonlander plover
 ./install.sh --list     # the part names
-INSTALL_USER=alice ./install.sh    # as root, if the repo folder belongs to root
+INSTALL_USER=user ./install.sh    # as root, if the repo folder belongs to root
 ```
 
 What the script does:

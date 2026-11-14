@@ -59,12 +59,16 @@ o.shiftround = true            -- >> and << snap to a multiple of 4
 o.smartindent = true
 
 -- Show whitespace that is easy to miss, dimmed (colour set below):
---   a real tab   →   (an arrow, then spaces to the tab's full width)
---   trailing spaces ·   no-break space ␣   line goes on past the edge › ‹
+--   a real tab: a right arrow, then spaces to the tab's full width
+--   trailing spaces: middle dots   no-break space: an open-box sign
+--   line goes on past the edge: single guillemets at either end
 -- Trailing dots are hidden while typing in insert mode (the space before
 -- your next word would flash otherwise). Prose mode hides all of this.
 o.list = true
-local listchars = "tab:→ ,trail:·,nbsp:␣,extends:›,precedes:‹"
+-- The characters are written as UTF-8 byte escapes (source stays ASCII):
+-- right arrow, middle dot, open box, right and left single guillemet.
+local listchars = "tab:\226\134\146 ,trail:\194\183,nbsp:\226\144\163,"
+  .. "extends:\226\128\186,precedes:\226\128\185"
 o.listchars = listchars
 vim.api.nvim_create_autocmd("InsertEnter", {
   callback = function()
@@ -137,7 +141,7 @@ local map = vim.keymap.set
 map("n", "<Esc>", "<cmd>nohlsearch<CR>", { desc = "Clear search highlight" })
 map("n", "<leader>w", "<cmd>write<CR>", { desc = "Save" })
 
--- Symbols from steno (— – “ ” …). On Linux, Plover types a symbol the way
+-- Symbols from steno (em and en dash, curly quotes, ellipsis). On Linux, Plover types a symbol the way
 -- GTK apps expect: Ctrl+Shift+U, its hex code (2014), then Space/Enter.
 -- Terminals ignore that shortcut, so only "2014" arrived. This catches
 -- the sequence in insert mode and puts in the real character instead.
@@ -451,7 +455,7 @@ plugin("Josiah-tan/plover-vim-tutor")
 -- Vim's built-in syntax files. Each language needs a small "parser",
 -- compiled once on your computer (needs gcc, which Gentoo has). The
 -- common languages below are built in the background on first start;
--- any other language is built the first time you open such a file.
+-- any other language only when you run :TSInstall <language>.
 -- Languages without a parser still get Vim's built-in highlighting,
 -- which covers hundreds of file types.
 -- Only highlighting is on: no error checking, no completion.
@@ -468,7 +472,9 @@ if plugin("nvim-treesitter/nvim-treesitter", "master") then
       "query", "regex", "ruby", "rust", "sql", "toml", "tsx",
       "typescript", "vim", "vimdoc", "xml", "yaml",
     },
-    auto_install = true,        -- others: built when you open such a file
+    -- No auto_install: a parser for another language is downloaded and
+    -- built only when you ask for it with :TSInstall <language>.
+    auto_install = false,
     -- These need an extra program (tree-sitter-cli) to build, so they
     -- keep Vim's built-in highlighting instead.
     ignore_install = { "latex", "mlir", "ocamllex", "scfg", "swift",

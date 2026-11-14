@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install Alice's configuration on a fresh Linux system. Run it as
+# Install the owner's configuration on a fresh Linux system. Run it as
 # yourself; only a few steps need root, and then it says so and stops
 # (run those with su -c, never sudo or doas):
 #   --deps   system packages          slock   must be root's to lock
@@ -43,7 +43,7 @@ if [ "$(id -u)" -eq 0 ]; then
 	AS_ROOT=yes
 	USER_NAME=${INSTALL_USER:-$(stat -c %U "$DOTFILES" 2>/dev/null || stat -f %Su "$DOTFILES")}
 	[ "$USER_NAME" != root ] ||
-		die "this repo belongs to root: say whose configs these are, e.g. INSTALL_USER=alice ./install.sh"
+		die "this repo belongs to root: say whose configs these are, e.g. INSTALL_USER=user ./install.sh"
 else
 	AS_ROOT=no
 	USER_NAME=$(id -un)
@@ -511,7 +511,7 @@ install_slock() {
 QMK_DIR=$DATA/qmk
 QMK_BIN=$SYSBIN
 QMK_BRANCH=firmware25
-# Alice's Moonlander is revision B (shipped since December 2025). Rev B has
+# The owner's Moonlander is revision B (shipped since December 2025). Rev B has
 # its own bootloader ("Moonlander Bootloader", USB 3297:2003) that starts
 # the firmware at 0x08002000; rev A's is ST's (0483:df11, at 0x08000000).
 # Flashing one revision's firmware on the other doesn't work.

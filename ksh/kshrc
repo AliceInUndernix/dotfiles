@@ -29,7 +29,7 @@ _hs_key() {
 	esac
 	# a new search, unless the last key was an arrow (any other key ends
 	# the search). Not by comparing the line with what was shown: for a
-	# line longer than the screen or with UTF-8 (é, —) ksh reports it
+	# line longer than the screen or with UTF-8 (accents, dashes) ksh reports it
 	# differently, the search started over from that whole command, and
 	# Up/Down then found nothing and seemed stuck. An empty line (after
 	# Ctrl+C) starts over too.

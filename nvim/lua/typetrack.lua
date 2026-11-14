@@ -88,10 +88,12 @@ vim.api.nvim_create_autocmd("ColorScheme", {
 
 -- Typographic characters that should count the same as plain ones.
 local SAME = {
-  ["\226\128\152"] = "'", ["\226\128\153"] = "'", ["\202\188"] = "'", -- ‘ ’ ʼ
-  ["\226\128\156"] = '"', ["\226\128\157"] = '"', ["\226\128\158"] = '"', -- “ ” „
-  ["\194\171"] = '"', ["\194\187"] = '"',                              -- « »
-  ["\226\128\166"] = "...",                                             -- …
+  -- left and right single quote, modifier apostrophe
+  ["\226\128\152"] = "'", ["\226\128\153"] = "'", ["\202\188"] = "'",
+  -- left, right and low double quote
+  ["\226\128\156"] = '"', ["\226\128\157"] = '"', ["\226\128\158"] = '"',
+  ["\194\171"] = '"', ["\194\187"] = '"',      -- left and right guillemet
+  ["\226\128\166"] = "...",                    -- ellipsis
 }
 local function normalise(s)
   for from, to in pairs(SAME) do s = s:gsub(from, to) end
@@ -107,11 +109,12 @@ local function chars(s)
   return list
 end
 
--- Dashes separate words ("word—word", "word -- word"). They are replaced
--- by the same number of spaces so byte positions in a line stay correct.
+-- Dashes separate words ("word<em dash>word", "word -- word"). They are
+-- replaced by the same number of spaces so byte positions in a line stay
+-- correct.
 local function blank_dashes(s)
-  s = s:gsub("\226\128\148", "   ")   -- — em dash
-  s = s:gsub("\226\128\147", "   ")   -- – en dash
+  s = s:gsub("\226\128\148", "   ")   -- em dash
+  s = s:gsub("\226\128\147", "   ")   -- en dash
   s = s:gsub("%-%-+", function(d) return (" "):rep(#d) end)
   return s
 end
@@ -249,10 +252,15 @@ end
 
 local ENTITIES = {
   amp = "&", lt = "<", gt = ">", quot = '"', apos = "'", nbsp = " ",
-  mdash = "—", ndash = "–", hellip = "…", lsquo = "‘", rsquo = "’",
-  ldquo = "“", rdquo = "”", shy = "", copy = "©", reg = "®",
-  trade = "™", times = "×", middot = "·", bull = "•", laquo = "«",
-  raquo = "»", bdquo = "„", sbquo = "‚", thinsp = " ", ensp = " ",
+  -- typographic characters, written as UTF-8 byte escapes
+  mdash = "\226\128\148", ndash = "\226\128\147",
+  hellip = "\226\128\166", lsquo = "\226\128\152",
+  rsquo = "\226\128\153", ldquo = "\226\128\156",
+  rdquo = "\226\128\157", shy = "", copy = "\194\169",
+  reg = "\194\174", trade = "\226\132\162", times = "\195\151",
+  middot = "\194\183", bull = "\226\128\162", laquo = "\194\171",
+  raquo = "\194\187", bdquo = "\226\128\158", sbquo = "\226\128\154",
+  thinsp = " ", ensp = " ",
   emsp = " ", zwj = "", zwnj = "",
 }
 local BLOCK = {}
