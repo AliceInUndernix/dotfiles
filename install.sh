@@ -662,14 +662,14 @@ install_moonlander() {
 #                 unpacked, so it runs without FUSE)
 #   plover.cfg    settings (from plover/plover.cfg the first time); Plover
 #                 keeps all its files next to it: plugins/, strokes.log, ...
-#   moonlander/   AliceInUndernix/moonlander, where Dotterel comes from
+#   dotterel/     AliceInUndernix/dotterel, where Dotterel comes from
 #   ~/.system/bin/plover   starts it (plover/plover)
 # Each run updates Plover to its newest release and Dotterel (with its dark
 # theme) to the newest commit. Reading the keyboard's serial port needs
 # your user in the port's group (dialout); a root run adds you to it.
 PLOVER_DIR=$SYSTEM/plover
 PLOVER_API=https://api.github.com/repos/openstenoproject/plover/releases/latest
-PLOVER_REPO=https://github.com/AliceInUndernix/moonlander
+PLOVER_REPO=https://github.com/AliceInUndernix/dotterel
 
 install_plover() {
 	# The serial port: the Moonlander is /dev/ttyACM0, group dialout (uucp
@@ -724,9 +724,14 @@ install_plover() {
 	fi
 
 	# 3. Dotterel and its dark theme, from the newest commit of the
-	# moonlander repo, into Plover's own plugins folder. pip's cache is
+	# dotterel repo, into Plover's own plugins folder. pip's cache is
 	# off, so nothing lands in ~/.cache.
-	src=$PLOVER_DIR/moonlander
+	src=$PLOVER_DIR/dotterel
+	# Dotterel used to come from the moonlander repo: that old clone goes.
+	if [ -d "$PLOVER_DIR/moonlander/.git" ]; then
+		rm -rf "$PLOVER_DIR/moonlander"
+		say "delete  $PLOVER_DIR/moonlander (Dotterel now comes from $PLOVER_REPO)"
+	fi
 	if [ -d "$src/.git" ]; then
 		git -C "$src" pull --quiet --ff-only ||
 			warn "could not update $src; installing Dotterel from what is there"

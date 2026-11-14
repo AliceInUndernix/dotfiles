@@ -26,7 +26,7 @@ script puts the whole configuration back after a fresh install.
 | `feh/` | feh shows pictures on Habamax grey | `~/.config/feh/themes` (symlink) |
 | `x/` | `xinitrc`: Habamax-grey wallpaper, PipeWire, idle lock off by default (`IDLE_LOCK_MINUTES`), xss-lock (slock before suspend), then dwm (run `startx`) | `~/.xinitrc` (symlink) |
 | `moonlander/` | QMK "canary" keymap for the keyboard | built into `moonlander/*.bin`, flashed with Keymapp |
-| `plover/` | Plover (steno) launcher and first settings: Dotterel, Gemini PR on the Moonlander | `~/.system/plover` (newest release, Dotterel from the moonlander repo), `~/.system/bin/plover` |
+| `plover/` | Plover (steno) launcher and first settings: Dotterel, Gemini PR on the Moonlander | `~/.system/plover` (newest release, Dotterel from AliceInUndernix/dotterel), `~/.system/bin/plover` |
 | `archive/` | Untouched copies of everything downloaded from elsewhere | |
 | `TODO.md` | Things decided but left for later | |
 | `install.sh` | Sets everything up | |
@@ -91,7 +91,7 @@ What the script does:
   `moonlander/` for Keymapp. See `moonlander/README.md`.
 - **Plover**: the newest release (its AppImage, unpacked) goes into
   `~/.system/plover`, with Dotterel and its dark theme from
-  AliceInUndernix/moonlander. Plover runs in portable mode there, so its
+  AliceInUndernix/dotterel. Plover runs in portable mode there, so its
   settings, plugins and logs stay in that folder too. Each run updates both.
   To read the keyboard you must be in group `dialout`:
   `su -c './install.sh plover'` adds you once (then log in again).
