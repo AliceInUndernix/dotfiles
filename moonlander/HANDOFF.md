@@ -50,6 +50,7 @@ In `canary/`, only comments differ from `keymap_87.c`, `config_87.h` and
 | 7 | Mouse with accelerating pointer | hold left lower key next to Ctrl | green |
 | 8 | Backlight, sound, LEDs, BOOT | tap far-left lower key | yellow |
 | 9 | tmux (Ctrl-b + a default tmux key) | hold right lower key next to DWM | cyan |
+| 10 | Function keys F1..F24 | hold left lower key next to RGB | blue |
 
 The steno layer keeps the RGB, Mouse and dwm layer keys in the same spots as
 layer 0, so those layers can be reached while in steno.
@@ -103,7 +104,7 @@ suggest them again without asking:
   them, layouts on the left top row, apps on the left home row. Kill only
   works with Shift. Shift moved to left thumb 1. Removed: last-two-layouts
   (Super+Space) and Flameshot full screen (Super+Print).
-- **91 (latest):** tmux layer (9, cyan), held on the right lower key next
+- **91:** tmux layer (9, cyan), held on the right lower key next
   to DWM. Each key types Ctrl-b and one of tmux's default keys (no custom
   tmux bindings), placed where the nearest dwm key is. On the dwm layer
   Kill works without Shift and moved to the far-left home key, Menu moved
@@ -113,6 +114,11 @@ suggest them again without asking:
   Then the tmux layer's left half was lined up with that: Copy top-left
   (Web), Kill, Cmd (Menu), Ses: session list (Tmux), Pane> (Scr), New
   (Term), Last (Lock).
+- **92:** dwm Stky (pin a window on every tag) left of TFlt.
+- **93 (latest):** function key layer (10, blue), held on the left lower
+  key next to RGB (also on the steno layer). F1..F10 where the red layer's
+  digits are, F11..F20 on the home row, F21..F24 on the left top row
+  (USB stops at F24).
 - **config:** combo key count raised from 20 to 32 (by version 71); debounce
   raised to 12 ms against double letters (version 82). **rules:** unchanged in
   substance since the first numbered version (rules_1).

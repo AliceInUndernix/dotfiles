@@ -2,7 +2,7 @@
  * ==========================================================================
  *  ZSA Moonlander (rev B), keymap "canary"
  *  Canary letter layout, built on optozorax's keymap libraries.
- *  Version 92 (the latest; earlier drafts were numbered 75..91).
+ *  Version 93 (the latest; earlier drafts were numbered 75..92).
  * ==========================================================================
  *
  * HOW TO READ THIS FILE
@@ -47,6 +47,7 @@
  *   9  L_TMUX   HOLD the right lower-row key next to DWM: tmux,
  *               each key types Ctrl-b and then one of tmux's
  *               default keys                                    cyan
+ *  10 L_FKEYS  HOLD the left lower-row key next to RGB: F1..F24    blue
  *
  *   Layers 2 and 3 only exist because the lang_shift library always uses
  *   layers 0..3 for itself (English, English+Shift, Russian, Russian+Shift).
@@ -148,6 +149,7 @@ enum Layers {
     L_MOUSE,    // 7: mouse
     L_RGB,      // 8: backlight settings
     L_TMUX,     // 9: tmux (Ctrl-b + a default tmux key)
+    L_FKEYS,    // 10: function keys F1..F24
 };
 
 /*
@@ -504,13 +506,14 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      * top      _    w    l    y    p    b    --       --   z    f    o    u    ;    -
      * home     1Sh  c    r    s    t    g    --       --   m    n    e    i    a    1Sh
      * bottom   --   q    j    v    d    k                 x    h    --   --   :    --
-     * lower    RGB  --   --   --   Mse  [Ctrl]      [Alt] DWM  Tmux --   --   --
+     * lower    RGB  Fn   --   --   Mse  [Ctrl]      [Alt] DWM  Tmux --   --   --
      * thumbs                  Spc  Red  Steno       Shift Tab  Bksp
      *
+     *   Fn    hold: function key layer (F1..F24)
      *   1Sh   one-time Shift: the next key you press is shifted
      *   RGB   tap: backlight layer on/off           Mse  hold: mouse layer
      *   DWM   hold: Super + dwm layer               Red  hold: red layer
- *   Tmux  hold: tmux layer
+     *   Tmux  hold: tmux layer
      *   Steno tap: steno layer on (tap again on the steno layer to leave)
      *
      * Punctuation that adds a space:
@@ -531,7 +534,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         EN_UNDS, EN_W,    EN_L,    EN_Y,    EN_P,    EN_B,    KC_NO,        KC_NO,   EN_Z,    EN_F,    EN_O,    EN_U,    SEMI_SP, EN_MINS,
         SFT_N_O, EN_C,    EN_R,    EN_S,    EN_T,    EN_G,    KC_NO,        KC_NO,   EN_M,    EN_N,    EN_E,    EN_I,    EN_A,    SFT_N_O,
         KC_NO,   EN_Q,    EN_J,    EN_V,    EN_D,    EN_K,                  EN_X,    EN_H,    KC_NO,   KC_NO,   COLN_SP, KC_NO,
-        CMB_RGB, KC_NO,   KC_NO,   KC_NO,   MO(L_MOUSE), CMB_CTL,           CMB_ALT, CMB_DWM, MO(L_TMUX), KC_NO, KC_NO,   KC_NO,
+        CMB_RGB, MO(L_FKEYS), KC_NO, KC_NO, MO(L_MOUSE), CMB_CTL,           CMB_ALT, CMB_DWM, MO(L_TMUX), KC_NO, KC_NO,   KC_NO,
                                             CMB_SPC, CMB_RED, TG(L_STENO), CMB_SFT, CMB_TAB, CMB_BSP
     ),
 
@@ -598,7 +601,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      *
      * home     --   #    T    P    H    *        --       --   *    F    P    L    T    D
      * bottom   --   S    K    W    R    *                     *    R    B    G    S    Z
-     * lower    RGB  --   --   --   Mse [--]            [--]  DWM  Tmux --   --   --
+     * lower    RGB  Fn   --   --   Mse [--]            [--]  DWM  Tmux --   --   --
      * thumbs                  A    O   exit               --   E    U
      *
      * 26 steno keys: 10 on the left rows, 12 on the right rows, 4 vowels.
@@ -607,7 +610,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      *          (Earlier versions had a second S here instead of #; Plover
      *          treats both S keys as the same S, so nothing was lost.)
      *   exit = left thumb 3, the same key that turns steno on from layer 0
-     *   RGB, Mse, DWM, Tmux = the same layer keys as on layer 0, in the same spots:
+     *   RGB, Fn, Mse, DWM, Tmux = the same layer keys as on layer 0, in the same spots:
      *          tap RGB for the backlight layer (yellow), hold Mse for the
      *          mouse layer (green), hold DWM for the dwm layer (magenta).
      *          Those layers sit above steno, so they win while they are on.
@@ -628,7 +631,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,        KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,
         KC_NO,   STN_N1,  STN_TL,  STN_PL,  STN_HL,  STN_ST1, KC_NO,        KC_NO,   STN_ST3, STN_FR,  STN_PR,  STN_LR,  STN_TR,  STN_DR,
         KC_NO,   STN_S2,  STN_KL,  STN_WL,  STN_RL,  STN_ST2,               STN_ST4, STN_RR,  STN_BR,  STN_GR,  STN_SR,  STN_ZR,
-        CMB_RGB, KC_NO,   KC_NO,   KC_NO,   MO(L_MOUSE), KC_NO,             KC_NO,   CMB_DWM, MO(L_TMUX), KC_NO, KC_NO,   KC_NO,
+        CMB_RGB, MO(L_FKEYS), KC_NO, KC_NO, MO(L_MOUSE), KC_NO,             KC_NO,   CMB_DWM, MO(L_TMUX), KC_NO, KC_NO,   KC_NO,
                                             STN_A,   STN_O,   TG(L_STENO), KC_NO,   STN_E,   STN_U
     ),
 
@@ -803,6 +806,31 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         _______, _______, _______, _______, _______, _______,               _______, _______, _______, _______, _______, _______,
                                             _______, _______, KC_NO,        _______, _______, _______
     ),
+
+    /*
+     * LAYER 10: function keys  (hold the left lower-row key next to RGB)
+     *
+     * F1..F10 sit where the red layer has its digits 1..0, and the count
+     * goes on up the home row (F11..F20) and the top row (F21..F24).
+     * USB keyboards only have F1..F24, so the top row stops there.
+     * Version 93.
+     *
+     * top      --   F21  F22  F23  F24  --   --       --   --   --   --   --   --   --
+     * home     --   F11  F12  F13  F14  F15  --       --   F16  F17  F18  F19  F20  --
+     * bottom   --   F1   F2   F3   F4   F5                 F6   F7   F8   F9   F10  --
+     * lower    __   held __   __   __   __          __   __   __   __   __   __
+     * thumbs                  __   __   --          __   __   __
+     *   (__ = same as layer 0, so Ctrl, Alt and Shift still work for
+     *    Ctrl+F5 and the like; -- = nothing, so no letter can slip in)
+     */
+    [L_FKEYS] = LAYOUT_moonlander(
+        KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,        KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,
+        KC_NO,   KC_F21,  KC_F22,  KC_F23,  KC_F24,  KC_NO,   KC_NO,        KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,   KC_NO,
+        KC_NO,   KC_F11,  KC_F12,  KC_F13,  KC_F14,  KC_F15,  KC_NO,        KC_NO,   KC_F16,  KC_F17,  KC_F18,  KC_F19,  KC_F20,  KC_NO,
+        KC_NO,   KC_F1,   KC_F2,   KC_F3,   KC_F4,   KC_F5,                 KC_F6,   KC_F7,   KC_F8,   KC_F9,   KC_F10,  KC_NO,
+        _______, _______, _______, _______, _______, _______,               _______, _______, _______, _______, _______, _______,
+                                            _______, _______, KC_NO,        _______, _______, _______
+    ),
 };
 
 /* ========================================================================== *
@@ -824,6 +852,7 @@ const uint8_t PROGMEM layermap[][3] = {
     [L_MOUSE] = {  76, 255, 255 },  // green
     [L_RGB]   = {  43, 255, 255 },  // yellow
     [L_TMUX]  = { 128, 255, 255 },  // cyan
+    [L_FKEYS] = { 170, 255, 255 },  // blue
 };
 const uint8_t layermap_size = sizeof(layermap) / (sizeof(uint8_t) * 3);
 
