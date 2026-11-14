@@ -75,11 +75,10 @@ own() { chown -hR "$USER_NAME:$USER_GROUP" "$@"; }
 
 # userdir <dir>: mkdir -p, with every folder it creates owned by the user.
 userdir() {
-	d=$1 new=
-	while [ ! -e "$d" ]; do new="$new $d"; d=$(dirname "$d"); done
-	[ -z "$new" ] && return
-	mkdir -p "$1"
-	for d in $new; do chown "$USER_NAME:$USER_GROUP" "$d"; done
+	[ -d "$1" ] && return
+	userdir "$(dirname "$1")"
+	mkdir "$1"
+	chown "$USER_NAME:$USER_GROUP" "$1"
 }
 
 # link <file or dir in repo> <target>: symlink, backing up what is there.
@@ -445,8 +444,13 @@ build_suckless() {
 	say "build   $name"
 	command -v make >/dev/null 2>&1 || die "make not found (try ./install.sh --deps)"
 	case $PREFIX in "$HOME"/*) userdir "$PREFIX/bin"; userdir "$PREFIX/share/man/man1" ;; esac
-	( cd "$DOTFILES/$name" && make PREFIX="$PREFIX" && make PREFIX="$PREFIX" install )
+	# make clean also after a failed build: a root run would otherwise
+	# leave object files of root's in your repo
+	built=yes
+	( cd "$DOTFILES/$name" && make PREFIX="$PREFIX" && make PREFIX="$PREFIX" install ) ||
+		built=no
 	( cd "$DOTFILES/$name" && make clean >/dev/null )
+	[ "$built" = yes ] || die "building $name failed"
 	# In the user's home, the installed files belong to the user. Except
 	# slock: it must stay root's and setuid to lock the screen (owning it
 	# would drop the setuid bit). This needs a home not mounted nosuid.
@@ -568,7 +572,8 @@ install_moonlander() {
 		PIP_NO_CACHE_DIR=1 "$QMK_DIR/venv/bin/python" -m pip install --quiet qmk -r "$fw/requirements.txt"
 	fi
 	link "$QMK_DIR/venv/bin/qmk" "$QMK_BIN/qmk"
-	"$QMK_DIR/venv/bin/qmk" config user.qmk_home="$fw" >/dev/null 2>&1
+	"$QMK_DIR/venv/bin/qmk" config user.qmk_home="$fw" >/dev/null 2>&1 ||
+		warn "could not set qmk's user.qmk_home to $fw"
 
 	# 4. ARM compiler: always our own pinned Arm GNU Toolchain, even when the
 	# system has one. Gentoo's gcc 16 built firmware that froze the
@@ -746,17 +751,11 @@ install_plover() {
 		say "clone   $PLOVER_REPO -> $src"
 		git clone --quiet --depth 1 "$PLOVER_REPO" "$src"
 	fi
-	# A clean install when the commit is new, the installed dictionaries
-	# differ from the repo's, or DOTTEREL_CLEAN=yes: Plover is stopped,
-	# Dotterel is uninstalled, every Dotterel dictionary file anywhere in
-	# ~/.system/plover is deleted (no backup), the dictionary list saved in
-	# plover.cfg is dropped so Plover uses the plugin's own list, and the
-	# plugin is installed fresh. (Plover copies the plugin's dictionaries
-	# into ~/.system/plover the first time it starts and never updates the
-	# copies, so they have to go for a new Dotterel to be used.)
 	# Every run: stop Plover and delete the dictionary copies it made in
 	# ~/.system/plover (no backup). Plover makes them again from the
 	# installed Dotterel when it starts, so they are always the newest.
+	# (It copies the plugin's dictionaries there the first time it starts
+	# and never updates the copies.)
 	if pkill -u "$USER_NAME" -f "python.* -m plover\.scripts" 2>/dev/null; then
 		sleep 2
 		say "stop    Plover (start it again when this is done)"
@@ -771,6 +770,12 @@ install_plover() {
 	done
 	say "delete  $PLOVER_DIR/dotterel-* (Plover copies them again at start)"
 
+	# A clean install when the commit is new, the installed dictionaries
+	# differ from the repo's, or DOTTEREL_CLEAN=yes: Dotterel is
+	# uninstalled, every Dotterel dictionary file anywhere in
+	# ~/.system/plover is deleted (no backup), the dictionary list saved in
+	# plover.cfg is dropped so Plover uses the plugin's own list, and the
+	# plugin is installed fresh.
 	commit=$(git -C "$src" rev-parse HEAD)
 	new=$src/plover-dotterel/plover_dotterel/dictionaries
 	old=$(dotterel_dicts)
