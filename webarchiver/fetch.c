@@ -105,20 +105,19 @@ static void wget_base(struct args *a)
     free(ua);
     if (use_ipv4)
         arg(a, "--inet4-only");
+    if (insecure)
+        arg(a, "--no-check-certificate");
     /* wget would otherwise list every https site it visits in
      * ~/.wget-hsts; keep that list inside the archive instead */
     arg(a, hsts_opt);
 }
 
-/* https if the site answers on it, otherwise plain http */
-char *pick_scheme(const char *url)
+/* exit code of "wget --spider" for one link: 0 = it answers */
+static int spider(const char *url)
 {
     struct args a;
-    char *plain;
     int rc;
 
-    if (!starts_with(url, "https://"))
-        return xstrdup(url);
     wget_base(&a);
     arg(&a, "-q");
     arg(&a, "--spider");
@@ -129,25 +128,56 @@ char *pick_scheme(const char *url)
     arg(&a, url);
     rc = run_wait(a.v, 0);
     args_free(&a);
+    return rc;
+}
+
+/* The link to download. https is never given up silently: when its
+ * certificate check fails, or the site does not answer over https,
+ * nothing is downloaded (0 is returned and *why says what to do),
+ * unless INSECURE=1 (https without the check) or ALLOW_HTTP=1 (plain
+ * http) was given. A link written as http:// is used as it is. */
+char *pick_scheme(const char *url, const char **why)
+{
+    char *plain;
+    int rc;
+
+    *why = 0;
+    if (!starts_with(url, "https://"))
+        return xstrdup(url);
+    rc = spider(url);
     /* 4 = network failure, 5 = SSL failure: https is not usable */
-    if (rc != 4 && rc != 5)
+    if (rc == 5) {
+        *why = "the https certificate check failed, so nothing was "
+            "downloaded (someone may be in the middle). To continue "
+            "anyway over https without the check, run again with "
+            "INSECURE=1";
+        return 0;
+    }
+    if (rc != 4)
         return xstrdup(url);
     plain = str2("http://", url + 8);
-    wget_base(&a);
-    arg(&a, "-q");
-    arg(&a, "--spider");
-    arg(&a, "--tries=1");
-    arg(&a, "--connect-timeout=10");
-    arg(&a, "--dns-timeout=10");
-    arg(&a, "--read-timeout=20");
-    arg(&a, plain);
-    rc = run_wait(a.v, 0);
-    args_free(&a);
+    if (!allow_http) {
+        rc = spider(plain);
+        if (rc != 4 && rc != 5) {
+            *why = "the site does not answer over https, only over "
+                "plain http (unencrypted: anyone on the network sees "
+                "what you fetch). To use it anyway, write the link "
+                "with http:// in the links file or run again with "
+                "ALLOW_HTTP=1";
+        } else {
+            *why = "the site does not answer (no network?); run again "
+                "later";
+        }
+        free(plain);
+        return 0;
+    }
+    rc = spider(plain);
     if (rc != 4 && rc != 5)
         return plain;
     free(plain);
     return xstrdup(url);
 }
+
 
 /* ------------------------------------------------------------ worker */
 
@@ -355,6 +385,21 @@ static int mirror(const char *d, const char *mode, const char *site,
     return slowed ? -1 : rc;
 }
 
+/* a line for the "problems" list printed at the end of the run */
+static void add_problem(const char *d, const char *link, const char *why)
+{
+    FILE *f;
+    char *p;
+
+    p = state_file(d, ".problems");
+    f = fopen(p, "a");
+    free(p);
+    if (!f)
+        return;
+    fprintf(f, "  ! %s: %s\n", link, why);
+    fclose(f);
+}
+
 /* download one domain: every link of it, one after another */
 void worker(const char *d, const char *mode, struct strlist *links)
 {
@@ -362,6 +407,7 @@ void worker(const char *d, const char *mode, struct strlist *links)
     struct table pre;
     struct urlmap m;
     char *log, *site, *p, *q, *wait;
+    const char *why;
     char num[32];
     int i, rc, worst, lvl;
 
@@ -371,7 +417,20 @@ void worker(const char *d, const char *mode, struct strlist *links)
     log = log_path(d);
     worst = 0;
     for (i = 0; i < links->n; i++) {
-        site = pick_scheme(links->v[i]);
+        site = pick_scheme(links->v[i], &why);
+        if (!site) {
+            q = str2(": ", why);
+            log_line(log, links->v[i], q);
+            free(q);
+            add_problem(d, links->v[i], why);
+            if (worst < 4)
+                worst = 4;
+            continue;
+        }
+        if (insecure && starts_with(site, "https://")) {
+            add_problem(d, site, "downloaded over https WITHOUT checking "
+                "the certificate (INSECURE=1)");
+        }
         if (strcmp(site, links->v[i])) {
             p = str3(links->v[i], " does not answer over https - using ",
                 site);

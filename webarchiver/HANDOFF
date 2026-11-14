@@ -14,9 +14,9 @@ them up to date, with version history. In detail:
 
 Downloading
 - Input: a text file with one link per line (blank lines and text after
-  "#" ignored). A link without a scheme is tried over https first and
-  falls back to plain http if https does not answer (privacy was chosen
-  over the "no HTTPS" rule here, by the owner).
+  "#" ignored). A link without a scheme uses https (privacy was chosen
+  over the "no HTTPS" rule here, by the owner). It is never downgraded
+  silently: see section 4.
 - Each domain gets its own directory, named after the domain (lower case,
   ":port" becomes "_port"). Without an archive directory argument the
   domain directories go into the current directory; with one, into it.
@@ -237,3 +237,10 @@ Changes made for the newer version of the owner's rules:
 - Keyboard: the --serve page has access keys (a: links box, u: update
   everything, h: all versions, p: progress) and says so on the page.
 - Code was already 4-space indented, no tabs, under 80 columns.
+- https: the owner asked for the safest variant. A failed certificate
+  check or a site that does not answer over https no longer falls back
+  to plain http: that link is skipped and a "problems" line at the end
+  of the run says why and how to continue. INSECURE=1 continues over
+  https without the check (wget --no-check-certificate, and the run
+  lists every link fetched that way); ALLOW_HTTP=1 brings back the
+  http fallback; a link written with http:// is used as it is.

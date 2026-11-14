@@ -135,6 +135,8 @@ extern char *fixed_wait;
 extern char *user_agent;
 extern char *hsts_opt;
 extern int use_ipv4;
+extern int insecure;
+extern int allow_http;
 extern int jobs;
 extern int refresh;
 extern char *self_path;
@@ -193,7 +195,7 @@ void all_domains(struct strlist *out);
 /* ---- wget (fetch.c) */
 int run_wait(char **argv, const char *log);
 int spawn(char **argv, const char *log, int *pid);
-char *pick_scheme(const char *url);
+char *pick_scheme(const char *url, const char **why);
 void worker(const char *d, const char *mode, struct strlist *links);
 int probe(const char *url, char **final, char **size, struct strlist *keys);
 int download(const char *url, const char *dest, const char *size,

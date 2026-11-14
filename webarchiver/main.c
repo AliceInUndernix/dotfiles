@@ -29,6 +29,8 @@ char *fixed_wait;
 char *user_agent;
 char *hsts_opt;
 int use_ipv4;
+int insecure;
+int allow_http;
 int jobs;
 int refresh;
 char *self_path;
@@ -73,6 +75,10 @@ static void settings(void)
     user_agent = xstrdup(v && v[0] ? v : DEF_USER_AGENT);
     v = getenv("IPV4");
     use_ipv4 = v && !strcmp(v, "1");
+    v = getenv("INSECURE");
+    insecure = v && !strcmp(v, "1");
+    v = getenv("ALLOW_HTTP");
+    allow_http = v && !strcmp(v, "1");
     v = getenv("JOBS");
     jobs = v && v[0] ? (int)parse_ll(v) : DEF_JOBS;
     if (jobs < 1)
@@ -721,7 +727,7 @@ static void release_lock(void)
 
 static void clear_run_files(void)
 {
-    static const char *ext[] = { ".rc", ".status", 0 };
+    static const char *ext[] = { ".rc", ".status", ".problems", 0 };
     char *p;
     int i, j;
 
@@ -734,16 +740,23 @@ static void clear_run_files(void)
     }
 }
 
+/* lines starting with "  !" in the linking log and in the problems the
+ * download step wrote (https refused, certificate not checked) */
 static void print_problems(void)
 {
     char *p, *log, *data, *line, *next;
-    int i, len, shown;
+    int i, j, len, shown;
 
     shown = 0;
-    for (i = 0; i < ndoms; i++) {
-        p = path2(logs_dir, doms[i].name);
-        log = str2(p, ".linking.log");
-        free(p);
+    for (i = 0; i < ndoms * 2; i++) {
+        j = i / 2;
+        if (i % 2) {
+            p = path2(logs_dir, doms[j].name);
+            log = str2(p, ".linking.log");
+            free(p);
+        } else {
+            log = state_file(doms[j].name, ".problems");
+        }
         data = read_file(log, &len);
         free(log);
         for (line = data; line && *line; line = next) {
@@ -758,7 +771,7 @@ static void print_problems(void)
                 continue;
             if (!shown)
                 printf("--- problems:\n");
-            printf("  %s: %s\n", doms[i].name, line + 2);
+            printf("  %s: %s\n", doms[j].name, line + 2);
             shown = 1;
         }
         free(data);

@@ -40,8 +40,12 @@ Use
     webarchiver LINKS_FILE [ARCHIVE_DIR]
 
         LINKS_FILE has one link per line; empty lines and text after # are
-        ignored. Links without http:// or https:// are tried over https
-        first, then over plain http. Each domain gets its own directory:
+        ignored. Links without http:// or https:// use https. If the
+        https certificate check fails, or the site answers only over
+        plain http, that link is not downloaded and the run ends with a
+        "problems" line saying so (see INSECURE and ALLOW_HTTP below).
+        A link written with http:// is used as it is.
+        Each domain gets its own directory:
             webarchiver sites.txt          ->  ./example.org/
             webarchiver sites.txt archive  ->  ./archive/example.org/
         Run the same command again at any time: unfinished sites are
@@ -92,6 +96,11 @@ Settings (environment variables, defaults in config.h)
     BIG_EXT=mp4,...    extensions treated as big files
     UA=...             browser identity sent to sites
     IPV4=1             use IPv4 only
+    INSECURE=1         continue over https even when the certificate
+                       check fails (still encrypted, but whoever is in
+                       the middle could read and change it)
+    ALLOW_HTTP=1       use plain http for sites that do not answer over
+                       https (unencrypted)
 
 
 Files in an archive directory
@@ -124,6 +133,8 @@ that asked for https (HSTS) is in .archive-state/wget-hsts instead of
 ~/.wget-hsts, and only the newest run's wget log is kept for each site.
 Deleting the archive directory deletes every trace.
 
-Plain http requests show which pages you fetch to anyone on the network;
-that is why https is tried first. To hide your address from the sites,
+Plain http requests show which pages you fetch to anyone on the network,
+so https is never given up silently: a failed certificate check or a
+site without https stops that link until you choose INSECURE=1,
+ALLOW_HTTP=1 or an http:// link. To hide your address from the sites,
 run it through Tor, for example "torsocks webarchiver ARCHIVE_DIR".
