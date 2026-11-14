@@ -48,6 +48,10 @@ export PATH
 # Logging in on the first console (tty1) starts X; logging out of X logs
 # you out. The other consoles (Ctrl+Alt+F2...) stay text, for when X
 # breaks. Never for root.
+# X runs on tty1 itself (vt1 -keeptty), not on the next free console:
+# then elogind still sees this login as the active local session, which
+# loginctl suspend (Mod+Shift+s) and xss-lock need. On another console
+# the session looks idle and suspend asks for a root password.
 if [ -z "${DISPLAY:-}" ] && [ "$(id -u)" -ne 0 ] && [ "$(tty)" = /dev/tty1 ]; then
-	exec startx
+	exec startx -- vt1 -keeptty
 fi
