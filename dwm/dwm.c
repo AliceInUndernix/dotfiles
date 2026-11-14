@@ -96,7 +96,10 @@ struct Client {
 	int bw, oldbw;
 	unsigned int tags;
 	int isfixed, isfloating, isurgent, neverfocus, oldstate, isfullscreen;
-	int issticky; /* on every tag of its monitor, skipped by focus */
+	int ispinned; /* floats, skipped by Mod+j/k and by focus changes */
+	int issticky; /* pinned and on every tag of its monitor */
+	int noborder; /* the X window has no border now (see solitary) */
+	long stackpos; /* restart: place in the focus history (see scan) */
 	Client *next;
 	Client *snext;
 	Monitor *mon;
@@ -198,7 +201,7 @@ static void pop(Client *c);
 static void propertynotify(XEvent *e);
 static void quit(const Arg *arg);
 static void restart(const Arg *arg);
-static void restorestate(void);
+static void restorestate(int before);
 static void savestate(void);
 static int sendrestart(void);
 static Monitor *recttomon(int x, int y, int w, int h);
@@ -286,6 +289,7 @@ static void (*handler[LASTEvent]) (XEvent *) = {
 static Atom wmatom[WMLast], netatom[NetLast], dwmatom[DwmLast];
 static int running = 1;
 static int restarting = 0; /* exec dwm again when the event loop ends */
+static int quiet = 0; /* scan() and a restart: no arrange() per window */
 static time_t startrulesend; /* startrules apply until then (0: never) */
 static Cur *cursor[CurLast];
 static Clr **scheme;
@@ -473,6 +477,8 @@ applysizehints(Client *c, int *x, int *y, int *w, int *h, int interact)
 void
 arrange(Monitor *m)
 {
+	if (quiet)
+		return;
 	if (m)
 		showhide(m->stack);
 	else for (m = mons; m; m = m->next)
@@ -582,8 +588,13 @@ cleanup(void)
 	Monitor *m;
 	size_t i;
 
-	view(&a);
-	selmon->lt[selmon->sellt] = &foo;
+	/* restart: the windows stay as they are, the new dwm takes them over
+	 * where they stand (nothing is shown, resized or focused in between) */
+	quiet = restarting;
+	if (!restarting) {
+		view(&a);
+		selmon->lt[selmon->sellt] = &foo;
+	}
 	for (m = mons; m; m = m->next)
 		while (m->stack)
 			unmanage(m->stack, 0);
@@ -615,6 +626,7 @@ cleanupmon(Monitor *mon)
 	}
 	XUnmapWindow(dpy, mon->barwin);
 	XDestroyWindow(dpy, mon->barwin);
+	free(mon->pertag);
 	free(mon);
 }
 
@@ -655,6 +667,11 @@ configure(Client *c)
 	ce.width = c->w;
 	ce.height = c->h;
 	ce.border_width = c->bw;
+	if (c->noborder) { /* the border's room went to the window */
+		ce.width += 2 * c->bw;
+		ce.height += 2 * c->bw;
+		ce.border_width = 0;
+	}
 	ce.above = None;
 	ce.override_redirect = False;
 	XSendEvent(dpy, c->win, False, StructureNotifyMask, (XEvent *)&ce);
@@ -934,7 +951,7 @@ void
 focus(Client *c)
 {
 	if (!c || !ISVISIBLE(c))
-		for (c = selmon->stack; c && (!ISVISIBLE(c) || c->issticky); c = c->snext);
+		for (c = selmon->stack; c && (!ISVISIBLE(c) || c->ispinned); c = c->snext);
 	if (selmon->sel && selmon->sel != c)
 		unfocus(selmon->sel, 0);
 	if (c) {
@@ -991,18 +1008,18 @@ focusstack(const Arg *arg)
 
 	if (!selmon->sel || (selmon->sel->isfullscreen && lockfullscreen))
 		return;
-	/* sticky windows are skipped: click one to focus it */
+	/* pinned windows are skipped: click one to focus it */
 	if (arg->i > 0) {
-		for (c = selmon->sel->next; c && (!ISVISIBLE(c) || c->issticky); c = c->next);
+		for (c = selmon->sel->next; c && (!ISVISIBLE(c) || c->ispinned); c = c->next);
 		if (!c)
-			for (c = selmon->clients; c && (!ISVISIBLE(c) || c->issticky); c = c->next);
+			for (c = selmon->clients; c && (!ISVISIBLE(c) || c->ispinned); c = c->next);
 	} else {
 		for (i = selmon->clients; i != selmon->sel; i = i->next)
-			if (ISVISIBLE(i) && !i->issticky)
+			if (ISVISIBLE(i) && !i->ispinned)
 				c = i;
 		if (!c)
 			for (; i; i = i->next)
-				if (ISVISIBLE(i) && !i->issticky)
+				if (ISVISIBLE(i) && !i->ispinned)
 					c = i;
 	}
 	if (c) {
@@ -1105,7 +1122,7 @@ gettextprop(Window w, Atom atom, char *text, unsigned int size)
 void
 grabbuttons(Client *c, int focused)
 {
-	updatenumlockmask();
+	/* numlockmask is kept up to date by mappingnotify() */
 	{
 		unsigned int i, j;
 		unsigned int modifiers[] = { 0, LockMask, numlockmask, numlockmask|LockMask };
@@ -1211,7 +1228,7 @@ manage(Window w, XWindowAttributes *wa)
 	Monitor *m;
 	long *saved = NULL;
 	unsigned long n = 0;
-	int restored = 0;
+	int restored;
 
 	c = ecalloc(1, sizeof(Client));
 	c->win = w;
@@ -1239,17 +1256,11 @@ manage(Window w, XWindowAttributes *wa)
 	c->y = MAX(c->y, c->mon->wy);
 	c->bw = borderpx;
 
-	selmon->tagset[selmon->seltags] &= ~scratchtag;
-	if (!strcmp(c->name, scratchpadname)) {
-		c->mon->tagset[c->mon->seltags] |= c->tags = scratchtag;
-		c->isfloating = True;
-		c->x = c->mon->wx + (c->mon->ww / 2 - WIDTH(c) / 2);
-		c->y = c->mon->wy + (c->mon->wh / 2 - HEIGHT(c) / 2);
-	}
-
-	/* restart: the window gets back the tags, monitor and floating
-	 * position it had before (savestate() left them on the window) */
-	if (getlongprop(w, dwmatom[DwmClient], &saved, &n) && n >= 8) {
+	/* restart: the window gets back the tags, monitor, position and
+	 * size it had before (savestate() left them on the window) */
+	c->stackpos = LONG_MAX;
+	restored = getlongprop(w, dwmatom[DwmClient], &saved, &n) && n >= 8;
+	if (restored) {
 		for (m = mons; m && m->num != saved[2]; m = m->next);
 		if (m)
 			c->mon = m;
@@ -1257,19 +1268,27 @@ manage(Window w, XWindowAttributes *wa)
 			c->tags = saved[1] & (TAGMASK | scratchtag);
 		c->isfloating = saved[3] & 1;
 		c->issticky = (saved[3] >> 1) & 1;
-		if (c->isfloating) {
-			c->x = saved[4];
-			c->y = saved[5];
-			c->w = saved[6];
-			c->h = saved[7];
-		}
-		restored = 1;
+		c->ispinned = c->issticky || ((saved[3] >> 2) & 1);
+		c->noborder = (saved[3] >> 3) & 1;
+		c->stackpos = n >= 9 ? saved[8] : LONG_MAX;
+		c->x = saved[4]; /* also of a tiled or hidden window */
+		c->y = saved[5];
+		c->w = saved[6];
+		c->h = saved[7];
 		XDeleteProperty(dpy, w, dwmatom[DwmClient]);
+	} else {
+		selmon->tagset[selmon->seltags] &= ~scratchtag;
+		if (!strcmp(c->name, scratchpadname)) {
+			c->mon->tagset[c->mon->seltags] |= c->tags = scratchtag;
+			c->isfloating = True;
+			c->x = c->mon->wx + (c->mon->ww / 2 - WIDTH(c) / 2);
+			c->y = c->mon->wy + (c->mon->wh / 2 - HEIGHT(c) / 2);
+		}
 	}
 	if (saved)
 		XFree(saved);
 
-	wc.border_width = c->bw;
+	wc.border_width = c->noborder ? 0 : c->bw;
 	XConfigureWindow(dpy, w, CWBorderWidth, &wc);
 	XSetWindowBorder(dpy, w, scheme[SchemeNorm][ColBorder].pixel);
 	configure(c); /* propagates border_width, if size doesn't change */
@@ -1284,7 +1303,7 @@ manage(Window w, XWindowAttributes *wa)
 	grabbuttons(c, 0);
 	if (!c->isfloating)
 		c->isfloating = c->oldstate = trans != None || c->isfixed;
-	if (c->isfloating)
+	if (c->isfloating && !restored) /* restart: X kept the order */
 		XRaiseWindow(dpy, c->win);
 	if (restored) { /* keep the old order: scan() goes through it in order */
 		Client **tc;
@@ -1297,8 +1316,13 @@ manage(Window w, XWindowAttributes *wa)
 	attachstack(c);
 	XChangeProperty(dpy, root, netatom[NetClientList], XA_WINDOW, 32, PropModeAppend,
 		(unsigned char *) &(c->win), 1);
-	XMoveResizeWindow(dpy, c->win, c->x + 2 * sw, c->y, c->w, c->h); /* some windows require this */
+	if (!restored) /* after a restart the window stays where it is */
+		XMoveResizeWindow(dpy, c->win, c->x + 2 * sw, c->y, c->w, c->h); /* some windows require this */
 	setclientstate(c, NormalState);
+	if (quiet) { /* scan(): restorestate() arranges and focuses once */
+		XMapWindow(dpy, c->win);
+		return;
+	}
 	if (c->mon == selmon)
 		unfocus(selmon->sel, 0);
 	c->mon->sel = c;
@@ -1315,6 +1339,8 @@ mappingnotify(XEvent *e)
 	XRefreshKeyboardMapping(ev);
 	if (ev->request == MappingKeyboard)
 		grabkeys();
+	else if (ev->request == MappingModifier)
+		updatenumlockmask();
 }
 
 void
@@ -1510,8 +1536,8 @@ void
 savestate(void)
 {
 	Monitor *m;
-	Client *c;
-	long rec[8], *mrec, *r, idx = 0;
+	Client *c, *o;
+	long rec[9], *mrec, *r, idx = 0, pos;
 	unsigned int i, nmons = 0;
 
 	for (m = mons; m; m = m->next)
@@ -1535,16 +1561,22 @@ savestate(void)
 			s[5] = m->pertag->sel[i] ? (long)m->pertag->sel[i]->win : 0;
 		}
 		for (c = m->clients; c; c = c->next) {
+			for (pos = 0, o = m->stack; o && o != c; o = o->snext)
+				pos++;
 			rec[0] = idx++;
 			rec[1] = c->tags;
 			rec[2] = m->num;
-			rec[3] = c->isfloating | c->issticky << 1;
-			rec[4] = c->x;
-			rec[5] = c->y;
-			rec[6] = c->w;
-			rec[7] = c->h;
+			/* a fullscreen window: what it goes back to */
+			rec[3] = (c->isfullscreen ? c->oldstate : c->isfloating)
+				| c->issticky << 1 | c->ispinned << 2
+				| c->noborder << 3;
+			rec[4] = c->isfullscreen ? c->oldx : c->x;
+			rec[5] = c->isfullscreen ? c->oldy : c->y;
+			rec[6] = c->isfullscreen ? c->oldw : c->w;
+			rec[7] = c->isfullscreen ? c->oldh : c->h;
+			rec[8] = pos;
 			XChangeProperty(dpy, c->win, dwmatom[DwmClient], XA_CARDINAL, 32,
-				PropModeReplace, (unsigned char *)rec, 8);
+				PropModeReplace, (unsigned char *)rec, 9);
 		}
 	}
 	XChangeProperty(dpy, root, dwmatom[DwmMons], XA_CARDINAL, 32,
@@ -1553,24 +1585,63 @@ savestate(void)
 	XSync(dpy, False);
 }
 
+/* sortstack: after a restart, the focus history as it was (stable:
+ * windows that were not there before stay in scan order, at the end) */
+static void
+sortstack(Monitor *m)
+{
+	Client *c, *next, **tc;
+
+	c = m->stack;
+	m->stack = NULL;
+	for (; c; c = next) {
+		next = c->snext;
+		for (tc = &m->stack; *tc && (*tc)->stackpos <= c->stackpos;
+			tc = &(*tc)->snext);
+		c->snext = *tc;
+		*tc = c;
+	}
+}
+
+/* restorestate: called twice around scan(). before: every monitor gets
+ * back its tags in view and pertag settings, so that scan() puts the
+ * windows straight where they belong. After scan(): what needs the
+ * windows (each tag's selected window, the scratchpad's tag), then all is
+ * arranged and focused once. */
 void
-restorestate(void)
+restorestate(int before)
 {
 	Monitor *m;
 	Client *c;
 	long *mrec = NULL, *r, *s;
-	unsigned long n, k;
+	unsigned long n = 0, k;
 	unsigned int i;
 	Monitor *focusmon = selmon;
 
-	if (!getlongprop(root, dwmatom[DwmMons], &mrec, &n))
-		return;
-	XDeleteProperty(dpy, root, dwmatom[DwmMons]);
+	getlongprop(root, dwmatom[DwmMons], &mrec, &n);
+	if (!before)
+		XDeleteProperty(dpy, root, dwmatom[DwmMons]);
 	for (k = 0; k + MONREC <= n; k += MONREC) {
 		r = mrec + k;
 		for (m = mons; m && m->num != r[0]; m = m->next);
 		if (!m)
 			continue;
+		if (!before) {
+			for (i = 0; i <= LENGTH(tags); i++) {
+				s = r + MONHEAD + MONSLOT * i;
+				c = s[5] ? wintoclient((Window)s[5]) : NULL;
+				m->pertag->sel[i] = c && c->mon == m ? c : NULL;
+			}
+			sortstack(m);
+			/* the scratchpad's tag is only in view if there is a
+			 * scratchpad */
+			for (c = m->clients; c && !(c->tags & scratchtag); c = c->next);
+			if (!c)
+				m->tagset[m->seltags] &= ~scratchtag;
+			if (!m->tagset[m->seltags])
+				m->tagset[m->seltags] = 1;
+			continue;
+		}
 		m->seltags = r[1] & 1;
 		m->tagset[0] = r[2] & (TAGMASK | scratchtag) ? r[2] & (TAGMASK | scratchtag) : 1;
 		m->tagset[1] = r[3] & (TAGMASK | scratchtag) ? r[3] & (TAGMASK | scratchtag) : 1;
@@ -1593,8 +1664,6 @@ restorestate(void)
 				m->pertag->ltidxs[i][0] = &layouts[s[3]];
 			if (s[4] >= 0 && s[4] < (long)LENGTH(layouts))
 				m->pertag->ltidxs[i][1] = &layouts[s[4]];
-			c = s[5] ? wintoclient((Window)s[5]) : NULL;
-			m->pertag->sel[i] = c && c->mon == m ? c : NULL;
 		}
 		i = m->pertag->curtag;
 		m->nmaster = m->pertag->nmasters[i];
@@ -1602,14 +1671,12 @@ restorestate(void)
 		m->sellt = m->pertag->sellts[i];
 		m->lt[m->sellt] = m->pertag->ltidxs[i][m->sellt];
 		m->lt[m->sellt ^ 1] = m->pertag->ltidxs[i][m->sellt ^ 1];
-		/* the scratchpad's tag is only in view if there is a scratchpad */
-		for (c = m->clients; c && !(c->tags & scratchtag); c = c->next);
-		if (!c)
-			m->tagset[m->seltags] &= ~scratchtag;
-		if (!m->tagset[m->seltags])
-			m->tagset[m->seltags] = 1;
 	}
-	XFree(mrec);
+	if (mrec)
+		XFree(mrec);
+	if (before)
+		return;
+	quiet = 0;
 	for (m = mons; m; m = m->next) {
 		selmon = m;
 		arrange(m);
@@ -1676,7 +1743,9 @@ recttomon(int x, int y, int w, int h)
 void
 resize(Client *c, int x, int y, int w, int h, int interact)
 {
-	if (applysizehints(c, &x, &y, &w, &h, interact))
+	/* also when only the border comes or goes (see solitary) */
+	if (applysizehints(c, &x, &y, &w, &h, interact)
+	|| c->noborder != solitary(c))
 		resizeclient(c, x, y, w, h);
 }
 
@@ -1690,9 +1759,12 @@ resizeclient(Client *c, int x, int y, int w, int h)
 	c->oldw = c->w; c->w = wc.width = w;
 	c->oldh = c->h; c->h = wc.height = h;
 	wc.border_width = c->bw;
-	if (solitary(c)) {
-		c->w = wc.width += c->bw * 2;
-		c->h = wc.height += c->bw * 2;
+	/* c->w and c->h stay the size inside the border, so nothing is
+	 * sent again while the window stays the same */
+	c->noborder = solitary(c);
+	if (c->noborder) {
+		wc.width += c->bw * 2;
+		wc.height += c->bw * 2;
 		wc.border_width = 0;
 	}
 	XConfigureWindow(dpy, c->win, CWX|CWY|CWWidth|CWHeight|CWBorderWidth, &wc);
@@ -1901,9 +1973,14 @@ scan(void)
 void
 sendmon(Client *c, Monitor *m)
 {
+	unsigned int i;
+
 	if (c->mon == m)
 		return;
 	unfocus(c, 1);
+	for (i = 0; i <= LENGTH(tags); i++) /* no tag here remembers it */
+		if (c->mon->pertag->sel[i] == c)
+			c->mon->pertag->sel[i] = NULL;
 	detach(c);
 	detachstack(c);
 	c->mon = m;
@@ -2266,22 +2343,29 @@ togglebar(const Arg *arg)
 	arrange(selmon);
 }
 
-/* sticky: the window shows on every tag of its monitor and floats on top.
- * Mod+j/k and focus changes skip it; click it to focus it. Unsticking
- * leaves it on the tags in view. */
+/* pin: the window floats and Mod+j/k and focus changes skip it; click it
+ * to focus it. arg->i 0: on its own tags only, 1: on every tag of its
+ * monitor (sticky). The same key again unpins it; the other key changes
+ * the kind of pin. An unpinned window stays floating, on the tags in view
+ * if it was on every tag. */
 void
 togglesticky(const Arg *arg)
 {
 	Client *c = selmon->sel;
+	int all = arg && arg->i;
 
 	if (!c || c->isfullscreen)
 		return;
-	c->issticky = !c->issticky;
-	if (c->issticky) {
+	if (c->issticky && (!all || c->ispinned))
+		c->tags = selmon->tagset[selmon->seltags] & TAGMASK;
+	if (c->ispinned && c->issticky == all) {
+		c->ispinned = c->issticky = 0;
+	} else {
+		c->ispinned = 1;
+		c->issticky = all;
 		if (!c->isfloating)
 			togglefloating(NULL);
-	} else
-		c->tags = selmon->tagset[selmon->seltags];
+	}
 	focus(NULL);
 	arrange(selmon);
 }
@@ -2294,6 +2378,12 @@ togglefloating(const Arg *arg)
 	if (selmon->sel->isfullscreen) /* no support for fullscreen windows */
 		return;
 	selmon->sel->isfloating = !selmon->sel->isfloating || selmon->sel->isfixed;
+	if (!selmon->sel->isfloating && selmon->sel->ispinned) {
+		/* a tiled window is not pinned: Mod+j/k reach it again */
+		if (selmon->sel->issticky)
+			selmon->sel->tags = selmon->tagset[selmon->seltags] & TAGMASK;
+		selmon->sel->ispinned = selmon->sel->issticky = 0;
+	}
 	if (selmon->sel->isfloating)
 		resize(selmon->sel, selmon->sel->x, selmon->sel->y,
 			selmon->sel->w, selmon->sel->h, 0);
@@ -2343,7 +2433,9 @@ toggleview(const Arg *arg)
 	unsigned int newtagset = selmon->tagset[selmon->seltags] ^ (arg->ui & TAGMASK);
 	int i;
 
-	if (newtagset) {
+	/* at least one real tag stays in view: the scratchpad's own tag has
+	 * no pertag slot */
+	if (newtagset & TAGMASK) {
 		selmon->tagset[selmon->seltags] = newtagset;
 
 		if (newtagset == ~0) {
@@ -2352,7 +2444,8 @@ toggleview(const Arg *arg)
 		}
 
 		/* test if the user did not select the same tag */
-		if (!(newtagset & 1 << (selmon->pertag->curtag - 1))) {
+		if (!selmon->pertag->curtag
+		|| !(newtagset & 1 << (selmon->pertag->curtag - 1))) {
 			selmon->pertag->prevtag = selmon->pertag->curtag;
 			for (i = 0; !(newtagset & 1 << i); i++) ;
 			selmon->pertag->curtag = i + 1;
@@ -2409,6 +2502,8 @@ unmanage(Client *c, int destroyed)
 		XUngrabServer(dpy);
 	}
 	free(c);
+	if (quiet) /* restart: the next dwm does all that */
+		return;
 	focus(NULL);
 	updateclientlist();
 	arrange(m);
@@ -2699,7 +2794,7 @@ view(const Arg *arg)
 	selmon->lt[selmon->sellt^1] = selmon->pertag->ltidxs[selmon->pertag->curtag][selmon->sellt^1];
 
 	c = selmon->pertag->sel[selmon->pertag->curtag];
-	focus(c && !c->issticky ? c : NULL);
+	focus(c && !c->ispinned ? c : NULL);
 	arrange(selmon);
 }
 
@@ -2810,8 +2905,12 @@ main(int argc, char *argv[])
 	if (pledge("stdio rpath proc exec", NULL) == -1)
 		die("pledge");
 #endif /* __OpenBSD__ */
+	/* the windows that are there already (all of them after a restart):
+	 * taken over without arranging in between, then arranged once */
+	quiet = 1;
+	restorestate(1);
 	scan();
-	restorestate();
+	restorestate(0);
 	run();
 	if (restarting)
 		savestate();
