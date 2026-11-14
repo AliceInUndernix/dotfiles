@@ -119,8 +119,10 @@ suggest them again without asking:
   key next to RGB (also on the steno layer). F1..F10 where the red layer's
   digits are, F11..F20 on the home row, F21..F24 on the left top row
   (USB stops at F24).
-- **94 (latest):** on the function key layer, the DWM key holds Ctrl+Alt
+- **94:** on the function key layer, the DWM key holds Ctrl+Alt
   (CTAL_0), for Ctrl+Alt+F1..F12 (console switching).
+- **95 (latest):** sounds quieter: AUDIO_DAC_SAMPLE_MAX 1023 in config.h
+  (QMK default 4095).
 - **config:** combo key count raised from 20 to 32 (by version 71); debounce
   raised to 12 ms against double letters (version 82). **rules:** unchanged in
   substance since the first numbered version (rules_1).

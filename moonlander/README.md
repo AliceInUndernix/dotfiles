@@ -8,7 +8,7 @@ that were tried and settled. Start with the comment at the top of
 
 | Path | What it is |
 |---|---|
-| `canary/` | Current layout (version 94): `keymap.c`, `config.h`, `rules.mk`, `keymap.json`, `mcuconf.h`, and the libraries it needs |
+| `canary/` | Current layout (version 95): `keymap.c`, `config.h`, `rules.mk`, `keymap.json`, `mcuconf.h`, and the libraries it needs |
 | `layout.html` | Picture of every layer as key squares (plain HTML, no scripts); open it in a browser or print it. Update it with every layout change |
 | `qmk.patch` | Small patch to ZSA's QMK that the libraries need |
 | `knowledge/canary/` | The first working canary keymap, kept as reference |

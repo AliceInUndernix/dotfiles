@@ -52,6 +52,10 @@
 // Run the audio timer at 1000 Hz so songs play with 2 ms accuracy
 // (ZSA's firmware25 default of 200 ms is far too coarse).
 #define AUDIO_STATE_TIMER_FREQUENCY 1000
+// Volume (version 95): the speaker swings between 0 and this value.
+// QMK's default is 4095 (loudest); 1023 is about a quarter of that.
+// Lower = quieter, e.g. 511; raise it again if it is too quiet.
+#define AUDIO_DAC_SAMPLE_MAX 1023U
 // Start-up and audio on/off sounds. (Older ZSA firmware, firmware20,
 // played these one octave lower than written; firmware25 plays them right.)
 #define STARTUP_SONG   SONG(E__NOTE(_E5), E__NOTE(_A5), ED_NOTE(_E6))
