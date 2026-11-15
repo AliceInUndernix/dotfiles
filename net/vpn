@@ -1396,8 +1396,12 @@ cmd_selftest() {
     st "proxychains goes through Tor" \
         "$(as_nobody "proxychains -q curl -s -m 40 $TOR_CHECK") |
         grep -q '\"IsTor\":true'"
+    # ahostsv4: "getent hosts" asks for IPv6 first, and Tor maps that
+    # to a fake IPv6 address, which says nothing about the firewall
     st ".onion names resolve (into Tor)" \
-        "$(as_nobody "getent hosts $ONION") | grep -q '^10\.'"
+        "$(as_nobody "getent ahostsv4 $ONION") | grep -q '^10\.'"
+    st "an .onion site opens without a proxy (through Tor)" \
+        "$(as_nobody "curl -4 -s -o /dev/null -m 90 http://$ONION/")"
     if [ -n "$router" ]; then
         was=off
         [ ! -e "$ETC/lan" ] || was=on
