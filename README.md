@@ -81,10 +81,11 @@ drawing only.
 
 ## Fresh install
 
-Clone and run it as yourself. Only three things need root, and for those
+Clone and run it as yourself. Only a few things need root, and for those
 the script stops and tells you the `su -c` command (it never uses sudo
 or doas): `--deps` (system packages), `slock` (must be root's to lock
-the screen) and making ksh the login shell (part `ksh`). Run as root, it
+the screen), making ksh the login shell (part `ksh`), and `net`,
+`icecat` and `chromium`, which go into the system. Run as root, it
 sets up the configs for the user who owns the repo folder, and
 everything it puts in that home belongs to that user, not to root.
 
@@ -102,7 +103,8 @@ when the dependencies are already there:
 ```sh
 ./install.sh all        # everything, no menu
 ./install.sh            # a numbered menu (Enter alone: everything)
-./install.sh nvim       # only some parts: ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver moonlander plover net
+./install.sh nvim       # only some parts: ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver moonlander plover net icecat chromium
+su -c '~user/dotfiles/install.sh icecat'    # a browser: icecat (20) or chromium (21)
 ./install.sh 4 12       # the same by number (0 is --deps)
 ./install.sh check      # only look: what is installed, missing, out of date
 ./install.sh --list     # the part names
@@ -119,6 +121,11 @@ What the script does:
 - **Log**: each run writes what it did, any errors and facts about the system (distro, kernel, which tools are installed) to `~/.system/state/install/latest.log`, yours even when root ran it. Paste it to Claude to check a run.
 - **Private home**: new files are yours alone (umask 077 in `~/.profile`, not for root), and each run of `install.sh` takes group and other permissions off everything already in your home.
 - **Login shell**: ksh becomes the shell of both the user and root (`chsh`, no password asked; root gets copies of `profile` and `kshrc`, owned by root).
+- **Browsers**: IceCat (`icecat`, 20) and ungoogled-chromium (`chromium`,
+  21) are parts of their own, built with emerge (Gentoo, as root). They
+  build from source for hours, so `all` and Enter alone leave them out:
+  name or number them. Only the program is installed; their settings and
+  profiles are not touched. `./install.sh check` shows whether they are in.
 - **Moonlander**: QMK, its Python environment, the ARM compiler and ZSA's
   QMK source go into `~/.system/share/qmk`, then the firmware is built into
   `moonlander/` for Keymapp. See `moonlander/README.md`.

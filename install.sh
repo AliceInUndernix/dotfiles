@@ -7,6 +7,7 @@
 #   plover   adding you to the serial port's group (dialout), once
 #   net      Riseup VPN, Tor and the kill switch (Gentoo with OpenRC;
 #            net/README)
+#   icecat, chromium   the browsers (emerge)
 #
 #   ./install.sh               a numbered menu: type numbers, then Enter
 #                              (Enter alone: everything, as "all")
@@ -19,8 +20,9 @@
 #                              distro's package manager (emerge -qv)
 #   ./install.sh -a --deps     the same, but emerge asks first (-qva)
 #   ./install.sh --list        show the parts
-#   BROWSERS=yes ./install.sh --deps   also build IceCat and Chromium
-#                              (Gentoo; from source, takes hours)
+#   ./install.sh icecat chromium   the browsers IceCat and
+#                              ungoogled-chromium (20, 21; Gentoo, as root,
+#                              from source, takes hours; not in "all")
 #
 # The configs are for the user who owns this repo folder (or INSTALL_USER=
 # name ./install.sh). Everything put in that user's home belongs to them,
@@ -40,7 +42,9 @@ umask 022
 
 DOTFILES=$(cd "$(dirname "$0")" && pwd)
 STAMP=$(date +%Y%m%d-%H%M%S)
-PARTS="ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver moonlander plover net"
+PARTS="ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver moonlander plover net icecat chromium"
+# only when named (or numbered): not in "all" or Enter alone
+ONLY_NAMED="icecat chromium"
 
 say()  { printf '==> %s\n' "$*"; }
 warn() { printf '!!  %s\n' "$*" >&2; }
@@ -110,43 +114,47 @@ link() {
 
 # The package managers run as root with root's own home and settings,
 # not the user's: otherwise eselect, emerge and pip leave root's caches in
-# the user's ~/.system (eselect-repo, 2026-11-12). A subshell, so the
-# rest of the script keeps the user's.
-deps() (
+# the user's ~/.system (eselect-repo, 2026-11-12). Called first in a
+# subshell, so the rest of the script keeps the user's.
+root_env() {
 	root_home=$(getent passwd root 2>/dev/null || grep '^root:' /etc/passwd)
 	root_home=${root_home%:*}; HOME=${root_home##*:}
 	unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME
+}
+
+# enable_overlay <name>: add a Gentoo overlay with eselect repository.
+enable_overlay() {
+	portageq get_repo_path / "$1" >/dev/null 2>&1 && return
+	say "enable  overlay $1"
+	emerge $EMERGE_OPTS --noreplace app-eselect/eselect-repository
+	eselect repository enable "$1"
+	emerge $EMERGE_OPTS --sync "$1"
+}
+
+# keyword <atom> [keyword]: allow a package from testing (~amd64, or the
+# keyword given), in a file of our own.
+keyword() {
+	kw=/etc/portage/package.accept_keywords
+	if [ -d "$kw" ] || [ ! -e "$kw" ]; then
+		mkdir -p "$kw"
+		kw=$kw/dotfiles
+	fi
+	grep -qs "^$1[[:space:]]" "$kw" && return
+	k=${2:-~$(portageq envvar ARCH)}
+	echo "$1 $k" >> "$kw"
+	say "keyword $1 $k -> $kw"
+}
+
+deps() (
+	root_env
 	id=unknown
 	[ -r /etc/os-release ] && id=$(. /etc/os-release; echo "${ID_LIKE:-} ${ID:-}")
 	case $id in
 	*gentoo*)
-		# enable_overlay <name>: add an overlay with eselect repository.
-		enable_overlay() {
-			portageq get_repo_path / "$1" >/dev/null 2>&1 && return
-			say "enable  overlay $1"
-			emerge $EMERGE_OPTS --noreplace \
-				app-eselect/eselect-repository
-			eselect repository enable "$1"
-			emerge $EMERGE_OPTS --sync "$1"
-		}
-		# wiremix and the two browsers are only in testing (~amd64): allow
-		# just those three, in a file of our own. Sioyek is the live
-		# ebuild (9999, no keywords at all), so it needs "**".
-		kw=/etc/portage/package.accept_keywords
-		if [ -d "$kw" ] || [ ! -e "$kw" ]; then
-			mkdir -p "$kw"
-			kw=$kw/dotfiles
-		fi
-		arch=$(portageq envvar ARCH)
-		for atom in media-sound/wiremix www-client/icecat www-client/ungoogled-chromium; do
-			grep -qs "^$atom[[:space:]]" "$kw" && continue
-			echo "$atom ~$arch" >> "$kw"
-			say "keyword $atom ~$arch -> $kw"
-		done
-		if ! grep -qs "^app-text/sioyek[[:space:]]" "$kw"; then
-			echo "app-text/sioyek **" >> "$kw"
-			say "keyword app-text/sioyek ** -> $kw"
-		fi
+		# wiremix is only in testing (~amd64). Sioyek is the live ebuild
+		# (9999, no keywords at all), so it needs "**".
+		keyword media-sound/wiremix
+		keyword app-text/sioyek '**'
 		# PipeWire first, on its own: wiremix needs its libpipewire-0.3 to
 		# build, but its ebuild doesn't say so, so emerge may build wiremix
 		# before PipeWire is in.
@@ -237,18 +245,7 @@ deps() (
 		emerge $EMERGE_OPTS --update --deep --changed-use \
 			app-text/sioyek
 		[ "$had_sioyek" = no ] ||
-			emerge $EMERGE_OPTS --oneshot app-text/sioyek
-		# Browsers only with BROWSERS=yes: both build from source and take
-		# hours. They are not in the main tree: IceCat comes from
-		# parona-overlay, ungoogled-chromium from pf4public.
-		if [ "${BROWSERS:-no}" = yes ]; then
-			enable_overlay parona-overlay
-			enable_overlay pf4public
-			emerge $EMERGE_OPTS --noreplace www-client/icecat \
-				www-client/ungoogled-chromium
-		else
-			say "skip    IceCat and Chromium (BROWSERS=yes ./install.sh --deps builds them)"
-		fi ;;
+			emerge $EMERGE_OPTS --oneshot app-text/sioyek ;;
 	*debian*|*ubuntu*)
 		apt-get install build-essential pkg-config libx11-dev \
 			libxft-dev libxinerama-dev libxrandr-dev libxext-dev \
@@ -1027,6 +1024,27 @@ install_net() {
 # when anything needs a look; each such line says what to run.
 
 CK_BAD=0
+# --- browsers --------------------------------------------------------------
+
+# The two browsers are parts of their own, only when asked for by name or
+# number (not in "all"): both build from source and take hours. Gentoo
+# only, and as root. Neither is in the main tree, and both are only in
+# testing (~amd64). Only the program is installed: no settings or
+# profile of ours.
+# browser <overlay> <atom>
+browser() (
+	if ! command -v emerge >/dev/null 2>&1; then
+		warn "${2#*/} is only for Gentoo: skipped"
+		return 0
+	fi
+	root_env
+	enable_overlay "$1"
+	keyword "$2"
+	emerge $EMERGE_OPTS --noreplace "$2"
+)
+install_icecat()   { browser parona-overlay www-client/icecat; }
+install_chromium() { browser pf4public www-client/ungoogled-chromium; }
+
 ck_ok() { printf '  ok   %s\n' "$*"; }
 ck_bad() { printf '  !!   %s\n' "$*"; CK_BAD=$((CK_BAD + 1)); }
 ck_info() { printf '  --   %s\n' "$*"; }
@@ -1175,7 +1193,19 @@ ck_part() {
 		[ ! -d "$PLOVER_DIR/dotterel" ] || ck_git "$PLOVER_DIR/dotterel" Dotterel
 		ck_info "a newer Plover release: ./install.sh plover always takes the newest" ;;
 	net) ck_net ;;
+	icecat) ck_browser www-client/icecat icecat ;;
+	chromium) ck_browser www-client/ungoogled-chromium chromium ;;
 	esac
+}
+
+ck_browser() {    # ck_browser <atom>: optional, so missing is no fault
+	if ! command -v portageq >/dev/null 2>&1; then
+		ck_info "${1#*/}: only for Gentoo"
+	elif portageq has_version / "$1"; then
+		ck_ok "${1#*/} $(portageq best_version / "$1" | sed 's/.*-\([0-9]\)/\1/')"
+	else
+		ck_info "${1#*/} is not installed: su -c '$DOTFILES/install.sh ${2:-}'"
+	fi
 }
 
 ck_same() {    # ck_same <repo file> <installed file>
@@ -1313,6 +1343,8 @@ part_info() {
 	moonlander) echo "QMK and the keyboard's firmware" ;;
 	plover) echo "Plover and Dotterel [root once: group dialout]" ;;
 	net) echo "Riseup VPN, Tor, kill switch (Gentoo, OpenRC) [root]" ;;
+	icecat) echo "IceCat browser, builds for hours (Gentoo) [root]" ;;
+	chromium) echo "ungoogled-chromium, builds for hours (Gentoo) [root]" ;;
 	*) echo "$1 settings" ;;
 	esac
 }
@@ -1321,7 +1353,8 @@ part_info() {
 menu() {
 	echo "What should install.sh do? Type numbers or names with spaces"
 	echo "between them (like: 1 4 19), then Enter. Enter alone does"
-	echo "everything; parts marked [root] need: su -c '$DOTFILES/install.sh'"
+	echo "everything but the browsers (20, 21: only when typed); parts"
+	echo "marked [root] need: su -c '$DOTFILES/install.sh'"
 	echo "(./install.sh check only looks at what is installed)"
 	echo
 	printf '  %2d  %-12s %s\n' 0 deps "system packages (emerge -qv) [root]"
@@ -1369,7 +1402,7 @@ for arg in "$@"; do
 		parts="$parts $p" ;;
 	-a) EMERGE_OPTS=-qva ;;
 	--list) echo "$PARTS"; exit 0 ;;
-	-h|--help) sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	-h|--help) sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 	-*) die "unknown option: $arg" ;;
 	*)
 		case " $PARTS " in *" $arg "*) ;; *) die "unknown part: $arg (see --list)" ;; esac
@@ -1377,7 +1410,11 @@ for arg in "$@"; do
 	esac
 done
 named=$parts
-[ -n "$parts" ] || parts=$PARTS
+if [ -z "$parts" ]; then
+	for p in $PARTS; do
+		case " $ONLY_NAMED " in *" $p "*) ;; *) parts="$parts $p" ;; esac
+	done
+fi
 
 # The log: the script runs itself again with everything it prints also
 # copied (by tee) to ~/.system/state/install/<date>.log, after a header of
@@ -1439,8 +1476,13 @@ if [ "$AS_ROOT" = no ]; then
 		parts=$(echo " $parts " | sed 's/ net / /')
 		skipped="${skipped:+$skipped }net" ;;
 	esac
+	for p in $ONLY_NAMED; do
+		case " $parts " in *" $p "*)
+			die "$p is built with emerge, which needs root: su -c '$DOTFILES/install.sh $p'" ;;
+		esac
+	done
 elif [ "$want_deps" = no ] && [ -n "$named" ]; then
-	case " $named " in *" slock "*|*" ksh "*|*" plover "*|*" net "*) ;; *)
+	case " $named " in *" slock "*|*" ksh "*|*" plover "*|*" net "*|*" icecat "*|*" chromium "*) ;; *)
 		say "note    these parts don't need root; next time just run ./install.sh$named" ;;
 	esac
 fi
