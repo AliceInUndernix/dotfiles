@@ -74,6 +74,10 @@ Commands
     vpn watch           the short status, updated every second (anyone)
     vpn log [N]         what happened and why: each server tried, its
                         speed or why it failed, why a zone was given up
+    vpn rescue          no internet? saves a log to your home, fixes
+                        what it can step by step (DHCP, the cards' own
+                        MAC, a new server, level 0), else turns it all
+                        off; says what worked, offers a reboot
     vpn report          everything needed to find a problem (MAC
                         addresses hidden; read it before you send it)
     vpn selftest        tries every level and feature one by one, then

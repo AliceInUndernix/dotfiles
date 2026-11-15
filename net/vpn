@@ -9,6 +9,9 @@
 #   vpn log [N]         what happened and why: each server tried,
 #                       each failure, why a zone was given up (root)
 #   vpn report          everything to find a problem (root)
+#   vpn rescue          no internet? saves a log to your home, fixes
+#                       what it can step by step, else turns it all
+#                       off; offers a reboot at the end (root)
 #   vpn off, vpn on     level -1, and back (root)
 #   vpn selftest        try every level and feature, then go back (root)
 # A command marked root asks for your password when you aren't root
@@ -1659,7 +1662,7 @@ pager_log() {
     else cmd_log | tail -n "$(($(rows) - 3))"; fi
 }
 
-help() { sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; }
+help() { sed -n '2,37p' "$0" | sed 's/^# \{0,1\}//'; }
 
 # the screen: vpntop (C) when it is installed, else the plain one here
 cmd_menu() {
@@ -1691,6 +1694,175 @@ cmd_report() {
         say "== $c"
         sh -c "$c" 2>&1
     done | sed 's/[0-9a-fA-F]\{2\}\(:[0-9a-fA-F]\{2\}\)\{5\}/MAC/g'
+}
+
+# --- vpn rescue: after a reboot with no internet ---------------------
+# Saves everything to a file in your home, then tries to get you online
+# step by step, testing the web after each: DHCP again (with the cards'
+# own MAC addresses), a new server, level 0, and at last everything
+# off (level -1). Says what worked; offers a reboot at the end.
+
+RESCUE=
+rlog() { say "$*" | tee -a "$RESCUE"; }
+
+# rcollect <title> <command>: its output into the file only
+rcollect() {
+    say "== $1" >> "$RESCUE"
+    sh -c "$2" >> "$RESCUE" 2>&1
+    say "" >> "$RESCUE"
+}
+
+# web_ok: can an ordinary program (nobody) open a web page?
+web_ok() {
+    su -s /bin/sh nobody -c "curl -s -o /dev/null -m 20 $WEB" \
+        </dev/null >/dev/null 2>&1
+}
+
+# rwait_state <secs>: until the vpn service says ok (or a problem)
+rwait_state() {
+    n=0
+    while [ $n -lt "$1" ]; do
+        st=$(cut -d ' ' -f 1 "$RUN/state" 2>/dev/null)
+        case $st in ok|problem) return 0 ;; esac
+        sleep 2
+        n=$((n + 2))
+        [ $((n % 10)) -ne 0 ] || printf '        ... %s s (%s)\n' "$n" \
+            "$(sed -n 's/^note=//p' "$RUN/status" 2>/dev/null | cut -c 1-50)"
+    done
+    return 1
+}
+
+# rtry <what>: test the web now; say it and keep it in the file
+rtry() {
+    if web_ok; then
+        rlog "  OK    the web works: $1"
+        return 0
+    fi
+    rlog "  no    the web does not work: $1"
+    return 1
+}
+
+cmd_rescue() {
+    need_root rescue
+    repo=$(cat "$ETC/repo" 2>/dev/null)
+    u=$(stat -c %U "$repo" 2>/dev/null)
+    home=$(getent passwd "$u" 2>/dev/null | cut -d : -f 6)
+    if [ -z "$u" ] || [ "$u" = root ] || [ ! -d "$home" ]; then
+        u=root home=/root
+    fi
+    RESCUE=$home/vpn-rescue-$(date -u +%Y%m%d-%H%M%S).txt
+    : > "$RESCUE"
+    chmod 600 "$RESCUE"
+    rlog "vpn rescue, $(date -u '+%Y-%m-%d %H:%M:%S') UTC"
+    rlog "Everything goes to $RESCUE (send it to me)."
+    rlog ""
+    rlog "1. collecting what is there now"
+    rcollect "vpn status -v" "$0 status -v"
+    rcollect "vpn log" "cat $RUN/events"
+    rcollect "ip -br link" "ip -br link"
+    rcollect "ip -br addr" "ip -br addr"
+    rcollect "ip route" "ip route"
+    rcollect "made-up MAC addresses" "cat $RUN/macs"
+    rcollect "dhcpcd" "rc-service dhcpcd status; tail -n 20 /etc/dhcpcd.conf"
+    rcollect "resolv.conf" "lsattr /etc/resolv.conf; cat /etc/resolv.conf"
+    rcollect "firewall" "nft list ruleset"
+    rcollect "runlevels" "rc-status -a"
+    rcollect "openvpn log" "tail -n 40 $RUN/openvpn.log"
+    rcollect "tor log" "tail -n 20 $RUN/tor.log"
+    rcollect "selftest log" "cat $RUN/selftest.log"
+    rcollect "kernel (network)" "dmesg | grep -i \
+        -e eth -e wlp -e wlan -e iwl -e firmware -e link -e dhcp | tail -n 40"
+    rcollect "processes" "ps -eo pid,ppid,stat,args --forest"
+    [ ! -x "$repo/install.sh" ] ||
+        rcollect "install.sh check" "$repo/install.sh check </dev/null"
+    rlog "  saved"
+    rlog ""
+    worked=
+
+    rlog "2. the network itself (DHCP)"
+    if has_net; then
+        rlog "  OK    a router gave an address"
+    else
+        rlog "  no    no address from DHCP"
+        if restore_macs; then
+            rlog "  fix   the cards' own MAC addresses back"
+        fi
+        dhcpcd -n >/dev/null 2>&1
+        rlog "  fix   asked dhcpcd again; waiting up to 40 s"
+        n=0
+        while [ $n -lt 40 ] && ! has_net; do sleep 2; n=$((n + 2)); done
+        if has_net; then rlog "  OK    a router gave an address"
+        else rlog "  no    still no address (cable? Wi-Fi? router?)"; fi
+    fi
+    rcollect "ip -br addr, after DHCP" "ip -br addr; ip route"
+
+    rlog ""
+    rlog "3. the web, as it is now"
+    if rtry "as it is (level $(cur_level))"; then
+        worked="as it is"
+    fi
+
+    if [ -z "$worked" ] && [ ! -e "$ETC/off" ] && has_net; then
+        rlog ""
+        rlog "4. picking a server again (up to 3 min)"
+        rm -f "$RUN/fw-off" "$RUN/state"
+        cmd_retry >/dev/null 2>&1
+        rwait_state 180
+        rlog "  vpn:  $(sed -n 's/^state=//p' "$RUN/status") $(sed -n \
+            's/^problem=//p' "$RUN/status")"
+        rtry "after picking a server again" && worked="a new server"
+        rcollect "vpn log, after the new pick" "tail -n 30 $RUN/events"
+    fi
+
+    if [ -z "$worked" ] && [ ! -e "$ETC/off" ]; then
+        rlog ""
+        rlog "5. level 0: your own IP, no VPN (until reboot)"
+        rm -f "$RUN/state"
+        cmd_level 0 >/dev/null 2>&1
+        rwait_state 40
+        sleep 3
+        rtry "level 0" && worked="level 0 (no VPN)"
+    fi
+
+    if [ -z "$worked" ]; then
+        rlog ""
+        rlog "6. everything off (level -1): the system as before vpn"
+        [ -e "$ETC/off" ] || cmd_off >> "$RESCUE" 2>&1
+        restore_macs >/dev/null 2>&1
+        dhcpcd -n >/dev/null 2>&1
+        n=0
+        while [ $n -lt 40 ] && ! has_net; do sleep 2; n=$((n + 2)); done
+        sleep 3
+        rtry "with everything off" && worked="everything off"
+        rcollect "after all off" "ip -br addr; ip route; cat /etc/resolv.conf"
+    fi
+
+    rlog ""
+    rlog "== result"
+    case $worked in
+    "as it is")
+        rlog "The internet works as it is: nothing had to change." ;;
+    "a new server")
+        rlog "The internet works again, through the VPN, with a new server." ;;
+    "level 0 (no VPN)")
+        rlog "The internet works at level 0 (your own IP, no VPN), until"
+        rlog "reboot. The VPN itself did not work: send me this file." ;;
+    "everything off")
+        rlog "The internet works with vpn turned off (level -1). Send me"
+        rlog "this file; vpn on turns it back on when it is fixed." ;;
+    *)
+        rlog "The internet does not work even with vpn off: the problem is"
+        rlog "the cable, the Wi-Fi or the router, not vpn (vpn is off now;"
+        rlog "vpn on turns it back on)." ;;
+    esac
+    sed -i 's/[0-9a-fA-F]\{2\}\(:[0-9a-fA-F]\{2\}\)\{5\}/MAC/g' "$RESCUE"
+    chown "$u" "$RESCUE" 2>/dev/null
+    say ""
+    say "Saved: $RESCUE (MAC addresses hidden)"
+    if [ -t 0 ]; then
+        ask "Reboot now? (the file stays) [y/N]" && reboot
+    fi
+    return 0
 }
 
 # random_macs: each network card gets a made-up MAC address, once, at
@@ -1749,7 +1921,7 @@ has_net() {
 
 case ${1:-} in
 ''|level|default|retry|refresh|lan|firewall-off|firewall-on|report|off|on|\
-selftest|log)
+selftest|log|rescue)
     as_root "$@" ;;
 status) [ "${2:-}" != -v ] || as_root "$@" ;;
 esac
@@ -1759,6 +1931,7 @@ status) cmd_status "${2:-}" ;;
 watch) cmd_watch ;;
 report) cmd_report ;;
 log) cmd_log "${2:-}" ;;
+rescue) cmd_rescue ;;
 off) cmd_off ;;
 selftest) cmd_selftest ;;
 on) cmd_on ;;

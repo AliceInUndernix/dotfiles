@@ -35,12 +35,14 @@ static const Rule rules[] = {
 
 /* Like rules, but only for the apps x/xinitrc starts: each one places just
  * the first window it matches in the first minute after login (not after
- * dwm restart). Plover or btop opened later open on the tag you are on.
- * btop runs in an st started with -c btop. */
+ * dwm restart). Opened later, they open on the tag you are on. Plover on
+ * tag 9; btop and the vpn screen on tag 8, each in an st started with
+ * -c btop or -c vpntop. */
 static const Rule startrules[] = {
 	/* class      instance    title       tags mask     isfloating   monitor */
 	{ "Plover",   NULL,       NULL,       1 << 8,       0,           -1 },
-	{ "btop",     NULL,       NULL,       1 << 8,       0,           -1 },
+	{ "btop",     NULL,       NULL,       1 << 7,       0,           -1 },
+	{ "vpntop",   NULL,       NULL,       1 << 7,       0,           -1 },
 };
 
 /* layout(s) */

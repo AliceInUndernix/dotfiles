@@ -40,10 +40,15 @@ while $STATUS_CLOCK; do
 	sleep $((60 - $(date +%S | sed 's/^0//')))
 done &
 
-# Started at login on tag 9 (startrules in dwm/config.h). Opened by hand
-# later, they open on the tag you are on like any other app.
+# Started at login (startrules in dwm/config.h): Plover on tag 9, btop
+# and the vpn screen on tag 8. Opened by hand later, they open on the
+# tag you are on like any other app. The vpn screen asks your password
+# for the full view; without it (Ctrl+C) it shows the short one.
 plover &
 st -c btop -e btop &
+if command -v vpn >/dev/null 2>&1; then
+	st -c vpntop -e sh -c 'vpn || vpn watch' &
+fi
 
 # dwm runs until you quit it (Mod+Shift+q), which ends the X session.
 # dwm restart (or Mod+Shift+r) restarts dwm in place, as the same
