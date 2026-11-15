@@ -842,7 +842,7 @@ install_net() {
 		return
 	fi
 	emerge $EMERGE_OPTS --noreplace net-vpn/openvpn net-vpn/tor \
-		net-firewall/nftables net-proxy/proxychains
+		net-firewall/nftables net-misc/proxychains
 	net=$DOTFILES/net
 	install -d -m 755 /usr/local/bin /etc/vpn
 	install -m 755 "$net/vpn" /usr/local/bin/vpn
