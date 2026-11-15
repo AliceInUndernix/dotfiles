@@ -2,7 +2,7 @@
  * ==========================================================================
  *  ZSA Moonlander (rev B), keymap "canary"
  *  Canary letter layout, built on optozorax's keymap libraries.
- *  Version 96 (the latest; earlier drafts were numbered 75..95).
+ *  Version 97 (the latest; earlier drafts were numbered 75..96).
  * ==========================================================================
  *
  * HOW TO READ THIS FILE
@@ -648,8 +648,9 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      * Version 96: Stky pins on the window's own tag, with Shift on every
      * tag; Susp sends Super+Ctrl+Shift+z (dwm moved suspend off Super+
      * Shift+s so that Shift+Stky can't suspend).
+     * Version 97: Stky and TFlt swapped (Stky is used far more often).
      *
-     * top      Web  Flt  Tile Deck Mono Bar  --       Stky TFlt Mst+ Mon> Mon< Mst- Susp
+     * top      Web  Flt  Tile Deck Mono Bar  --       TFlt Stky Mst+ Mon> Mon< Mst- Susp
      * home     Kill Menu Tmux Scr  Term Lock --       --   Zoom Shrk Next Prev Grow Top
      * bottom   Mix  All  Tag9 Tag8 Tag7 Tag6               Tag5 Tag4 Tag3 Tag2 Tag1 Shot
      * lower    __   __   __   __   __   __          __   (held)
@@ -703,7 +704,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      */
     [L_DWM] = LAYOUT_moonlander(
         _______, _______, _______, _______, _______, _______, _______,      _______, _______, _______, _______, _______, _______, _______,
-        D_WEB,   D_FLOT,  D_TILE,  D_DECK,  D_MONO,  D_BAR,   KC_NO,        D_STKY,  D_TFLT,  D_NMAI,  D_MONN,  D_MONP,  D_NMAD,  D_SUSP,
+        D_WEB,   D_FLOT,  D_TILE,  D_DECK,  D_MONO,  D_BAR,   KC_NO,        D_TFLT,  D_STKY,  D_NMAI,  D_MONN,  D_MONP,  D_NMAD,  D_SUSP,
         D_KILL,  D_RUN,   D_TMUX,  D_SCRT,  D_TERM,  D_LOCK,  KC_NO,        KC_NO,   D_ZOOM,  D_MSTS,  D_FOCN,  D_FOCP,  D_MSTG,  D_TOP,
         D_MIX,   D_ALL,   D_TAG9,  D_TAG8,  D_TAG7,  D_TAG6,                D_TAG5,  D_TAG4,  D_TAG3,  D_TAG2,  D_TAG1,  D_SHOT,
         _______, _______, _______, _______, _______, _______,               _______, _______, _______, _______, _______, _______,

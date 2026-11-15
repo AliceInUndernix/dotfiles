@@ -123,10 +123,12 @@ suggest them again without asking:
   (CTAL_0), for Ctrl+Alt+F1..F12 (console switching).
 - **95:** sounds quieter: AUDIO_DAC_SAMPLE_MAX 1023 in config.h
   (QMK default 4095).
-- **96 (latest):** follows dwm: Stky pins the window on its own tag
+- **96:** follows dwm: Stky pins the window on its own tag
   (Super+s), Shift+Stky on every tag (Super+Shift+s). Susp sends
   Super+Ctrl+Shift+z, dwm's new suspend shortcut, so Shift+Stky can't
   suspend.
+- **97 (latest):** Stky and TFlt swapped on the dwm layer's top row:
+  Stky is used far more than TFlt.
 - **config:** combo key count raised from 20 to 32 (by version 71); debounce
   raised to 12 ms against double letters (version 82). **rules:** unchanged in
   substance since the first numbered version (rules_1).
