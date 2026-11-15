@@ -83,7 +83,8 @@ need_root() {
 # reboot.
 
 S_STATE=starting S_LEVEL=2 S_PROBLEM= S_NOTE= S_ZONE= S_CC= S_LOC= S_IP=
-S_SPEED= S_SINCE= S_CLOCK= S_CERT= S_TOR= S_TESTS= S_STEP=
+S_SPEED= S_SINCE= S_CLOCK= S_CERT= S_TOR= S_TESTS= S_STEP= S_ZONES=
+S_PROG=
 
 put() {
     S_STATE=$1
@@ -105,6 +106,8 @@ put() {
         say "tor=$S_TOR"
         say "tests=$S_TESTS"
         say "step=$S_STEP"
+        say "zones=$S_ZONES"
+        say "progress=$S_PROG"
         say "updated=$(date -u +%H:%M:%S)"
     } > "$RUN/status.new"
     printf 'state=%s\nlevel=%s\nproblem=%s\nupdated=%s\n' "$S_STATE" \
@@ -647,10 +650,12 @@ pick() {
     firewall pick
     S_TESTS=
     all=$(awk 'NF >= 5' "$ETC/gateways" | wc -l)
-    counts=
+    counts= S_ZONES=
     for zone in white gray black; do
         candidates "$zone" > "$RUN/candidates.$zone"
-        counts="$counts $(wc -l < "$RUN/candidates.$zone") $zone,"
+        c=$(wc -l < "$RUN/candidates.$zone")
+        counts="$counts $c $zone,"
+        S_ZONES="${S_ZONES:+$S_ZONES }$c"
     done
     ev "picking a server: $all in the list:${counts%,}"
     why=
@@ -670,12 +675,13 @@ pick() {
             [ $tested -lt $TESTS ] || break
             set -- $line
             tried=$((tried + 1))
+            S_PROG="$zone $tried $total $tested"
             note "$zone: connecting to $3 $2, server $tried of $total," \
                 "speed-tested $tested of $TESTS"
             put testing
             if test_gateway "$line"; then
                 tested=$((tested + 1))
-                S_TESTS="${S_TESTS:+$S_TESTS, }$3 $((TG_SPEED / 1024)) KB/s"
+                S_TESTS="$S_TESTS$3|$2|$1|$((TG_SPEED / 1024))|;"
                 put testing
                 ev "$zone: $3 $2 $1: $((TG_SPEED / 1024)) KB/s"
                 if [ "$TG_SPEED" -gt "$bspeed" ]; then
@@ -683,7 +689,7 @@ pick() {
                 fi
             else
                 failed=$((failed + 1))
-                S_TESTS="${S_TESTS:+$S_TESTS, }$3 failed"
+                S_TESTS="$S_TESTS$3|$2|$1||$(say "$TG_WHY" | tr ';|' ',/');"
                 put testing
                 ev "$zone: $3 $2 $1 FAILED: $TG_WHY"
             fi
@@ -694,6 +700,7 @@ pick() {
             ev "$zone: chose $3 $2, the fastest of $tested tested" \
                 "($failed failed)"
             CHOSEN=$best CHOSEN_ZONE=$zone CHOSEN_SPEED=$bspeed
+            S_PROG="$zone done $tried $tested"
             note ""
             return 0
         fi
@@ -702,6 +709,7 @@ pick() {
     done
     rm -f "$RUN"/candidates.*
     ev "no zone has a working server ($why)"
+    S_PROG="none"
     PICK_WHY=$why
     note ""
     return 1
@@ -1017,7 +1025,9 @@ cmd_status() {
     fi
     [ -z "$cl" ] || say "clock:    $cl"
     [ -z "$ce" ] || say "cert:     valid until $ce"
-    [ -z "$te" ] || field "tests:" "$te"
+    [ -z "$te" ] || field "tests:" "$(say "$te" | tr ';' '\n' |
+        awk -F '|' 'NF { if ($4 != "") s = $4 " KB/s"; else s = "failed"
+            printf "%s%s %s %s", n++ ? ", " : "", $1, $3, s }')"
     [ -z "$pr" ] || say "(vpn: choose what to do; vpn log: what happened)"
     return 0
 }
@@ -1374,6 +1384,22 @@ cmd_selftest() {
     say "== without the network" | tee -a "$RUN/selftest.log"
     for m in closed pick vpn torvpn direct sandbox refresh; do
         st "firewall rules for $m load" "$0 firewall $m --check"
+    done
+    st "the hostname is host" '[ "$(hostname)" = host ]'
+    st "dhcpcd sends no hostname (anonymous)" \
+        "grep -q '^anonymous' /etc/dhcpcd.conf"
+    st "dhcpcd does not change the MAC while connected" \
+        "! grep -q '^randomise_hwaddr' /etc/dhcpcd.conf"
+    for d in /sys/class/net/*; do
+        [ -e "$d/device" ] || continue
+        [ ! -e "$ETC/keep-mac" ] || break
+        # the second hex digit has bit 2 set: made up, not the card's
+        st "${d##*/} has a made-up MAC address" \
+            "cut -c 2 $d/address | grep -q '[2367abefABEF]'"
+        if [ -d "$d/wireless" ]; then
+            say "  info  ${d##*/} (Wi-Fi) is $(cat "$d/operstate")" |
+                tee -a "$RUN/selftest.log"
+        fi
     done
     st "vpnauth is setuid root" "[ -u /usr/local/bin/vpnauth ]"
     st "the server list and certificate are there" \
