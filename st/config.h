@@ -203,6 +203,9 @@ static Shortcut shortcuts[] = {
 	/* scrollback, like Alacritty (-1 is one page; outside vim/tmux/less) */
 	{ ShiftMask,            XK_Prior,       kscrollup,      {.i = -1} },
 	{ ShiftMask,            XK_Next,        kscrolldown,    {.i = -1} },
+	/* Shift+Up/Down: a line (else they type ;2A on the ksh line) */
+	{ ShiftMask,            XK_Up,          kscrollup,      {.i = 1} },
+	{ ShiftMask,            XK_Down,        kscrolldown,    {.i = 1} },
 	{ ShiftMask,            XK_Home,        kscrollup,      {.i = 1 << 30} },
 	{ ShiftMask,            XK_End,         kscrolldown,    {.i = 1 << 30} },
 	{ TERMMOD,              XK_Prior,       zoom,           {.f = +1} },

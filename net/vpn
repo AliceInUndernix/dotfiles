@@ -1288,6 +1288,7 @@ cmd_off() {
     fi
     chattr -i /etc/resolv.conf 2>/dev/null
     restore_macs && say "  MAC addresses: the cards' own again"
+    own_macs && say "  more MAC addresses: the cards' own again"
     # dhcpcd writes resolv.conf again from what the network says
     if pgrep -x dhcpcd >/dev/null 2>&1; then dhcpcd -n >/dev/null 2>&1; fi
     say "  /etc/resolv.conf: unlocked, dhcpcd writes it again"
@@ -1787,6 +1788,9 @@ cmd_rescue() {
         if restore_macs; then
             rlog "  fix   the cards' own MAC addresses back"
         fi
+        if own_macs; then
+            rlog "  fix   more cards' own MAC addresses back (permaddr, dmesg)"
+        fi
         dhcpcd -n >/dev/null 2>&1
         rlog "  fix   asked dhcpcd again; waiting up to 40 s"
         n=0
@@ -1911,6 +1915,28 @@ restore_macs() {
     done < "$RUN/macs"
     rm -f "$RUN/macs"
     return 0
+}
+
+# own_macs: also cards with a made-up address that /run/vpn/macs does
+# not know (an older vpn changed USB cards too): the real one from
+# "ip link" (permaddr) or from the kernel's log when the card started
+own_macs() {
+    done_any=1
+    for d in /sys/class/net/*; do
+        [ -e "$d/device" ] || continue
+        i=${d##*/}
+        cut -c 2 "$d/address" | grep -q '[2367abefABEF]' || continue
+        own=$(ip link show dev "$i" | sed -n 's/.* permaddr \([^ ]*\).*/\1/p')
+        [ -n "$own" ] || own=$(dmesg 2>/dev/null |
+            sed -n "s/.* $i: register .*, \([0-9a-f:]\{17\}\)\$/\1/p" |
+            tail -n 1)
+        [ -n "$own" ] || continue
+        ip link set dev "$i" down 2>/dev/null
+        ip link set dev "$i" address "$own" 2>/dev/null
+        ip link set dev "$i" up 2>/dev/null
+        done_any=0
+    done
+    return $done_any
 }
 
 # has_net: a default route through a router (not dhcpcd's link-local
