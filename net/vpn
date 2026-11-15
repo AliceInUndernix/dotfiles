@@ -522,7 +522,8 @@ start_ovpn() {
 # without the date, short
 ovpn_last() {
     tail -n +"$(($1 + 1))" "$RUN/openvpn.log" 2>/dev/null |
-        grep -i 'error\|fail\|refused\|time.*out\|unreach' |
+        grep -v 'Exiting due to fatal error\|SIGTERM\|process exiting' |
+        grep -i 'error\|fail\|refused\|time.*out\|unreach\|cannot' |
         tail -n 1 |
         sed -e 's/^[A-Z][a-z]* [A-Z][a-z]* *[0-9]* [0-9:]* [0-9]* //' \
             -e 's/^[0-9-]* [0-9:]* //' |
@@ -647,6 +648,12 @@ CHOSEN= CHOSEN_ZONE= CHOSEN_SPEED=
 # step and each reason goes to the events (vpn log).
 TG_ZONE=
 pick() {
+    if ! has_net; then
+        PICK_WHY="no network: DHCP gave no address (ip -br addr)"
+        ev "no network to test servers through: $PICK_WHY"
+        S_PROG=none
+        return 1
+    fi
     firewall pick
     S_TESTS=
     all=$(awk 'NF >= 5' "$ETC/gateways" | wc -l)
@@ -947,19 +954,28 @@ daemon() {
     done
     openssl x509 -checkend 0 -noout -in "$ETC/client.crt" >/dev/null 2>&1 ||
         fail "the certificate has expired: run vpn refresh"
-    # wait (up to a minute) for dhcpcd to give us a network
-    note "waiting for a network (dhcpcd), up to 60 s"
+    # wait (up to a minute) for dhcpcd to give us a network; if the
+    # made-up MAC addresses get none, try again with the cards' own
+    note "waiting for an address from DHCP (dhcpcd), up to 60 s"
     put starting
     n=0
-    while [ $n -lt 60 ] && [ -z "$(ip -4 route show default 2>/dev/null)" ]
-    do
+    while [ $n -lt 60 ] && ! has_net; do
+        if [ $n -eq 30 ] && [ -s "$RUN/macs" ]; then
+            ev "no address from DHCP in 30 s with made-up MAC addresses:" \
+                "back to the cards' own (vpn log; touch $ETC/keep-mac)"
+            restore_macs
+            dhcpcd -n >/dev/null 2>&1
+            note "waiting for DHCP again, with the cards' own MAC addresses"
+            put starting
+        fi
         sleep 1
         n=$((n + 1))
     done
-    if [ $n -ge 60 ]; then
-        ev "no default route after 60 s: is a cable or Wi-Fi up?"
-    else
+    if has_net; then
         ev "network up after $n s"
+    else
+        ev "no address from DHCP after 60 s: is a cable or Wi-Fi" \
+            "connected? (ip -br addr: 169.254.x.x means DHCP gave none)"
     fi
     connect_loop
 }
@@ -1268,6 +1284,7 @@ cmd_off() {
         ln -sfn "$(cat "$ORIG/localtime.link")" /etc/localtime
     fi
     chattr -i /etc/resolv.conf 2>/dev/null
+    restore_macs && say "  MAC addresses: the cards' own again"
     # dhcpcd writes resolv.conf again from what the network says
     if pgrep -x dhcpcd >/dev/null 2>&1; then dhcpcd -n >/dev/null 2>&1; fi
     say "  /etc/resolv.conf: unlocked, dhcpcd writes it again"
@@ -1400,12 +1417,18 @@ cmd_selftest() {
         "! grep -q '^randomise_hwaddr' /etc/dhcpcd.conf"
     for d in /sys/class/net/*; do
         [ -e "$d/device" ] || continue
-        [ ! -e "$ETC/keep-mac" ] || break
-        # the second hex digit has bit 2 set: made up, not the card's
-        st "${d##*/} has a made-up MAC address (set at boot only)" \
-            "cut -c 2 $d/address | grep -q '[2367abefABEF]'"
+        i=${d##*/}
+        if grep -q "^$i " "$RUN/macs" 2>/dev/null; then
+            # the second hex digit has bit 2 set: made up, not the card's
+            st "$i has a made-up MAC address" \
+                "cut -c 2 $d/address | grep -q '[2367abefABEF]'"
+        else
+            say "  info  $i uses its own MAC address (USB, keep-mac," \
+                "or DHCP failed with a made-up one)" |
+                tee -a "$RUN/selftest.log"
+        fi
         if [ -d "$d/wireless" ]; then
-            say "  info  ${d##*/} (Wi-Fi) is $(cat "$d/operstate")" |
+            say "  info  $i (Wi-Fi) is $(cat "$d/operstate")" |
                 tee -a "$RUN/selftest.log"
         fi
     done
@@ -1673,11 +1696,21 @@ cmd_report() {
 # random_macs: each network card gets a made-up MAC address, once, at
 # boot (vpnfw), while it is still down; nothing changes it while
 # connected (changing it then breaks Wi-Fi). /etc/vpn/keep-mac: don't.
+# USB network devices (phone tethering, docks: cdc_ncm, rndis...) are
+# left alone: they only pass on frames for the address they know.
+# /run/vpn/macs keeps "card own-address", for restore_macs.
 random_macs() {
     [ ! -e "$ETC/keep-mac" ] || return 0
+    mkdir -p "$RUN"
+    : > "$RUN/macs"
+    chmod 600 "$RUN/macs"
     for d in /sys/class/net/*; do
         [ -e "$d/device" ] || continue
+        case $(readlink -f "$d/device/subsystem" 2>/dev/null) in
+        */usb) continue ;;
+        esac
         i=${d##*/}
+        own=$(cat "$d/address" 2>/dev/null)
         set -- $(od -An -N6 -tx1 /dev/urandom)
         [ $# -eq 6 ] || continue
         # locally administered, unicast
@@ -1686,10 +1719,32 @@ random_macs() {
         up=no
         ip link show dev "$i" | grep -q '[<,]UP[,>]' && up=yes
         [ $up = no ] || ip link set dev "$i" down
-        ip link set dev "$i" address "$m" 2>/dev/null ||
+        if ip link set dev "$i" address "$m" 2>/dev/null; then
+            say "$i $own" >> "$RUN/macs"
+        else
             warn "could not give $i a random MAC address"
+        fi
         [ $up = no ] || ip link set dev "$i" up
     done
+}
+
+# restore_macs: the cards' own MAC addresses back (from random_macs)
+restore_macs() {
+    [ -s "$RUN/macs" ] || return 1
+    while read -r i own; do
+        [ -n "$own" ] || continue
+        ip link set dev "$i" down 2>/dev/null
+        ip link set dev "$i" address "$own" 2>/dev/null
+        ip link set dev "$i" up 2>/dev/null
+    done < "$RUN/macs"
+    rm -f "$RUN/macs"
+    return 0
+}
+
+# has_net: a default route through a router (not dhcpcd's link-local
+# fallback, 169.254.x.x, which means DHCP gave nothing)
+has_net() {
+    ip -4 route show default 2>/dev/null | grep -q ' via '
 }
 
 case ${1:-} in
