@@ -19,8 +19,8 @@
 #   vpn level L         switch until reboot (root). L is one of:
 #                        -1  everything off, as if vpn weren't installed
 #                            (stays off after reboot; vpn on: back on)
-#                         0  "bare": your own IP, no VPN (DNS 1.1.1.1)
-#                         1  "vpn": all through the VPN (DNS 1.1.1.1 in it)
+#                         0  "bare": your own IP, no VPN (DNS through Tor)
+#                         1  "vpn": all through the VPN (Riseup's DNS in it)
 #                         2  "tor dns": the VPN, DNS through Tor (usual)
 #                         3  "tor": the VPN, and everything through Tor
 #                         sandbox  like 0, but only programs started
@@ -64,7 +64,6 @@ UP_SECS=30              # how long a tunnel may take to come up
 DROPS=3                 # this many drops ...
 DROP_WINDOW=600         # ... in 10 minutes: stop and tell
 LAN_NETS="10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16"
-CLOUDFLARE=1.1.1.1
 TOR_DNS=9053            # Tor's DNSPort (torrc)
 TOR_TRANS=9040          # Tor's TransPort (torrc)
 ONION_NET=10.192.0.0/10 # Tor's VirtualAddrNetworkIPv4 (torrc)
@@ -545,6 +544,9 @@ stop_ovpn() {
 
 # The VPN's DNS server, which OpenVPN's up-hook wrote down.
 vpn_dns() { sed -n 's/^dns=//p' "$RUN/up" 2>/dev/null; }
+# riseup_dns: the DNS of level 1, Riseup's inside the tunnel (10.41.0.1
+# when tested, 2026-11-15); Tor's (127.0.0.1) if the tunnel gave none.
+riseup_dns() { d=$(vpn_dns); echo "${d:-127.0.0.1}"; }
 
 up_hook() {
     d=
@@ -823,7 +825,7 @@ apply_level() {
     fi
     ev "level $S_LEVEL${S_NOTE:+ ($S_NOTE)}"
     case $S_LEVEL in
-    1) set_resolv "$CLOUDFLARE"; firewall vpn ;;
+    1) set_resolv "$(riseup_dns)"; firewall vpn ;;
     3) set_resolv 127.0.0.1; firewall torvpn ;;
     *) set_resolv 127.0.0.1; firewall vpn ;;
     esac
@@ -931,14 +933,14 @@ daemon() {
     put starting
     case $S_LEVEL in
     0)
-        set_resolv "$CLOUDFLARE"
+        set_resolv 127.0.0.1
         firewall direct
         start_tor
         S_SINCE=$(now_utc)
         put ok
         idle ;;
     sandbox)
-        set_resolv "$CLOUDFLARE"
+        set_resolv 127.0.0.1
         firewall sandbox
         start_tor
         S_SINCE=$(now_utc)
@@ -1014,8 +1016,8 @@ cmd_status() {
         no="$no ($(($(date +%s) - ss)) s so far)"
     fi
     case $lv in
-    0) d="bare: your own IP, no VPN (DNS 1.1.1.1)" ;;
-    1) d="vpn: all through the VPN (DNS 1.1.1.1 in it)" ;;
+    0) d="bare: your own IP, no VPN (DNS through Tor)" ;;
+    1) d="vpn: all through the VPN (Riseup's DNS in it)" ;;
     2) d="tor dns: the VPN, DNS through Tor" ;;
     3) d="tor: the VPN, and everything through Tor" ;;
     sandbox) d="sandbox: own IP, only vpn run programs and Tor online" ;;
@@ -1512,8 +1514,8 @@ cmd_selftest() {
     fi
 
     st_level 1
-    st "DNS is 1.1.1.1 (through the VPN)" \
-        "grep -qx 'nameserver 1.1.1.1' /etc/resolv.conf"
+    st "DNS is Riseup's ($(riseup_dns), through the VPN)" \
+        "grep -qx 'nameserver $(riseup_dns)' /etc/resolv.conf"
     st_web "the web works through the VPN"
     [ -z "$phys" ] || st_not "kill switch: nothing goes out on $phys itself" \
         "$(as_nobody "curl -s -o /dev/null -m 10 --interface $phys $WEB")"
@@ -1867,7 +1869,14 @@ cmd_rescue() {
         cmd_level 0 >/dev/null 2>&1
         rwait_state 40
         sleep 3
+        # DNS goes through Tor at level 0 too: give it time to start
         rtry "level 0" && worked="level 0 (no VPN)"
+        for t in 1 2; do
+            [ -z "$worked" ] || break
+            sleep 15
+            rtry "level 0, $((t * 15)) s later" &&
+                worked="level 0 (no VPN)"
+        done
     fi
 
     if [ -z "$worked" ]; then

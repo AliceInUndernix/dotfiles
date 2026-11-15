@@ -45,8 +45,9 @@ Levels
     -1       everything off: kill switch, VPN and Tor gone, the system
              files as before install.sh net, nothing at boot (vpn on,
              or any other level, installs it all again)
-    0        "bare": your own IP, no VPN (DNS 1.1.1.1)
-    1        "vpn": everything through the VPN (DNS 1.1.1.1, in the VPN)
+    0        "bare": your own IP, no VPN (DNS through Tor)
+    1        "vpn": everything through the VPN (Riseup's own DNS, in
+             the VPN)
     2        "tor dns": the VPN, and DNS through Tor (the usual one)
     3        "tor": the VPN, and every TCP connection goes through Tor;
              anything else (UDP) is dropped
