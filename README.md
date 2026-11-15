@@ -76,6 +76,7 @@ when the dependencies are already there:
 ./install.sh            # a numbered menu (Enter alone: everything)
 ./install.sh nvim       # only some parts: ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver moonlander plover net
 ./install.sh 4 12       # the same by number (0 is --deps)
+./install.sh check      # only look: what is installed, missing, out of date
 ./install.sh --list     # the part names
 INSTALL_USER=user ./install.sh    # as root, if the repo folder belongs to root
 ```

@@ -13,6 +13,8 @@
 #   ./install.sh 1 4 19        the parts with those numbers (0: --deps)
 #   ./install.sh nvim dwm      only the parts named
 #   ./install.sh all           everything, without the menu
+#   ./install.sh check [part]  only look: what is installed, missing or
+#                              out of date (changes nothing)
 #   ./install.sh --deps        first install build dependencies with the
 #                              distro's package manager (emerge -qv)
 #   ./install.sh -a --deps     the same, but emerge asks first (-qva)
@@ -984,6 +986,271 @@ install_net() {
 	say "        rc-service vpnfw start && rc-service vpn start"
 }
 
+# --- check (./install.sh check) --------------------------------------------
+# Only looks, changes nothing: for each part what is installed, missing,
+# out of date or not as the repo has it. Asks git whether this repo and
+# Dotterel have newer commits (that needs the network). Exit status 1
+# when anything needs a look; each such line says what to run.
+
+CK_BAD=0
+ck_ok() { printf '  ok   %s\n' "$*"; }
+ck_bad() { printf '  !!   %s\n' "$*"; CK_BAD=$((CK_BAD + 1)); }
+ck_info() { printf '  --   %s\n' "$*"; }
+
+# ck_links <part>: the links install_<part> makes from this repo
+ck_links() {
+	lines=$(sed -n "/^install_$1() {/,/^}/p" "$DOTFILES/install.sh" |
+		grep '^[[:space:]]*link "$DOTFILES/') || :
+	[ -n "$lines" ] || return 0
+	while IFS= read -r line; do
+		eval "set -- ${line#*link }"
+		if [ -L "$2" ] && [ "$(readlink "$2")" = "$1" ]; then
+			ck_ok "$2"
+		elif [ -e "$2" ] || [ -L "$2" ]; then
+			ck_bad "$2 is not the repo's: ./install.sh $p"
+		else
+			ck_bad "$2 is missing: ./install.sh $p"
+		fi
+	done <<EOF
+$lines
+EOF
+}
+
+ck_cmd() {
+	if c=$(PATH=$PATH:/usr/sbin:/sbin command -v "$1"); then
+		ck_ok "$1 installed ($c)"
+	else
+		ck_bad "$1 is not installed: su -c '$DOTFILES/install.sh --deps'"
+	fi
+}
+
+# ck_built <name>: ~/.system/bin/<name> is there and newer than its source
+ck_built() {
+	b=$SYSBIN/$1
+	if [ ! -x "$b" ]; then
+		ck_bad "$1 is not built: ./install.sh $1"
+		return
+	fi
+	n=$(find "$DOTFILES/$1" -type f \( -name '*.[ch]' -o -name config.mk \
+		-o -name Makefile \) -newer "$b" | wc -l)
+	if [ "$n" -gt 0 ]; then
+		ck_bad "$1 is older than its source ($n files changed): ./install.sh $1"
+	else
+		ck_ok "$1 built from the current source"
+	fi
+}
+
+# ck_git <dir> <name>: uncommitted changes, newer commits upstream
+ck_git() {
+	g="git -c safe.directory=$1 -C $1"
+	if ! $g rev-parse >/dev/null 2>&1; then
+		ck_bad "$2 is not a git checkout ($1)"
+		return
+	fi
+	if $g status --porcelain 2>/dev/null | grep -q .; then
+		ck_info "$2 has changes not committed"
+	fi
+	if ! $g fetch -q 2>/dev/null; then
+		ck_info "$2: could not ask upstream for newer commits (network?)"
+		return
+	fi
+	n=$($g rev-list --count 'HEAD..@{upstream}' 2>/dev/null || echo 0)
+	if [ "$n" -gt 0 ]; then
+		ck_bad "$2 is $n commits behind: git -C $1 pull"
+	else
+		ck_ok "$2 is up to date ($($g log -1 --format=%h))"
+	fi
+}
+
+ck_part() {
+	case $1 in
+	ksh)
+		ck_links ksh
+		sh_now=$(getent passwd "$USER_NAME" 2>/dev/null | cut -d: -f7)
+		case $sh_now in
+		*ksh) ck_ok "login shell $sh_now" ;;
+		*) ck_bad "login shell is $sh_now: su -c '$DOTFILES/install.sh ksh'" ;;
+		esac
+		for f in profile kshrc; do
+			if [ ! -r "/root/.$f" ]; then
+				ck_info "root's .$f: only root can read it (check as root)"
+			elif cmp -s "$DOTFILES/ksh/$f" "/root/.$f"; then
+				ck_ok "root's .$f"
+			else
+				ck_bad "root's .$f is older: su -c '$DOTFILES/install.sh ksh'"
+			fi
+		done ;;
+	nvim)
+		ck_links nvim
+		if command -v nvim >/dev/null 2>&1; then
+			v=$(nvim --version | sed -n '1s/^NVIM v\{0,1\}//p')
+			case $v in
+			0.[0-9].*|0.10.*) ck_bad "Neovim $v is older than 0.11" ;;
+			*) ck_ok "Neovim $v" ;;
+			esac
+		else
+			ck_bad "nvim is not installed: su -c '$DOTFILES/install.sh --deps'"
+		fi
+		pack=$DATA/nvim/site/pack/plugins/opt
+		for t in "$DOTFILES"/archive/nvim-plugins/*.tar.gz; do
+			n=$(basename "$t" .tar.gz)
+			if [ -d "$pack/$n" ]; then ck_ok "plugin $n"
+			else ck_bad "plugin $n is missing: ./install.sh nvim"; fi
+		done
+		if command -v nvim >/dev/null 2>&1 &&
+			[ "$(readlink "$SYSBIN/vim" 2>/dev/null)" = "$(command -v nvim)" ]
+		then
+			ck_ok "vim runs Neovim"
+		else
+			ck_bad "$SYSBIN/vim is not Neovim: ./install.sh nvim"
+		fi ;;
+	xdg|x|feh) ck_links "$1" ;;
+	tmux|flameshot|mpv|sioyek|wiremix|btop)
+		ck_links "$1"
+		ck_cmd "$1" ;;
+	dwm|st|webarchiver) ck_built "$1" ;;
+	dmenu)
+		ck_built dmenu
+		ck_links dmenu ;;
+	slock)
+		ck_built slock
+		if [ -u "$SYSBIN/slock" ] && [ "$(stat -c %U "$SYSBIN/slock" 2>/dev/null)" = root ]; then
+			ck_ok "slock is root's and setuid (it can lock)"
+		elif [ -e "$SYSBIN/slock" ]; then
+			ck_bad "slock is not root's setuid: su -c '$DOTFILES/install.sh slock'"
+		fi ;;
+	moonlander)
+		if [ -x "$QMK_BIN/qmk" ]; then ck_ok "qmk"; else ck_bad "qmk is missing: ./install.sh moonlander"; fi
+		b=$DOTFILES/moonlander/$ML_BIN
+		if [ ! -f "$b" ]; then
+			ck_bad "no firmware built: ./install.sh moonlander"
+		elif [ -n "$(find "$DOTFILES/moonlander/canary" -type f -newer "$b" 2>/dev/null)" ]; then
+			ck_bad "the firmware is older than the layout: ./install.sh moonlander"
+		else
+			ck_ok "firmware $ML_BIN is from the current layout"
+		fi ;;
+	plover)
+		if [ -d "$PLOVER_DIR/app" ]; then ck_ok "Plover in $PLOVER_DIR"
+		else ck_bad "Plover is not installed: ./install.sh plover"; fi
+		ck_links plover
+		g=$(stat -c %G /dev/ttyACM0 2>/dev/null || echo dialout)
+		case " $(id -nG "$USER_NAME") " in
+		*" $g "*) ck_ok "$USER_NAME is in group $g (the keyboard's port)" ;;
+		*) ck_bad "$USER_NAME is not in group $g: su -c '$DOTFILES/install.sh plover'" ;;
+		esac
+		[ ! -d "$PLOVER_DIR/dotterel" ] || ck_git "$PLOVER_DIR/dotterel" Dotterel
+		ck_info "a newer Plover release: ./install.sh plover always takes the newest" ;;
+	net) ck_net ;;
+	esac
+}
+
+ck_same() {    # ck_same <repo file> <installed file>
+	if [ ! -e "$2" ]; then
+		ck_bad "$2 is missing: su -c '$DOTFILES/install.sh net'"
+	elif cmp -s "$1" "$2"; then
+		ck_ok "$2"
+	else
+		ck_bad "$2 is older than the repo's: su -c '$DOTFILES/install.sh net'"
+	fi
+}
+
+ck_net() {
+	if [ ! -x /sbin/openrc-run ]; then
+		ck_info "not OpenRC: net is not for this system"
+		return
+	fi
+	n=$DOTFILES/net
+	ck_same "$n/vpn" /usr/local/bin/vpn
+	ck_same "$n/vpnfw.initd" /etc/init.d/vpnfw
+	ck_same "$n/vpn.initd" /etc/init.d/vpn
+	for f in openvpn.conf countries mirrors; do ck_same "$n/$f" "/etc/vpn/$f"; done
+	ck_same "$n/sysctl.conf" /etc/sysctl.d/vpn.conf
+	ck_same "$n/proxychains.conf" /etc/proxychains.conf
+	if [ -u /usr/local/bin/vpnauth ]; then
+		ck_ok "vpnauth (your password for vpn commands)"
+		[ ! -f /usr/local/bin/vpnauth ] ||
+			[ -z "$(find "$n/vpnauth.c" -newer /usr/local/bin/vpnauth)" ] ||
+			ck_bad "vpnauth is older than vpnauth.c: su -c '$DOTFILES/install.sh net'"
+	else
+		ck_bad "vpnauth missing: vpn asks root's password (install.sh net)"
+	fi
+	for t in openvpn tor nft proxychains; do ck_cmd "$t"; done
+	for g in vpnctl vpnallow; do
+		case " $(id -nG "$USER_NAME") " in
+		*" $g "*) ck_ok "$USER_NAME is in group $g" ;;
+		*) ck_bad "$USER_NAME is not in group $g: su -c '$DOTFILES/install.sh net', log in again" ;;
+		esac
+	done
+	for s in boot/vpnfw default/vpn; do
+		if [ -e "/etc/runlevels/$s" ]; then ck_ok "${s#*/} in runlevel ${s%/*}"
+		else ck_bad "${s#*/} is not in runlevel ${s%/*}: su -c '$DOTFILES/install.sh net'"; fi
+	done
+	for l in boot default; do
+		[ ! -e "/etc/runlevels/$l/tor" ] ||
+			ck_bad "tor is in runlevel $l, so it starts before the VPN: rc-update del tor $l"
+	done
+	if [ -s /etc/vpn/gateways ] && [ -s /etc/vpn/client.crt ]; then
+		ck_ok "$(wc -l < /etc/vpn/gateways) Riseup servers known"
+		if openssl x509 -checkend 0 -noout -in /etc/vpn/client.crt >/dev/null 2>&1; then
+			ck_ok "certificate valid until $(openssl x509 -enddate -noout -in /etc/vpn/client.crt | sed 's/notAfter=//')"
+		else
+			ck_bad "the certificate has expired: vpn refresh"
+		fi
+	else
+		ck_bad "no Riseup server list or certificate: vpn refresh"
+	fi
+	if [ -e /run/openrc/started/vpn ]; then
+		read -r st lv 2>/dev/null < /run/vpn/state || st=?
+		if [ "$st" = ok ]; then ck_ok "vpn running, level $lv"
+		else ck_bad "vpn is $st: vpn status"; fi
+	else
+		ck_bad "the vpn service is not running (reboot, or rc-service vpn start)"
+	fi
+	if [ "$(cat /etc/resolv.conf 2>/dev/null)" = "nameserver 127.0.0.1" ] ||
+		[ "$(cat /etc/resolv.conf 2>/dev/null)" = "nameserver 1.1.1.1" ]
+	then
+		case $(lsattr -d /etc/resolv.conf 2>/dev/null) in
+		*i*' '*) ck_ok "/etc/resolv.conf locked ($(cat /etc/resolv.conf))" ;;
+		*) ck_bad "/etc/resolv.conf is not locked (vpn locks it when it starts)" ;;
+		esac
+	else
+		ck_bad "/etc/resolv.conf is not vpn's (vpn sets it when it starts)"
+	fi
+	if grep -q '^anonymous' /etc/dhcpcd.conf 2>/dev/null; then ck_ok "dhcpcd: no hostname, random MAC"
+	else ck_bad "dhcpcd still sends your hostname and MAC: su -c '$DOTFILES/install.sh net'"; fi
+	h=$(cat /proc/sys/kernel/hostname 2>/dev/null) || :
+	if [ "$h" = host ]; then ck_ok "hostname host"
+	else ck_bad "the hostname is not \"host\" yet (after the next boot)"; fi
+	if [ "$(readlink /etc/localtime)" = ../usr/share/zoneinfo/UTC ]; then ck_ok "time zone UTC"
+	else ck_bad "the time zone is not UTC: su -c '$DOTFILES/install.sh net'"; fi
+	if [ "$(cat /proc/sys/net/ipv6/conf/all/disable_ipv6 2>/dev/null)" = 1 ]; then ck_ok "IPv6 off"
+	else ck_bad "IPv6 is on (vpnfw turns it off at boot)"; fi
+}
+
+do_check() {
+	echo "== repo"
+	ck_git "$DOTFILES" "this repo"
+	echo "== deps"
+	missing=
+	for t in git make cc pkg-config curl wget nvim tmux xclip xsel mpv flameshot \
+		sioyek wiremix btop feh dfu-util fc-cache; do
+		command -v "$t" >/dev/null 2>&1 || missing="$missing $t"
+	done
+	if [ -z "$missing" ]; then ck_ok "all the tools are installed"
+	else ck_bad "missing:$missing: su -c '$DOTFILES/install.sh --deps'"; fi
+	for p in ${1:-$PARTS}; do
+		echo "== $p"
+		ck_part "$p"
+	done
+	echo
+	if [ "$CK_BAD" -eq 0 ]; then
+		echo "everything is as the repo has it"
+		return 0
+	fi
+	echo "$CK_BAD things need a look (the lines with !!)"
+	return 1
+}
+
 # --- the menu --------------------------------------------------------------
 
 part_info() {
@@ -1007,6 +1274,7 @@ menu() {
 	echo "What should install.sh do? Type numbers or names with spaces"
 	echo "between them (like: 1 4 19), then Enter. Enter alone does"
 	echo "everything; parts marked [root] need: su -c '$DOTFILES/install.sh'"
+	echo "(./install.sh check only looks at what is installed)"
 	echo
 	printf '  %2d  %-12s %s\n' 0 deps "system packages (emerge -qv) [root]"
 	i=1
@@ -1023,6 +1291,18 @@ menu() {
 want_deps=no
 parts=
 EMERGE_OPTS=-qv  # -a: -qva, so emerge asks before it builds anything
+# check: only look, and before anything else is done
+case ${1:-} in check|--check)
+	shift
+	named=
+	for x in "$@"; do
+		case " $PARTS " in *" $x "*) named="$named $x" ;;
+		*) die "unknown part: $x (see --list)" ;; esac
+	done
+	rc=0
+	do_check "$named" || rc=$?
+	exit $rc ;;
+esac
 # no arguments in a terminal: ask (not again in the logged run below)
 if [ $# -eq 0 ] && [ -t 0 ] && [ -z "${INSTALL_LOG:-}" ]; then
 	menu
@@ -1041,7 +1321,7 @@ for arg in "$@"; do
 		parts="$parts $p" ;;
 	-a) EMERGE_OPTS=-qva ;;
 	--list) echo "$PARTS"; exit 0 ;;
-	-h|--help) sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	-h|--help) sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 	-*) die "unknown option: $arg" ;;
 	*)
 		case " $PARTS " in *" $arg "*) ;; *) die "unknown part: $arg (see --list)" ;; esac
