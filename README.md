@@ -51,6 +51,34 @@ The suckless tools are the upstream sources from https://git.suckless.org,
 copied at the release tag. Each directory has an `UPSTREAM` file with the
 tag and commit, and any local change.
 
+## Colours: Habamax everywhere
+
+Every program here uses Habamax, Neovim's colour scheme, and so must
+anything new: the same dark grey background, grey text and calm
+accents, no other palette. For a terminal UI, also the look of btop
+(btop/btop.conf): boxes with the title in the top border, keys shown
+in the borders with the key in blue, the chosen item on the selected
+grey, meters and graphs in btop's Habamax gradients
+(btop/themes/habamax.theme), square corners, ASCII and DEC line
+drawing only.
+
+| Use | Colour |
+|---|---|
+| background | `#1c1c1c` |
+| text | `#c7c7c7` |
+| titles, bold | `#eeeeee` |
+| labels, graph text | `#9e9e9e` |
+| inactive, dim | `#767676` |
+| box lines, selected background | `#585858` |
+| meter background | `#303030` |
+| keys, blue | `#5f87af` |
+| cyan | `#5fafd7` |
+| teal | `#87afaf` |
+| green: fine | `#87af87` |
+| brown: worth knowing | `#af875f` |
+| red: a problem | `#af5f5f` |
+| magenta | `#d787d7` |
+
 ## Fresh install
 
 Clone and run it as yourself. Only three things need root, and for those

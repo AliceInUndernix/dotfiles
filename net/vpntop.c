@@ -40,21 +40,107 @@
 #define HIST_MAX 512
 #define MSG_MAX 512
 #define SMALL_MAX 256
-#define MIN_COLS 60
-#define MIN_ROWS 18
+#define MIN_COLS 70
+#define MIN_ROWS 20
 
+/* --- colours: Habamax, the same as btop/themes/habamax.theme -------- */
+
+struct rgb {
+    unsigned char r, g, b;
+};
+
+/* fixed colours; c_none is the normal text */
 enum {
-    c_none, c_red, c_green, c_yellow, c_blue, c_magenta, c_cyan, c_dim,
-    c_bold, c_title, c_key, c_bar_green, c_bar_red, c_bar_cyan,
-    c_bar_yellow, c_head, c_head_ok, c_head_bad, c_head_busy
+    c_def, c_none, c_title, c_hi, c_sel, c_dim, c_label, c_meter, c_misc,
+    c_box, c_green, c_yellow, c_red, c_blue, c_cyan, c_magenta, c_bg,
+    c_bold, pal_fixed
 };
 
-static const char *color_codes[] = {
-    "\033[0m", "\033[0;31m", "\033[0;32m", "\033[0;33m", "\033[0;34m",
-    "\033[0;35m", "\033[0;36m", "\033[0;2m", "\033[0;1m", "\033[0;1;36m",
-    "\033[0;1;7m", "\033[0;42m", "\033[0;41m", "\033[0;46m", "\033[0;43m",
-    "\033[0;7m", "\033[0;1;30;42m", "\033[0;1;37;41m", "\033[0;1;30;43m"
+#define GRAD_N 12
+enum { g_down, g_up, g_load, g_good, grads };
+
+#define PAL_MAX (pal_fixed + grads * GRAD_N)
+
+static struct rgb pal[PAL_MAX] = {
+    { 0, 0, 0 },                /* the terminal's own */
+    { 0xc7, 0xc7, 0xc7 },       /* main_fg */
+    { 0xee, 0xee, 0xee },       /* title */
+    { 0x5f, 0x87, 0xaf },       /* hi_fg: keys */
+    { 0x58, 0x58, 0x58 },       /* selected_bg */
+    { 0x76, 0x76, 0x76 },       /* inactive_fg */
+    { 0x9e, 0x9e, 0x9e },       /* graph_text: labels */
+    { 0x30, 0x30, 0x30 },       /* meter_bg */
+    { 0x87, 0xaf, 0xaf },       /* proc_misc */
+    { 0x58, 0x58, 0x58 },       /* the boxes */
+    { 0x87, 0xaf, 0x87 },       /* green */
+    { 0xaf, 0x87, 0x5f },       /* yellow (brown) */
+    { 0xaf, 0x5f, 0x5f },       /* red */
+    { 0x5f, 0x87, 0xaf },       /* blue */
+    { 0x5f, 0xaf, 0xd7 },       /* cyan */
+    { 0xd7, 0x87, 0xd7 },       /* magenta */
+    { 0x1c, 0x1c, 0x1c },       /* main_bg, for text on a colour */
+    { 0xee, 0xee, 0xee }        /* bold text */
 };
+
+/* start, middle, end of each gradient (btop's download, upload, cpu
+ * and available) */
+static const struct rgb grad_ends[grads][3] = {
+    { { 0x5f, 0x87, 0xaf }, { 0x5f, 0xaf, 0xd7 }, { 0x87, 0xaf, 0xaf } },
+    { { 0xaf, 0x87, 0xaf }, { 0xd7, 0x87, 0xd7 }, { 0xd7, 0x87, 0xd7 } },
+    { { 0x87, 0xaf, 0x87 }, { 0xaf, 0x87, 0x5f }, { 0xaf, 0x5f, 0x5f } },
+    { { 0x5f, 0x87, 0x87 }, { 0x87, 0xaf, 0x87 }, { 0x87, 0xd7, 0x87 } }
+};
+
+static int mix(int a, int b, int i, int n)
+{
+    return a + (b - a) * i / n;
+}
+
+static void make_gradients(void)
+{
+    int g, i, half;
+    const struct rgb *a, *b;
+    struct rgb *p;
+
+    half = (GRAD_N - 1) / 2;
+    for (g = 0; g < grads; g++) {
+        for (i = 0; i < GRAD_N; i++) {
+            p = &pal[pal_fixed + g * GRAD_N + i];
+            if (i <= half) {
+                a = &grad_ends[g][0];
+                b = &grad_ends[g][1];
+                p->r = (unsigned char)mix(a->r, b->r, i, half);
+                p->g = (unsigned char)mix(a->g, b->g, i, half);
+                p->b = (unsigned char)mix(a->b, b->b, i, half);
+            } else {
+                a = &grad_ends[g][1];
+                b = &grad_ends[g][2];
+                p->r = (unsigned char)mix(a->r, b->r, i - half,
+                    GRAD_N - 1 - half);
+                p->g = (unsigned char)mix(a->g, b->g, i - half,
+                    GRAD_N - 1 - half);
+                p->b = (unsigned char)mix(a->b, b->b, i - half,
+                    GRAD_N - 1 - half);
+            }
+        }
+    }
+}
+
+/* grad: colour of gradient g at level v of n (0 .. n - 1) */
+static int grad(int g, int v, int n)
+{
+    int i;
+
+    if (n <= 1)
+        i = GRAD_N - 1;
+    else
+        i = v * (GRAD_N - 1) / (n - 1);
+    if (i < 0)
+        i = 0;
+    if (i > GRAD_N - 1)
+        i = GRAD_N - 1;
+    return pal_fixed + g * GRAD_N + i;
+}
 
 /* --- output: everything goes to one buffer, written at once ----- */
 
@@ -132,12 +218,17 @@ static void out_n(long long v)
 
 #define GRID_ROWS 200
 #define GRID_COLS 512
-#define DEC_FLAG 128            /* line drawing (DEC special graphics) */
+#define AT_DEC 1                /* line drawing (DEC special graphics) */
+#define AT_BOLD 2
 
 static char grid_ch[GRID_ROWS][GRID_COLS], prev_ch[GRID_ROWS][GRID_COLS];
-static unsigned char grid_co[GRID_ROWS][GRID_COLS];
-static unsigned char prev_co[GRID_ROWS][GRID_COLS];
-static int grid_r, grid_c, grid_color, prev_ok;
+static unsigned char grid_fg[GRID_ROWS][GRID_COLS];
+static unsigned char grid_bg[GRID_ROWS][GRID_COLS];
+static unsigned char grid_at[GRID_ROWS][GRID_COLS];
+static unsigned char prev_fg[GRID_ROWS][GRID_COLS];
+static unsigned char prev_bg[GRID_ROWS][GRID_COLS];
+static unsigned char prev_at[GRID_ROWS][GRID_COLS];
+static int grid_r, grid_c, cur_fg = c_none, cur_bg = c_def, prev_ok;
 
 static void go(int row, int col)
 {
@@ -145,9 +236,11 @@ static void go(int row, int col)
     grid_c = col - 1;
 }
 
+/* color: the text colour from now on (no background) */
 static void color(int c)
 {
-    grid_color = c;
+    cur_fg = c;
+    cur_bg = c_def;
 }
 
 static void gput(char ch, int dec)
@@ -156,8 +249,11 @@ static void gput(char ch, int dec)
         grid_c < GRID_COLS)
     {
         grid_ch[grid_r][grid_c] = ch;
-        grid_co[grid_r][grid_c] = (unsigned char)(grid_color |
-            (dec ? DEC_FLAG : 0));
+        grid_fg[grid_r][grid_c] = (unsigned char)cur_fg;
+        grid_bg[grid_r][grid_c] = (unsigned char)cur_bg;
+        grid_at[grid_r][grid_c] = (unsigned char)((dec ? AT_DEC : 0) |
+            (cur_fg == c_title || cur_fg == c_bold || cur_fg == c_hi ?
+            AT_BOLD : 0));
     }
     grid_c++;
 }
@@ -165,7 +261,9 @@ static void gput(char ch, int dec)
 static void grid_clear(void)
 {
     memset(grid_ch, ' ', sizeof grid_ch);
-    memset(grid_co, 0, sizeof grid_co);
+    memset(grid_fg, c_none, sizeof grid_fg);
+    memset(grid_bg, c_def, sizeof grid_bg);
+    memset(grid_at, 0, sizeof grid_at);
 }
 
 /* --- the pen: text on one line of a box, cut at its width ---------- */
@@ -191,14 +289,7 @@ static void pen(int c, const char *s)
     }
 }
 
-static void pen_n(int c, long long v)
-{
-    char b[24];
-
-    pen(c, num(v, b));
-}
-
-/* pen_pad: spaces up to column w of this line (w counted from 0) */
+/* pen_pad_to: spaces up to column w of this line (w counted from 0) */
 static void pen_pad_to(int width, int w)
 {
     color(c_none);
@@ -217,45 +308,51 @@ static void pen_end(void)
     }
 }
 
-/* bar: n cells, the first full of them in colour c, the rest dots */
-static void pen_bar(int c, int n, int full)
+/* pen_meter: n cells like btop's meters, the first full of them in
+ * gradient g, the rest in the meter background */
+static void pen_meter(int g, int n, int full)
 {
     int i;
 
     for (i = 0; i < n && pen_left > 0; i++) {
-        if (i < full) {
-            color(c);
-            gput(' ', 0);
-        } else {
-            color(c_dim);
-            gput('.', 0);
-        }
+        color(c_none);
+        if (i < full)
+            cur_bg = grad(g, i, n);
+        else
+            cur_bg = c_meter;
+        gput(' ', 0);
         pen_left--;
     }
-    color(c_none);
+    cur_bg = c_def;
 }
 
-/* box: a frame with a title */
+/* box: a frame like btop's: the title between two corners at the top
+ * left, "-+title+------" */
 static void box(int top, int left, int h, int w, const char *title)
 {
     int r, i, tl;
 
     if (h < 2 || w < 4)
         return;
-    color(c_blue);
-    go(top, left);
-    gput('l', 1);
-    gput('q', 1);
     tl = (int)strlen(title);
     if (tl > w - 6)
         tl = w - 6;
-    color(c_title);
-    gput(' ', 0);
-    for (i = 0; i < tl; i++)
-        gput(title[i], 0);
-    gput(' ', 0);
-    color(c_blue);
-    for (i = tl + 4; i < w - 1; i++)
+    color(c_box);
+    go(top, left);
+    gput('l', 1);
+    gput('q', 1);
+    if (tl > 0) {
+        gput('k', 1);
+        color(c_title);
+        for (i = 0; i < tl; i++)
+            gput(title[i], 0);
+        color(c_box);
+        gput('l', 1);
+        i = tl + 4;
+    } else {
+        i = 2;
+    }
+    for (; i < w - 1; i++)
         gput('q', 1);
     gput('k', 1);
     for (r = 1; r < h - 1; r++) {
@@ -286,37 +383,99 @@ static void box_fill(int top, int left, int h, int w, const char *title)
     box(top, left, h, w, title);
 }
 
+/* tag: in a border, like btop's "+key text+": the key in the key
+ * colour, the text after it; sel: shown as chosen. Returns its width. */
+static int tag(int row, int col, int top, const char *k, const char *t,
+    int sel)
+{
+    int n;
+
+    n = 0;
+    go(row, col);
+    color(c_box);
+    gput(top ? 'k' : 'j', 1);
+    n++;
+    color(c_hi);
+    if (sel)
+        cur_bg = c_sel;
+    while (*k) {
+        gput(*k, 0);
+        k++;
+        n++;
+    }
+    color(sel ? c_title : c_none);
+    if (sel)
+        cur_bg = c_sel;
+    while (*t) {
+        gput(*t, 0);
+        t++;
+        n++;
+    }
+    color(c_box);
+    gput(top ? 'l' : 'm', 1);
+    n++;
+    color(c_none);
+    return n;
+}
+
+static int tag_len(const char *k, const char *t)
+{
+    return (int)(strlen(k) + strlen(t)) + 2;
+}
+
 /* present: the rows that changed since the last frame, to the
- * terminal (the very last cell is left out: writing it may scroll) */
+ * terminal, in 24-bit colour (autowrap is off, so even the last cell
+ * can be written) */
 static void present(int nrows, int ncols)
 {
-    int r, c, last, dec, co, end;
+    int r, c, dec, end, lf, lb, la, f, b, a;
 
     for (r = 0; r < nrows && r < GRID_ROWS; r++) {
         if (prev_ok && !memcmp(grid_ch[r], prev_ch[r], ncols) &&
-            !memcmp(grid_co[r], prev_co[r], ncols))
+            !memcmp(grid_fg[r], prev_fg[r], ncols) &&
+            !memcmp(grid_bg[r], prev_bg[r], ncols) &&
+            !memcmp(grid_at[r], prev_at[r], ncols))
         {
             continue;
         }
         out_s("\033[");
         out_n(r + 1);
         out_s(";1H");
-        last = -1;
+        lf = -1;
+        lb = -1;
+        la = -1;
         dec = 0;
-        end = r == nrows - 1 ? ncols - 1 : ncols;
+        end = ncols;
         for (c = 0; c < end; c++) {
-            co = grid_co[r][c];
-            if (co != last) {
-                if ((co & DEC_FLAG) && !dec) {
-                    out_s("\033(0");
-                    dec = 1;
-                } else if (!(co & DEC_FLAG) && dec) {
-                    out_s("\033(B");
-                    dec = 0;
+            f = grid_fg[r][c];
+            b = grid_bg[r][c];
+            a = grid_at[r][c];
+            if ((a & AT_DEC) && !dec) {
+                out_s("\033(0");
+                dec = 1;
+            } else if (!(a & AT_DEC) && dec) {
+                out_s("\033(B");
+                dec = 0;
+            }
+            if (f != lf || b != lb || (a & AT_BOLD) != (la & AT_BOLD)) {
+                out_s(a & AT_BOLD ? "\033[0;1;38;2;" : "\033[0;38;2;");
+                out_n(pal[f].r);
+                out_c(';');
+                out_n(pal[f].g);
+                out_c(';');
+                out_n(pal[f].b);
+                if (b != c_def) {
+                    out_s(";48;2;");
+                    out_n(pal[b].r);
+                    out_c(';');
+                    out_n(pal[b].g);
+                    out_c(';');
+                    out_n(pal[b].b);
                 }
-                if (last < 0 || (co & ~DEC_FLAG) != (last & ~DEC_FLAG))
-                    out_s(color_codes[co & ~DEC_FLAG]);
-                last = co;
+                out_c('m');
+                lf = f;
+                lb = b;
+                la = a;
             }
             out_c(grid_ch[r][c]);
         }
@@ -324,7 +483,9 @@ static void present(int nrows, int ncols)
             out_s("\033(B");
         out_s("\033[0m");
         memcpy(prev_ch[r], grid_ch[r], ncols);
-        memcpy(prev_co[r], grid_co[r], ncols);
+        memcpy(prev_fg[r], grid_fg[r], ncols);
+        memcpy(prev_bg[r], grid_bg[r], ncols);
+        memcpy(prev_at[r], grid_at[r], ncols);
     }
     prev_ok = 1;
     out_flush();
@@ -803,14 +964,14 @@ static void tty_raw(void)
     t.c_cc[VMIN] = 0;
     t.c_cc[VTIME] = 0;
     tcsetattr(0, TCSAFLUSH, &t);
-    out_s("\033[?1049h\033[?25l\033[2J");
+    out_s("\033[?1049h\033[?25l\033[?7l\033[2J");
     out_flush();
     prev_ok = 0;
 }
 
 static void tty_back(void)
 {
-    out_s("\033[0m\033[?25h\033[?1049l");
+    out_s("\033[0m\033[?7h\033[?25h\033[?1049l");
     out_flush();
     if (tty_saved)
         tcsetattr(0, TCSAFLUSH, &tty_old);
@@ -1048,36 +1209,36 @@ static int confirm_what;        /* the key waiting for y */
 static const char *level_text(const char *lv)
 {
     if (same(lv, "0"))
-        return "your own IP, Cloudflare DNS (no VPN, no Tor)";
+        return "own IP, Cloudflare DNS";
     if (same(lv, "1"))
-        return "VPN, Cloudflare DNS through the VPN";
+        return "VPN, Cloudflare DNS";
     if (same(lv, "2"))
-        return "VPN, DNS through Tor (the usual one)";
+        return "VPN, DNS through Tor";
     if (same(lv, "3"))
-        return "VPN, and everything goes through Tor";
+        return "VPN, all through Tor";
     if (same(lv, "sandbox"))
-        return "own IP, only programs started with vpn run go online";
+        return "only vpn run programs";
     if (same(lv, "offline"))
-        return "offline: nothing goes out";
+        return "nothing goes out";
     return "?";
 }
 
 static const char *fw_text(const char *mode)
 {
     if (same(mode, "closed"))
-        return "closed: nothing goes out";
+        return "closed: nothing out";
     if (same(mode, "pick"))
-        return "only to Riseup's servers";
+        return "only to Riseup";
     if (same(mode, "vpn"))
         return "only through the VPN";
     if (same(mode, "torvpn"))
         return "only through Tor";
     if (same(mode, "direct"))
-        return "open (level 0), no IPv6";
+        return "open (level 0)";
     if (same(mode, "sandbox"))
-        return "only vpn run programs and Tor";
+        return "only vpn run, Tor";
     if (same(mode, "refresh"))
-        return "open for root: new list";
+        return "open for the list";
     return mode;
 }
 
@@ -1091,114 +1252,6 @@ static int fw_is_off(void)
     return exists(RUN_DIR "/fw-off");
 }
 
-/* row 1: the name, the state in colour, the level, the clock */
-static void draw_head(void)
-{
-    const char *st, *lv;
-    char b[32];
-    int c;
-
-    st = sv("state");
-    lv = sv("level");
-    pen_at(1, 1, cols);
-    pen(c_head, " vpn ");
-    pen(c_none, " ");
-    if (is_off()) {
-        pen(c_head_bad, " OFF ");
-        pen(c_bold, "  level -1: no kill switch, VPN or Tor");
-    } else if (!st[0]) {
-        pen(c_head_bad, " NOT RUNNING ");
-    } else {
-        c = c_head_busy;
-        if (same(st, "ok"))
-            c = c_head_ok;
-        else if (same(st, "problem") || same(st, "stopped"))
-            c = c_head_bad;
-        pen(c, " ");
-        pen(c, st);
-        pen(c, " ");
-        if (fw_is_off())
-            pen(c_head_bad, " FIREWALL OFF ");
-        pen(c_bold, "  level ");
-        pen(c_bold, lv);
-        pen(c_none, ": ");
-        pen(c_none, level_text(lv));
-    }
-    pen_pad_to(cols, cols - 13);
-    pen(c_dim, clock_text(b));
-    pen_end();
-}
-
-/* row 2: in plain words, what is going on and what to do */
-static void draw_now(void)
-{
-    const char *st, *no, *pr;
-    long long step, t;
-    char b[64];
-
-    st = sv("state");
-    no = sv("note");
-    pr = sv("problem");
-    t = time(0);
-    pen_at(2, 1, cols);
-    pen(c_none, " ");
-    if (job_pid > 0) {
-        pen(c_yellow, "running: vpn ");
-        pen(c_yellow, job_name + 4);
-        pen(c_yellow, " (");
-        pen(c_yellow, duration(t - job_t, b));
-        pen(c_yellow, ")");
-    } else if (msg[0] && t - msg_t < 10) {
-        pen(msg_color, msg);
-    } else if (is_off()) {
-        pen(c_yellow, "Everything of vpn is off. Press 2 (or any level) to"
-            " turn it back on.");
-    } else if (!st[0]) {
-        pen(c_red, "The vpn service is not running: press r to start it.");
-    } else if (pr[0]) {
-        pen(c_red, "PROBLEM: ");
-        pen(c_red, pr);
-        pen(c_none, "  (r: try again, n: new list, ?: help)");
-    } else if (no[0]) {
-        step = to_num(sv("step"));
-        pen(c_yellow, "now: ");
-        pen(c_none, no);
-        if (step > 0) {
-            pen(c_dim, " (");
-            pen(c_dim, duration(t - step, b));
-            pen(c_dim, ")");
-        }
-    } else if (same(st, "ok")) {
-        pen(c_green, "All good: ");
-        if (same(sv("level"), "0"))
-            pen(c_none, "you are online with your own IP, no VPN.");
-        else if (same(sv("level"), "sandbox"))
-            pen(c_none, "only programs started with vpn run are online.");
-        else if (same(sv("level"), "3"))
-            pen(c_none, "everything goes through the VPN and then Tor.");
-        else
-            pen(c_none, "everything goes through the VPN; the kill switch"
-                " is on.");
-    } else {
-        pen(c_yellow, st);
-        pen(c_none, "...");
-    }
-    pen_end();
-}
-
-/* label: "Name    " in a fixed width, then the value follows */
-static void label(const char *s)
-{
-    int n;
-
-    pen(c_dim, s);
-    n = (int)strlen(s);
-    while (n < 9) {
-        pen(c_none, " ");
-        n++;
-    }
-}
-
 static int zone_color(const char *z)
 {
     if (same(z, "white"))
@@ -1210,80 +1263,358 @@ static int zone_color(const char *z)
     return c_none;
 }
 
+/* label: a name in the label colour, padded to n columns */
+static void label(const char *s, int n)
+{
+    int i;
+
+    pen(c_label, s);
+    for (i = (int)strlen(s); i < n; i++)
+        pen(c_none, " ");
+}
+
+/* fold_line: the part of s that fits in w, cut at a space; returns
+ * where the rest starts */
+static const char *fold_line(const char *s, int w, char *out)
+{
+    int n, cut;
+
+    n = (int)strlen(s);
+    if (n <= w) {
+        strcpy(out, s);
+        return s + n;
+    }
+    cut = w;
+    while (cut > w / 2 && s[cut] != ' ')
+        cut--;
+    if (cut <= w / 2)
+        cut = w;
+    memcpy(out, s, cut);
+    out[cut] = 0;
+    s += cut;
+    while (*s == ' ')
+        s++;
+    return s;
+}
+
+/* the state in a word and its colour */
+static const char *state_word(int *c)
+{
+    const char *st;
+
+    st = sv("state");
+    if (is_off()) {
+        *c = c_dim;
+        return "OFF";
+    }
+    if (fw_is_off()) {
+        *c = c_red;
+        return "NO KILL SWITCH";
+    }
+    if (!st[0]) {
+        *c = c_red;
+        return "NOT RUNNING";
+    }
+    if (same(st, "ok")) {
+        *c = c_green;
+        return "OK";
+    }
+    if (same(st, "problem") || same(st, "stopped")) {
+        *c = c_red;
+        return same(st, "problem") ? "PROBLEM" : "STOPPED";
+    }
+    *c = c_yellow;
+    return st;
+}
+
+/* --- the traffic graph: download up from the middle, upload down,
+ * each in its gradient, like btop's net box ------------------------ */
+
+static void draw_graph(int top, int left, int h, int w)
+{
+    char b[64], b2[64];
+    int dh, uh, col, rr, idx, lvl, i;
+    long long dmax, umax, v;
+
+    if (h < 2 || w < 8)
+        return;
+    dh = (h + 1) / 2;
+    uh = h - dh;
+    dmax = 1024;
+    umax = 1024;
+    for (i = 0; i < hist_n && i < w; i++) {
+        if (hist_rx[hist_n - 1 - i] > dmax)
+            dmax = hist_rx[hist_n - 1 - i];
+        if (hist_tx[hist_n - 1 - i] > umax)
+            umax = hist_tx[hist_n - 1 - i];
+    }
+    for (col = 0; col < w; col++) {
+        idx = hist_n - w + col;
+        for (rr = 0; rr < h; rr++) {
+            go(top + rr, left + col);
+            color(c_none);
+            if (idx >= 0 && rr < dh) {
+                v = hist_rx[idx];
+                lvl = dh - 1 - rr;          /* 0 at the middle */
+                if (v > 0 && v * dh > dmax * lvl)
+                    cur_bg = grad(g_down, lvl, dh);
+            } else if (idx >= 0) {
+                v = hist_tx[idx];
+                lvl = rr - dh;
+                if (v > 0 && v * uh > umax * lvl)
+                    cur_bg = grad(g_up, lvl, uh);
+            }
+            gput(' ', 0);
+        }
+    }
+    /* the numbers over it, like btop */
+    pen_at(top, left + 1, w - 2);
+    pen(c_label, "download ");
+    pen(c_cyan, size_text(hist_n ? hist_rx[hist_n - 1] : 0, b));
+    pen(c_cyan, "/s");
+    pen(c_dim, "  top ");
+    pen(c_dim, size_text(dmax, b2));
+    pen(c_dim, "/s");
+    pen_at(top + h - 1, left + 1, w - 2);
+    pen(c_label, "upload ");
+    pen(c_magenta, size_text(hist_n ? hist_tx[hist_n - 1] : 0, b));
+    pen(c_magenta, "/s");
+    pen(c_dim, "  top ");
+    pen(c_dim, size_text(umax, b2));
+    pen(c_dim, "/s");
+}
+
+/* the top box, like btop's cpu box: the graph on the left, the state
+ * on the right, the clock in the middle of the top border, the levels
+ * in the bottom border */
+static const char *level_keys[] = {
+    "0", " own IP", "1", " cloudflare", "2", " tor dns", "3", " all tor",
+    "s", "andbox", "o", "ffline", "-", " all off", 0
+};
+static const char *level_names[] = {
+    "0", "1", "2", "3", "sandbox", "offline", "-1"
+};
+
+static void draw_top(int h)
+{
+    char b[64], line[128];
+    const char *lv, *no, *pr, *rest, *word_st;
+    int iw, gx, r, c, n, i, col, total, sc;
+    long long step, t, t0;
+
+    box(1, 1, h, cols, "vpn");
+    /* the state panel on the right, behind a line like btop's */
+    iw = cols / 2 - 4;
+    if (iw > 46)
+        iw = 46;
+    if (iw < 30)
+        iw = 30;
+    gx = cols - iw;
+    color(c_box);
+    go(1, gx);
+    gput('w', 1);
+    for (r = 2; r < h; r++) {
+        go(r, gx);
+        gput('x', 1);
+    }
+    go(h, gx);
+    gput('v', 1);
+    /* the clock, like btop's, in the middle of the top border */
+    clock_text(b);
+    col = (cols - (int)strlen(b) - 2) / 2;
+    go(1, col);
+    color(c_box);
+    gput('k', 1);
+    color(c_title);
+    for (i = 0; b[i]; i++)
+        gput(b[i], 0);
+    color(c_box);
+    gput('l', 1);
+    if (!watch_only) {
+        col = cols - tag_len("q", " quit") - 1;
+        tag(1, col, 1, "q", " quit", 0);
+        col -= tag_len("?", " help") + 1;
+        tag(1, col, 1, "?", " help", 0);
+        lv = is_off() ? "-1" : sv("level");
+        total = 0;
+        for (i = 0; level_keys[i]; i += 2)
+            total += tag_len(level_keys[i], level_keys[i + 1]);
+        col = 3;
+        if (total + 4 > cols)
+            col = 2;
+        for (i = 0; level_keys[i]; i += 2) {
+            if (col + tag_len(level_keys[i], level_keys[i + 1]) > cols - 1)
+                break;
+            col += tag(h, col, 0, level_keys[i], level_keys[i + 1],
+                same(lv, level_names[i / 2]));
+        }
+    } else {
+        tag(1, cols - tag_len("q", " quit") - 1, 1, "q", " quit", 0);
+    }
+
+    draw_graph(2, 2, h - 2, gx - 2);
+
+    r = 2;
+    word_st = state_word(&sc);
+    pen_at(r, gx + 2, iw - 3);
+    label("state", 7);
+    pen(sc, word_st);
+    lv = is_off() ? "-1" : sv("level");
+    pen_end();
+    r++;
+    pen_at(r, gx + 2, iw - 3);
+    label("level", 7);
+    pen(c_title, lv);
+    pen(c_none, " ");
+    pen(c_none, is_off() ? "vpn is off" : level_text(lv));
+    pen_end();
+    r++;
+
+    /* what is happening now, in up to three lines */
+    t = time(0);
+    no = sv("note");
+    pr = sv("problem");
+    line[0] = 0;
+    c = c_none;
+    if (job_pid > 0) {
+        strcpy(line, "running: vpn ");
+        strncat(line, job_name + 4, 60);
+        strcat(line, " (");
+        strcat(line, duration(t - job_t, b));
+        strcat(line, ")");
+        c = c_yellow;
+    } else if (msg[0] && t - msg_t < 10) {
+        strncat(line, msg, 120);
+        c = msg_color;
+    } else if (pr[0]) {
+        strcpy(line, "PROBLEM: ");
+        strncat(line, pr, 100);
+        c = c_red;
+    } else if (no[0]) {
+        strncat(line, no, 90);
+        step = to_num(sv("step"));
+        if (step > 0) {
+            strcat(line, " (");
+            strcat(line, duration(t - step, b));
+            strcat(line, ")");
+        }
+        c = c_yellow;
+    } else if (is_off()) {
+        strcpy(line, "press 2 (or any level) to turn it on");
+        c = c_dim;
+    } else if (same(sv("state"), "ok")) {
+        strcpy(line, "all good");
+        c = c_green;
+    }
+    rest = line;
+    n = 0;
+    while (*rest && r < h - 2 && n < 3) {
+        char part[128];
+
+        rest = fold_line(rest, iw - 10, part);
+        pen_at(r, gx + 2, iw - 3);
+        label(n ? "" : "now", 7);
+        pen(c, part);
+        pen_end();
+        r++;
+        n++;
+    }
+    if (r < h - 1 && !watch_only) {
+        pen_at(r, gx + 2, iw - 3);
+        label("server", 7);
+        if (sv("server")[0] && !same(lv, "0") && !same(lv, "sandbox")) {
+            pen(c_title, sv("location"));
+            pen(c_none, " ");
+            pen(c_none, sv("country"));
+            pen(c_none, " ");
+            pen(zone_color(sv("zone")), sv("zone"));
+        } else {
+            pen(c_dim, "none");
+        }
+        pen_end();
+        r++;
+    }
+    if (r < h - 1 && !watch_only) {
+        pen_at(r, gx + 2, iw - 3);
+        label("up", 7);
+        t0 = since_epoch(sv("since"));
+        if (t0 > 0 && same(sv("state"), "ok"))
+            pen(c_none, duration(t - t0, b));
+        else
+            pen(c_dim, "-");
+        pen_end();
+        r++;
+    }
+    if (r < h - 1 && watch_only) {
+        pen_at(r, gx + 2, iw - 3);
+        pen(c_dim, "more: run vpn (your password)");
+        pen_end();
+    }
+}
+
 static void draw_connection(int top, int left, int h, int w)
 {
     const char *lv, *ip, *ce, *cl;
-    long long t0;
-    char b[64];
+    char m[16], d[16], y[16];
     int r, own;
 
-    box(top, left, h, w, "Connection");
+    box(top, left, h, w, "connection");
+    if (watch_only) {
+        pen_at(top + 1, left + 2, w - 4);
+        pen(c_dim, "run vpn to see it");
+        pen_end();
+        return;
+    }
     lv = sv("level");
     ip = sv("server");
     own = same(lv, "0") || same(lv, "sandbox");
     r = top + 1;
-    if (watch_only) {
+    if (r < top + h - 1) {
         pen_at(r, left + 2, w - 4);
-        label("Level");
-        pen(c_bold, lv);
+        label("address", 9);
+        pen(own || !ip[0] ? c_dim : c_none, own || !ip[0] ? "-" : ip);
         pen_end();
-        pen_at(r + 1, left + 2, w - 4);
-        pen(c_dim, "more: run vpn (your password)");
+        r++;
+    }
+    if (r < top + h - 1) {
+        pen_at(r, left + 2, w - 4);
+        label("speed", 9);
+        pen(c_none, own || !sv("speed")[0] ? "-" : sv("speed"));
         pen_end();
-        return;
+        r++;
     }
-    pen_at(r, left + 2, w - 4);
-    label("Server");
-    if (own || !ip[0]) {
-        pen(c_yellow, own ? "none: your own IP" : "none yet");
-    } else {
-        pen(c_bold, sv("location"));
-        pen(c_none, " ");
-        pen(c_bold, sv("country"));
-        pen(c_none, "  ");
-        pen(zone_color(sv("zone")), sv("zone"));
-        pen(c_dim, " zone");
+    if (r < top + h - 1) {
+        pen_at(r, left + 2, w - 4);
+        label("Tor", 9);
+        pen(same(sv("tor"), "running") ? c_green : c_red,
+            sv("tor")[0] ? sv("tor") : "-");
+        if (same(sv("tor"), "running"))
+            pen(c_dim, " 9050 9150");
+        pen_end();
+        r++;
     }
-    pen_end();
-    pen_at(r + 1, left + 2, w - 4);
-    label("Address");
-    pen(c_none, own ? "-" : ip);
-    pen_end();
-    pen_at(r + 2, left + 2, w - 4);
-    label("Speed");
-    pen(c_none, own ? "-" : sv("speed"));
-    pen_end();
-    pen_at(r + 3, left + 2, w - 4);
-    label("Up for");
-    t0 = since_epoch(sv("since"));
-    if (t0 > 0 && same(sv("state"), "ok"))
-        pen(c_none, duration(time(0) - t0, b));
-    else
-        pen(c_dim, "-");
-    pen_end();
-    if (h > 6) {
-        pen_at(r + 4, left + 2, w - 4);
-        label("Clock");
+    if (r < top + h - 1) {
+        pen_at(r, left + 2, w - 4);
+        label("clock", 9);
         cl = sv("clock");
         pen(same(cl, "ok") || !strncmp(cl, "set", 3) ? c_green : c_yellow,
             cl[0] ? cl : "-");
         pen_end();
+        r++;
     }
-    if (h > 7) {
-        pen_at(r + 5, left + 2, w - 4);
-        label("Cert");
+    if (r < top + h - 1) {
+        pen_at(r, left + 2, w - 4);
+        label("cert", 9);
         ce = sv("certificate");
         if (ce[0]) {
-            char m[16], d[16], y[16];
-
-            pen(c_none, "valid until ");
+            pen(c_none, "until ");
             pen(c_none, word(ce, 0, m, sizeof m));
             pen(c_none, " ");
             pen(c_none, word(ce, 1, d, sizeof d));
             pen(c_none, " ");
             pen(c_none, word(ce, 3, y, sizeof y));
         } else {
-            pen(c_none, "-");
+            pen(c_dim, "-");
         }
         pen_end();
     }
@@ -1291,18 +1622,22 @@ static void draw_connection(int top, int left, int h, int w)
 
 static void draw_protection(int top, int left, int h, int w)
 {
-    char b[SMALL_MAX], dns[64], mode[64];
-    int fd, flags, r, rc, locked;
-    const char *tor;
+    char b[SMALL_MAX], dns[64], mode[64], *p;
+    int fd, flags, r, rc, locked, col;
 
-    box(top, left, h, w, "Protection");
+    box(top, left, h, w, "protection");
+    if (!watch_only) {
+        col = left + 2;
+        col += tag(top + h - 1, col, 0, "l", " LAN", 0);
+        col += tag(top + h - 1, col, 0, "f", " firewall", 0);
+    }
     r = top + 1;
-    pen_at(r, left + 2, w - 4);
-    label("Kill sw.");
     read_small(RUN_DIR "/fwmode", mode, sizeof mode);
     first_line(mode);
+    pen_at(r, left + 2, w - 4);
+    label("firewall", 9);
     if (is_off())
-        pen(c_red, "off (level -1)");
+        pen(c_dim, "off (level -1)");
     else if (fw_is_off())
         pen(c_red, "OFF: f turns it on");
     else if (!mode[0])
@@ -1310,26 +1645,20 @@ static void draw_protection(int top, int left, int h, int w)
     else
         pen(same(mode, "direct") ? c_yellow : c_green, fw_text(mode));
     pen_end();
+    r++;
 
-    pen_at(r + 1, left + 2, w - 4);
-    label("DNS");
     dns[0] = 0;
     read_small("/etc/resolv.conf", b, sizeof b);
-    {
-        char *p;
-
-        /* the first line that starts with "nameserver" */
-        p = b;
-        while (p) {
-            if (!strncmp(p, "nameserver", 10)) {
-                word(p, 1, dns, sizeof dns);
-                first_line(dns);
-                break;
-            }
-            p = strchr(p, '\n');
-            if (p)
-                p++;
+    p = b;
+    while (p) {
+        if (!strncmp(p, "nameserver", 10)) {
+            word(p, 1, dns, sizeof dns);
+            first_line(dns);
+            break;
         }
+        p = strchr(p, '\n');
+        if (p)
+            p++;
     }
     locked = 0;
     fd = open("/etc/resolv.conf", O_RDONLY);
@@ -1340,50 +1669,47 @@ static void draw_protection(int top, int left, int h, int w)
             locked = (flags & FS_IMMUTABLE_FL) != 0;
         close(fd);
     }
-    if (same(dns, "127.0.0.1"))
-        pen(c_green, "Tor");
-    else if (same(dns, "1.1.1.1"))
-        pen(c_yellow, "Cloudflare");
-    else
-        pen(c_yellow, dns[0] ? dns : "none");
-    pen(c_dim, locked ? ", locked" : ", not locked");
-    pen_end();
-
-    pen_at(r + 2, left + 2, w - 4);
-    label("Tor");
-    tor = sv("tor");
-    if (watch_only)
-        pen(c_dim, "run vpn to see");
-    else
-        pen(same(tor, "running") ? c_green : c_red, tor[0] ? tor : "-");
-    if (same(tor, "running"))
-        pen(c_dim, " (9050, 9150)");
-    pen_end();
-
-    pen_at(r + 3, left + 2, w - 4);
-    label("IPv6");
-    read_small("/proc/sys/net/ipv6/conf/all/disable_ipv6", b, sizeof b);
-    if (b[0] == '1')
-        pen(c_green, "off");
-    else if (is_off())
-        pen(c_none, "on");
-    else
-        pen(c_yellow, "on, the firewall drops it");
-    pen_end();
-
-    pen_at(r + 4, left + 2, w - 4);
-    label("LAN");
-    if (exists(ETC_DIR "/lan"))
-        pen(c_yellow, "on: router, printer reachable");
-    else
-        pen(c_green, "off");
-    pen_end();
-
-    if (h > 7) {
-        pen_at(r + 5, left + 2, w - 4);
-        label("MAC");
+    if (r < top + h - 1) {
+        pen_at(r, left + 2, w - 4);
+        label("DNS", 9);
+        if (same(dns, "127.0.0.1"))
+            pen(c_green, "Tor");
+        else if (same(dns, "1.1.1.1"))
+            pen(c_yellow, "Cloudflare");
+        else
+            pen(c_yellow, dns[0] ? dns : "none");
+        pen(c_dim, locked ? ", locked" : ", not locked");
+        pen_end();
+        r++;
+    }
+    if (r < top + h - 1) {
+        pen_at(r, left + 2, w - 4);
+        label("IPv6", 9);
+        read_small("/proc/sys/net/ipv6/conf/all/disable_ipv6", b, sizeof b);
+        if (b[0] == '1')
+            pen(c_green, "off");
+        else if (is_off())
+            pen(c_none, "on");
+        else
+            pen(c_yellow, "on, the firewall drops it");
+        pen_end();
+        r++;
+    }
+    if (r < top + h - 1) {
+        pen_at(r, left + 2, w - 4);
+        label("LAN", 9);
+        if (exists(ETC_DIR "/lan"))
+            pen(c_yellow, "on: router, printer");
+        else
+            pen(c_green, "off");
+        pen_end();
+        r++;
+    }
+    if (r < top + h - 1) {
+        pen_at(r, left + 2, w - 4);
+        label("MAC", 9);
         if (exists(ETC_DIR "/keep-mac"))
-            pen(c_yellow, "the card's own (keep-mac)");
+            pen(c_yellow, "the cards' own");
         else
             pen(c_green, "made up at boot");
         pen_end();
@@ -1409,65 +1735,86 @@ static void split_test(char *s, char **f)
     }
 }
 
-static void draw_tests(int top, int left, int h, int w)
+/* the servers box, like btop's process list: a header, one row each,
+ * the one in use selected */
+static void draw_servers(int top, int left, int h, int w)
 {
     char tests[STAT_MAX], *ent[64], *f[5], *p, *semi;
-    char zone[32], a[32], bb[32], c[32];
+    char zone[32], a[32], bb[32], c[32], z[64], t[96];
     const char *zones, *pr;
-    int n, i, first, r, barw, full;
+    int n, i, first, r, mw, full, col, inner, sel;
     long long best, s;
 
-    box(top, left, h, w, "Choosing a server");
+    box(top, left, h, w, "servers");
+    inner = w - 2;
+    if (!watch_only) {
+        col = left + 2;
+        col += tag(top + h - 1, col, 0, "r", " reconnect", 0);
+        col += tag(top + h - 1, col, 0, "n", " new list", 0);
+    }
     if (watch_only) {
         pen_at(top + 1, left + 2, w - 4);
-        pen(c_dim, "run vpn to see the tests");
+        pen(c_dim, "run vpn to see them");
         pen_end();
         return;
     }
-    r = top + 1;
+    /* how many each zone has, top right */
     zones = sv("zones");
-    pen_at(r, left + 2, w - 4);
-    pen(c_dim, "servers: ");
-    pen(c_green, "white ");
-    pen(c_none, word(zones, 0, a, sizeof a));
-    pen(c_yellow, "  gray ");
-    pen(c_none, word(zones, 1, a, sizeof a));
-    pen(c_red, "  black ");
-    pen(c_none, word(zones, 2, a, sizeof a));
-    pen_end();
+    strcpy(z, " white ");
+    strcat(z, word(zones, 0, a, sizeof a));
+    strcat(z, " gray ");
+    strcat(z, word(zones, 1, a, sizeof a));
+    strcat(z, " black ");
+    strcat(z, word(zones, 2, a, sizeof a));
+    if (zones[0] && (int)strlen(z) + 14 < w)
+        tag(top, left + w - tag_len("", z) - 1, 1, "", z, 0);
 
-    /* progress: "gray 2 12 1" testing, "gray done 5 3" chosen */
+    /* the step: "gray 2 12 1" testing, "gray done 5 3" chosen */
     pr = sv("progress");
     word(pr, 0, zone, sizeof zone);
     word(pr, 1, a, sizeof a);
     word(pr, 2, bb, sizeof bb);
     word(pr, 3, c, sizeof c);
-    pen_at(r + 1, left + 2, w - 4);
+    r = top + 1;
+    pen_at(r, left + 1, inner);
+    pen(c_none, " ");
     if (same(zone, "none")) {
         pen(c_red, "no server worked in any zone");
     } else if (same(a, "done")) {
-        pen(c_dim, "used ");
+        pen(c_label, "using the fastest of ");
+        pen(c_title, c);
+        pen(c_label, " tested in ");
         pen(zone_color(zone), zone);
-        pen(c_dim, ": the fastest of ");
-        pen(c_none, c);
-        pen(c_dim, " tested (");
+        pen(c_label, " (");
         pen(c_none, bb);
-        pen(c_dim, " tried)");
+        pen(c_label, " tried)");
     } else if (zone[0]) {
         pen(c_yellow, "testing ");
         pen(zone_color(zone), zone);
-        pen(c_dim, ": server ");
-        pen(c_none, a);
-        pen(c_dim, "/");
+        pen(c_label, ": server ");
+        pen(c_title, a);
+        pen(c_label, " of ");
         pen(c_none, bb);
-        pen(c_dim, ", speed-tested ");
-        pen(c_none, c);
-        pen(c_dim, "/3 ");
-        pen_bar(c_bar_yellow, TESTS_MAX * 3, (int)to_num(c) * 3);
+        pen(c_label, ", tested ");
+        pen(c_title, c);
+        pen(c_label, " of 3 ");
+        pen_meter(g_good, 9, (int)to_num(c) * 3);
     } else {
         pen(c_dim, "no test since the service started");
     }
     pen_end();
+    r++;
+
+    /* the header */
+    mw = inner - 42;
+    if (mw > 30)
+        mw = 30;
+    pen_at(r, left + 1, inner);
+    pen(c_title, " Location        Address");
+    pen_pad_to(inner, 32);
+    pen(c_title, mw >= 4 ? "Speed" : "");
+    pen_end();
+    r++;
 
     strcpy(tests, sv("tests"));
     n = 0;
@@ -1497,113 +1844,61 @@ static void draw_tests(int top, int left, int h, int w)
                 best = s;
         }
     }
-    /* the newest that fit */
-    first = n - (h - 4);
+    first = n - (top + h - 1 - r);
     if (first < 0)
         first = 0;
-    barw = w - 4 - 32 - 11;
-    if (barw < 3)
-        barw = 3;
-    if (barw > 30)
-        barw = 30;
-    for (i = first; i < n && r + 2 + i - first < top + h - 1; i++) {
+    for (i = first; i < n && r < top + h - 1; i++) {
         split_test(ent[i], f);
-        pen_at(r + 2 + i - first, left + 2, w - 4);
-        if (same(f[2], sv("server")) && f[3][0])
-            pen(c_green, "> ");
-        else
-            pen(c_none, "  ");
-        pen(c_bold, f[0]);
+        sel = same(f[2], sv("server")) && f[3][0] &&
+            !same(sv("level"), "0") && !same(sv("level"), "sandbox");
+        pen_at(r, left + 1, inner);
         pen(c_none, " ");
-        pen(c_none, f[1]);
-        pen_pad_to(w - 4, 15);
-        pen(c_dim, f[2]);
-        pen_pad_to(w - 4, 32);
+        pen(sel ? c_title : c_none, f[0]);
+        pen(c_label, " ");
+        pen(c_label, f[1]);
+        pen_pad_to(inner, 16);
+        pen(c_misc, f[2]);
+        pen_pad_to(inner, 32);
         if (f[3][0]) {
             s = to_num(f[3]);
-            full = (int)(s * barw / best);
-            if (full < 1)
-                full = 1;
-            pen_bar(c_bar_green, barw, full);
-            pen(c_none, " ");
-            pen_n(c_green, s);
-            pen(c_dim, " KB/s");
+            if (mw >= 4) {
+                full = (int)(s * mw / best);
+                if (full < 1)
+                    full = 1;
+                pen_meter(g_good, mw, full);
+                pen(c_none, " ");
+            }
+            strcpy(t, num(s, a));
+            strcat(t, " KB/s");
+            pen(c_green, t);
         } else {
-            pen(c_red, "FAILED ");
+            pen(c_red, "failed: ");
             pen(c_red, f[4]);
         }
         pen_end();
-    }
-}
-
-static void draw_traffic(int top, int left, int h, int w)
-{
-    char b[64];
-    int gh, gw, i, rr, col, idx, filled;
-    long long mx, v, dn, up;
-
-    box(top, left, h, w, "Traffic");
-    dn = hist_n > 0 ? hist_rx[hist_n - 1] : 0;
-    up = hist_n > 0 ? hist_tx[hist_n - 1] : 0;
-    pen_at(top + 1, left + 2, w - 4);
-    pen(c_bold, iface[0] ? iface : "no network");
-    pen(c_cyan, "  down ");
-    pen(c_none, size_text(dn, b));
-    pen(c_none, "/s");
-    pen(c_yellow, "  up ");
-    pen(c_none, size_text(up, b));
-    pen(c_none, "/s");
-    pen_end();
-    gh = h - 4;
-    gw = w - 4;
-    if (gh < 1 || gw < 1)
-        return;
-    mx = 1024;
-    for (i = 0; i < hist_n && i < gw; i++) {
-        v = hist_rx[hist_n - 1 - i];
-        if (hist_tx[hist_n - 1 - i] > v)
-            v = hist_tx[hist_n - 1 - i];
-        if (v > mx)
-            mx = v;
-    }
-    /* columns, newest on the right: down cyan, up yellow in front */
-    for (rr = 0; rr < gh; rr++) {
-        pen_at(top + 2 + rr, left + 2, gw);
-        for (col = 0; col < gw; col++) {
-            idx = hist_n - gw + col;
-            if (idx < 0) {
-                pen(c_none, " ");
-                continue;
+        if (sel) {
+            /* the row in use, like btop's selected process */
+            for (col = left + 1; col < left + w - 1; col++) {
+                if (grid_bg[r - 1][col - 1] == c_def)
+                    grid_bg[r - 1][col - 1] = c_sel;
             }
-            filled = gh - rr;
-            if (hist_tx[idx] * gh >= mx * filled && hist_tx[idx] > 0)
-                pen(c_bar_yellow, " ");
-            else if (hist_rx[idx] * gh >= mx * filled && hist_rx[idx] > 0)
-                pen(c_bar_cyan, " ");
-            else if (rr == gh - 1)
-                pen(c_dim, "_");
-            else
-                pen(c_none, " ");
         }
-        pen_end();
+        r++;
     }
-    pen_at(top + h - 2, left + 2, w - 4);
-    pen(c_dim, "top of the graph ");
-    pen(c_none, size_text(mx, b));
-    pen(c_none, "/s");
-    pen(c_dim, "   up is ");
-    pen(c_bar_yellow, " ");
-    pen(c_dim, " down is ");
-    pen(c_bar_cyan, " ");
-    pen_end();
 }
 
 static void draw_events(int top, int left, int h, int w)
 {
-    int i, first, n;
+    int i, first, n, col;
     const char *s;
+    char t[10];
 
-    box(top, left, h, w, "What happened (newest last; e: all of it)");
+    box(top, left, h, w, "log");
+    if (!watch_only) {
+        col = left + 2;
+        col += tag(top + h - 1, col, 0, "e", " whole log", 0);
+        col += tag(top + h - 1, col, 0, "t", " selftest", 0);
+    }
     n = h - 2;
     if (watch_only) {
         pen_at(top + 1, left + 2, w - 4);
@@ -1618,13 +1913,9 @@ static void draw_events(int top, int left, int h, int w)
         s = ev_line[i];
         pen_at(top + 1 + i - first, left + 2, w - 4);
         if (strlen(s) > 9) {
-            {
-                char t[10];
-
-                memcpy(t, s, 8);
-                t[8] = 0;
-                pen(c_dim, t);
-            }
+            memcpy(t, s, 8);
+            t[8] = 0;
+            pen(c_dim, t);
             pen(c_none, " ");
             pen(event_color(s + 9), s + 9);
         } else {
@@ -1634,122 +1925,59 @@ static void draw_events(int top, int left, int h, int w)
     }
 }
 
-/* the key bar at the bottom, as many rows as it needs */
-static const char *keys_main[] = {
-    "0 1 2 3 s o", "level", "-", "all off", "r", "reconnect",
-    "n", "new list", "l", "LAN", "f", "firewall", "t", "selftest",
-    "e", "log", "?", "help", "q", "quit", 0
-};
-
-static const char *keys_watch[] = { "q", "quit", 0 };
-
-static int draw_keys(int bottom, int dry)
-{
-    const char **k;
-    int i, len, row, used, lines;
-
-    k = watch_only ? keys_watch : keys_main;
-    lines = 1;
-    used = 1;
-    for (i = 0; k[i]; i += 2) {
-        len = (int)(strlen(k[i]) + strlen(k[i + 1])) + 4;
-        if (used + len > cols) {
-            lines++;
-            used = 1;
-        }
-        used += len;
-    }
-    if (dry)
-        return lines;
-    row = bottom - lines + 1;
-    pen_at(row, 1, cols);
-    used = 1;
-    pen(c_none, " ");
-    for (i = 0; k[i]; i += 2) {
-        len = (int)(strlen(k[i]) + strlen(k[i + 1])) + 4;
-        if (used + len > cols) {
-            pen_end();
-            row++;
-            pen_at(row, 1, cols);
-            pen(c_none, " ");
-            used = 1;
-        }
-        pen(c_key, " ");
-        pen(c_key, k[i]);
-        pen(c_key, " ");
-        pen(c_none, " ");
-        pen(c_none, k[i + 1]);
-        pen(c_none, " ");
-        used += len;
-    }
-    pen_end();
-    return lines;
-}
-
 static void draw_main(void)
 {
-    int kl, top, avail, th, mh, eh, lw, rw, tw;
+    int th, rem, lw, rw, ch, ph, sh, lh;
 
-    kl = draw_keys(rows, 1);
-    draw_head();
-    draw_now();
-    top = 3;
-    avail = rows - 2 - kl;
-    th = 8;
-    mh = 7;
-    if (avail >= th + mh + 4)
-        eh = avail - th - mh;
-    else
-        eh = 0;
-    if (eh > 4 && avail >= 30) {
-        th = 9;
-        mh = 8 + (avail - 30) / 3;
-        if (mh > 14)
-            mh = 14;
-        eh = avail - th - mh;
-    }
-    if (eh == 0) {
-        mh = avail - th;
-        if (mh < 5) {
-            th = avail;
-            mh = 0;
-        }
-    }
-    lw = cols / 2;
+    th = rows / 3;
+    if (th < 8)
+        th = 8;
+    if (th > 14)
+        th = 14;
+    rem = rows - th;
+    lw = cols * 2 / 5;
+    if (lw < 34)
+        lw = 34;
+    if (lw > 52)
+        lw = 52;
     rw = cols - lw;
-    draw_connection(top, 1, th, lw);
-    draw_protection(top, 1 + lw, th, rw);
-    if (mh > 0) {
-        /* the tests need about 56 columns, the graph the rest */
-        tw = cols * 3 / 5;
-        if (tw < 56)
-            tw = 56;
-        if (cols - tw < 22)
-            tw = cols - 22;
-        draw_tests(top + th, 1, mh, tw);
-        draw_traffic(top + th, 1 + tw, mh, cols - tw);
+    ch = 7;
+    ph = rem - ch;
+    if (ph > 8) {
+        ph = 8;
+        ch = rem - ph;
+        if (ch > 7)
+            ch = 7;
     }
-    if (eh > 0)
-        draw_events(top + th + mh, 1, eh, cols);
-    draw_keys(rows, 0);
+    sh = rem / 2;
+    if (sh < 8)
+        sh = 8;
+    if (sh > rem - 4)
+        sh = rem - 4;
+    lh = rem - sh;
+    draw_top(th);
+    draw_connection(th + 1, 1, ch, lw);
+    draw_protection(th + 1 + ch, 1, rem - ch, lw);
+    draw_servers(th + 1, 1 + lw, sh, rw);
+    draw_events(th + 1 + sh, 1 + lw, lh, rw);
 }
 
 static const char *help_text[] = {
-    "Every key does one thing at once, without Enter. The screen",
-    "updates itself; green is fine, yellow worth knowing, red a problem.",
+    "One key does one thing, without Enter; the screen updates itself.",
+    "Green is fine, brown is worth knowing, red is a problem.",
     "",
-    "Levels (until reboot)",
-    "  0  your own IP, Cloudflare DNS     s  sandbox: own IP, only",
-    "  1  VPN, Cloudflare DNS                programs started with",
-    "  2  VPN, DNS through Tor (usual)       vpn run (and Tor) online",
-    "  3  VPN, everything through Tor     o  offline: nothing goes out",
+    "Levels (until reboot), in the bottom line of the top box",
+    "  0  your own IP, Cloudflare DNS    s  sandbox: own IP, only",
+    "  1  VPN, Cloudflare DNS               programs started with",
+    "  2  VPN, DNS through Tor (usual)      vpn run (and Tor) online",
+    "  3  VPN, everything through Tor    o  offline: nothing goes out",
     "  -  everything off (level -1), as if vpn were not installed;",
     "     any level turns it back on (that runs install.sh net)",
-    "Other keys",
-    "  r  pick a server again            n  new server list, certificate",
-    "  l  local network on/off           f  kill switch off/on",
-    "  t  try every feature (selftest)   e  everything that happened",
-    "  q  quit (Ctrl+C too)              Ctrl+L  draw it all again",
+    "Other keys, in the bottom lines of the boxes",
+    "  r  pick a server again          n  new server list, certificate",
+    "  l  local network on/off         f  kill switch off/on",
+    "  e  everything that happened     t  try every feature (selftest)",
+    "  q  quit (Ctrl+C too)            Ctrl+L  draw it all again",
     "How a server is chosen",
     "  Zones first (white, gray, black: /etc/vpn/countries), then speed:",
     "  in the first zone with a working server, up to 3 random ones are",
@@ -1773,11 +2001,13 @@ static void draw_help(void)
         h = rows;
     top = (rows - h) / 2 + 1;
     left = (cols - w) / 2 + 1;
-    box_fill(top, left, h, w, "Help (any key: back)");
+    box_fill(top, left, h, w, "help");
+    tag(top, left + w - tag_len("", " any key: back ") - 1, 1, "",
+        " any key: back ", 0);
     for (i = 0; help_text[i] && i < h - 2; i++) {
         pen_at(top + 1 + i, left + 2, w - 4);
         if (help_text[i][0] && help_text[i][0] != ' ' && i > 2)
-            pen(c_bold, help_text[i]);
+            pen(c_title, help_text[i]);
         else
             pen(c_none, help_text[i]);
         pen_end();
@@ -1809,17 +2039,25 @@ static int lr_start[EV_LINES * 4], lr_part[EV_LINES * 4];
 
 static void draw_log(void)
 {
-    int w, h, n, i, top, cnt;
+    int w, h, n, i, top, cnt, col;
     const char *s;
+    char t[10], b[24];
 
     w = cols - 4;
-    h = rows - 3;
+    h = rows - 2;
     n = log_rows(w, lr_start, lr_part, EV_LINES * 4);
     if (log_top < 0 || log_top > n - h)
         log_top = n - h;
     if (log_top < 0)
         log_top = 0;
-    box(1, 1, rows - 1, cols, "Everything that happened since boot");
+    box(1, 1, rows, cols, "log");
+    strcpy(t, "");
+    tag(1, cols - tag_len("", num(n, b)) - 8, 1, "", num(n, b), 0);
+    col = 3;
+    col += tag(rows, col, 0, "j k", " line", 0);
+    col += tag(rows, col, 0, "space b", " page", 0);
+    col += tag(rows, col, 0, "g G", " top end", 0);
+    col += tag(rows, col, 0, "q", " back", 0);
     top = log_top;
     for (i = 0; i < h && top + i < n; i++) {
         s = ev_line[lr_start[top + i]];
@@ -1830,19 +2068,14 @@ static void draw_log(void)
             if (s[cnt] == ' ')
                 cnt++;
             pen(event_color(s), s + cnt);
+        } else if (strlen(s) > 9) {
+            memcpy(t, s, 8);
+            t[8] = 0;
+            pen(c_dim, t);
+            pen(c_none, " ");
+            pen(event_color(s + 9), s + 9);
         } else {
-            cnt = (int)strlen(s);
-            if (cnt > 9) {
-                char t[10];
-
-                memcpy(t, s, 8);
-                t[8] = 0;
-                pen(c_dim, t);
-                pen(c_none, " ");
-                pen(event_color(s + 9), s + 9);
-            } else {
-                pen(c_none, s);
-            }
+            pen(c_none, s);
         }
         pen_end();
     }
@@ -1851,23 +2084,11 @@ static void draw_log(void)
         pen(c_dim, "nothing yet");
         pen_end();
     }
-    pen_at(rows, 1, cols);
-    pen(c_key, " j k ");
-    pen(c_none, " line  ");
-    pen(c_key, " space b ");
-    pen(c_none, " page  ");
-    pen(c_key, " g G ");
-    pen(c_none, " top, end  ");
-    pen(c_key, " q ");
-    pen(c_none, " back   ");
-    pen_n(c_dim, n);
-    pen(c_dim, " lines");
-    pen_end();
 }
 
 static void draw_confirm(void)
 {
-    int w, top, left;
+    int w, top, left, col;
     const char *a, *b;
 
     if (confirm_what == 'f') {
@@ -1882,19 +2103,16 @@ static void draw_confirm(void)
         w = cols;
     top = rows / 2 - 3;
     left = (cols - w) / 2 + 1;
-    box_fill(top, left, 7, w, "Are you sure?");
+    box_fill(top, left, 6, w, "are you sure?");
     pen_at(top + 1, left + 2, w - 4);
     pen(c_none, a);
     pen_end();
     pen_at(top + 2, left + 2, w - 4);
     pen(c_none, b);
     pen_end();
-    pen_at(top + 4, left + 2, w - 4);
-    pen(c_key, " y ");
-    pen(c_none, " yes     ");
-    pen(c_key, " any other key ");
-    pen(c_none, " no");
-    pen_end();
+    col = left + 2;
+    col += tag(top + 5, col, 0, "y", " yes", 0);
+    col += tag(top + 5, col, 0, "any other key", " no", 0);
 }
 
 static void draw(void)
@@ -1908,7 +2126,7 @@ static void draw(void)
     grid_clear();
     if (cols < MIN_COLS || rows < MIN_ROWS) {
         pen_at(1, 1, cols);
-        pen(c_yellow, "make the window at least 60x18 (q quits)");
+        pen(c_yellow, "make the window at least 70x20 (q quits)");
         pen_end();
         present(rows, cols);
         return;
@@ -2093,6 +2311,7 @@ int main(int argc, char **argv)
         (void)r;
         return 1;
     }
+    make_gradients();
     signal(SIGWINCH, on_winch);
     signal(SIGINT, on_quit);
     signal(SIGTERM, on_quit);

@@ -113,27 +113,33 @@ check.
 The screen
 ----------
 
-"vpn" opens vpntop, a full screen in the style of top: the state in
-colour at the top with the clock, a line in plain words saying what
-is happening now (and for how many seconds), then panels:
+"vpn" opens vpntop, a full screen that looks like btop, in Habamax
+colours (24-bit). Boxes:
 
-    Connection      server, zone, address, speed, up for, clock, cert
-    Protection      kill switch, DNS (Tor? locked?), Tor, IPv6, LAN, MAC
-    Choosing a      how many servers each zone has, which zone is being
-     server         tested (server 4/12, speed-tested 2/3), and each
-                    server tried: its speed as a bar, or FAILED and why
-    Traffic         download and upload of the tunnel, as a graph
-    What happened   the newest lines of vpn log, failures in red
+    vpn          the traffic graph (download up, upload down) and, on
+                 the right, the state, the level, what is happening
+                 now (and for how many seconds), the server, uptime;
+                 the clock in the top border, the levels in the bottom
+                 one (the current one selected)
+    connection   address, speed at the test, Tor, clock, certificate
+    protection   firewall, DNS (Tor? locked?), IPv6, LAN, MAC
+    servers      how many each zone has, which zone is being tested
+                 (server 4 of 12, tested 2 of 3), and each server
+                 tried: its speed as a meter, or why it failed; the
+                 one in use selected
+    log          the newest lines of vpn log, failures in red
 
-Green is fine, yellow worth knowing, red a problem. It redraws twice a
-second and uses the whole window (at least 60x18). One key does one
-thing, nothing needs Enter; the keys are at the bottom:
+Green is fine, brown worth knowing, red a problem. The keys are in the
+borders, as in btop, the key itself in blue; nothing needs Enter:
 
     0 1 2 3 s o   level       - everything off (asks first)
     r reconnect (pick again)  n new server list and certificate
     l LAN on/off              f kill switch off (asks first) / on
     t selftest                e the whole log (j k space b g G, q back)
     ? help                    q quit (Ctrl+C too)
+
+It redraws twice a second, only what changed, and uses the whole
+window (at least 70x20).
 
 "vpn watch" shows the same screen to anyone, without the details and
 keys. Without vpntop (or without a terminal) vpn shows a plain screen.
