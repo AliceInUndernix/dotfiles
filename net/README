@@ -42,6 +42,9 @@ then everything goes through Tor (level 3).
 Levels
 ------
 
+    -1       everything off: kill switch, VPN and Tor gone, the system
+             files as before install.sh net, nothing at boot (vpn on,
+             or any other level, installs it all again)
     0        your own IP, DNS from Cloudflare (1.1.1.1)
     1        VPN, Cloudflare DNS through the VPN
     2        VPN, DNS through Tor (the usual one)
@@ -65,9 +68,18 @@ Commands
 --------
 
     vpn status          state and level (anyone)
-    vpn status -v       server, country, Tor, DNS, firewall, clock
-    vpn                 a menu with everything
-    vpn level L         0 1 2 3 sandbox offline, until reboot
+    vpn status -v       server, country, Tor, DNS, firewall, clock,
+                        what it is doing now and the test results
+    vpn                 the screen: everything, one key each (below)
+    vpn watch           the short status, updated every second (anyone)
+    vpn log [N]         what happened and why: each server tried, its
+                        speed or why it failed, why a zone was given up
+    vpn report          everything needed to find a problem (MAC
+                        addresses hidden; read it before you send it)
+    vpn selftest        tries every level and feature one by one, then
+                        goes back; falls back to level -1 if it can't
+    vpn off, vpn on     level -1, and back
+    vpn level L         -1 0 1 2 3 sandbox offline, until reboot
     vpn default L       the level at boot
     vpn retry           pick a server again and connect
     vpn refresh         a new server list and certificate from Riseup
@@ -77,7 +89,7 @@ Commands
     vpn run PROGRAM     a program that may go online in the sandbox
     proxychains PROGRAM run a program through Tor (port 9050)
 
-Every command but "vpn status" and "vpn run" asks for your own
+Every command but "vpn status", "vpn watch" and "vpn run" asks for your own
 password (not root's): vpnauth checks it and runs vpn as root. You
 must be in group vpnctl (install.sh net puts you there; log in again).
 vpn run needs group vpnallow, also set up by install.sh net.
@@ -94,17 +106,51 @@ can't be checked, it tells you and asks whether to go on without the
 check.
 
 
+The screen
+----------
+
+"vpn" shows the status and redraws it every second by itself, with
+the clock at the top right, so you can see it is alive. "now:" says
+what is being done and for how many seconds so far (connecting to
+Zurich CH, server 2 of 5, speed-tested 1 of 3). The rows left at the
+bottom show the newest events of vpn log. One key does one thing,
+nothing needs Enter:
+
+    0 1 2 3   level       s sandbox   o offline   - everything off
+    r reconnect (pick again)          n new server list and certificate
+    l LAN on/off          f firewall off/on
+    e the whole log       ? help      q quit (Ctrl+C too)
+
+What it keeps to (a checklist for terminal programs):
+
+- redraws by itself, every second, without flicker; never hangs
+  waiting for something
+- every key it takes is on the screen; a wrong key says so
+- every action answers on the screen; long ones show their progress
+  and seconds so far
+- it says why when something fails, and what to do next
+- asks before anything dangerous (firewall off, going out without
+  the VPN)
+- the terminal comes back as it was on q, Ctrl+C or any exit
+- fits 80x24, uses more rows when there are more; ASCII only
+- everything in it is also a plain command (vpn level 3, vpn log)
+- without a terminal (in a pipe) it prints the status once
+
+
 Privacy
 -------
 
 - Your ISP sees only that you use Riseup. Riseup sees your IP and that
   you use Tor, not what you do in it. Tor's first relay sees Riseup's
   address, not yours.
-- dhcpcd sends no hostname and uses a random MAC address each time it
-  starts (its anonymous mode, RFC 7844). The hostname is "host" and
+- dhcpcd sends no hostname (its anonymous mode, RFC 7844), and each
+  network card gets a random MAC address once at boot, before it is
+  up (not while connected: that breaks Wi-Fi). To keep the real one:
+  touch /etc/vpn/keep-mac. The hostname is "host" and
   the clock is in UTC, so programs can't give away either.
-- Nothing is logged for long: the status, OpenVPN's and Tor's warnings
-  are in /run/vpn, which is gone after a reboot.
+- Nothing is logged for long: the status, the events (vpn log),
+  OpenVPN's and Tor's warnings are in /run/vpn, which is gone after
+  a reboot.
 - The server list and certificate are Riseup's anonymous ones: no
   account.
 

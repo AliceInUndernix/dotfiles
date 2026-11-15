@@ -35,7 +35,7 @@
 
 static const char *allowed_cmds[] = {
     "level", "default", "retry", "refresh", "lan", "firewall-off",
-    "firewall-on", "status", 0
+    "firewall-on", "status", "report", "log", "off", "on", "selftest", 0
 };
 
 static char file_buf[FILE_MAX];

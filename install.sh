@@ -847,6 +847,26 @@ install_net() {
 		net-firewall/nftables net-misc/proxychains
 	net=$DOTFILES/net
 	install -d -m 755 /usr/local/bin /etc/vpn
+	# The system's files as they were before net first changed them, for
+	# vpn off (level -1). An older backup of ours (.bak.<date>) is the
+	# truer original, so it wins.
+	install -d -m 700 /etc/vpn/orig
+	for f in /etc/dhcpcd.conf /etc/conf.d/hostname /etc/hostname \
+		/etc/hosts /etc/timezone /etc/conf.d/hwclock /etc/tor/torrc \
+		/etc/proxychains.conf
+	do
+		o=/etc/vpn/orig$f
+		if [ -e "$o" ] || [ -e "$o.absent" ]; then continue; fi
+		mkdir -p "${o%/*}"
+		old=$(ls "$f".bak.* 2>/dev/null | head -n 1) || :
+		if [ -n "$old" ]; then cp -p "$old" "$o"
+		elif [ -e "$f" ]; then cp -p "$f" "$o"
+		else : > "$o.absent"; fi
+	done
+	[ -e /etc/vpn/orig/localtime.link ] ||
+		readlink /etc/localtime > /etc/vpn/orig/localtime.link || :
+	echo "$DOTFILES" > /etc/vpn/repo
+	rm -f /etc/vpn/off
 	install -m 755 "$net/vpn" /usr/local/bin/vpn
 	say "install /usr/local/bin/vpn"
 	# vpnctl: may run vpn's commands with their own password (vpnauth);
@@ -903,26 +923,31 @@ install_net() {
 	rm -f "$net/.torrc"
 	d=$(echo "$keep" | sed -n 's/^[[:space:]]*DataDirectory[[:space:]]*//p')
 	[ -z "$d" ] || [ -d "$d" ] || install -d -o tor -g tor -m 700 "$d"
-	# dhcpcd: no hostname, a random MAC address each time, and
-	# resolv.conf left alone (vpn writes and locks it)
+	# dhcpcd: no hostname, no fixed client ID, and resolv.conf left alone
+	# (vpn writes and locks it). The random MAC address is vpnfw's, once
+	# at boot: dhcpcd's randomise_hwaddr changed it whenever the link
+	# dropped, which broke Wi-Fi (2026-11-15), so it is taken out.
 	f=/etc/dhcpcd.conf
+	if grep -q '^randomise_hwaddr$' "$f" 2>/dev/null; then
+		sed -i '/^randomise_hwaddr$/d; s/^# each time, leave/# leave/' "$f"
+		say "dhcpcd  randomise_hwaddr out (it broke Wi-Fi)"
+	fi
 	if [ -f "$f" ] && ! grep -q '^# vpn (dotfiles' "$f"; then
 		cp -p "$f" "$f.bak.$STAMP"
 		sed -i 's/^hostname[[:space:]]*$/#hostname  # off: net (vpn)/' "$f"
 		cat >> "$f" <<-'EOF'
 
-		# vpn (dotfiles, net/): send no hostname, use a random MAC address
-		# each time, leave /etc/resolv.conf alone (vpn sets and locks it).
-		# Keep these last: anonymous hides what comes before it.
+		# vpn (dotfiles, net/): send no hostname or fixed ID, and leave
+		# /etc/resolv.conf alone (vpn sets and locks it). Keep these last:
+		# anonymous hides what comes before it.
 		nohook resolv.conf
-		randomise_hwaddr
 		anonymous
 		EOF
-		say "dhcpcd  no hostname, random MAC (backup $f.bak.$STAMP)"
+		say "dhcpcd  no hostname (backup $f.bak.$STAMP)"
 	fi
 	v=$(dhcpcd --version 2>/dev/null | sed -n '1s/[^0-9]*\([0-9]*\).*/\1/p')
 	[ "${v:-0}" -ge 9 ] 2>/dev/null ||
-		warn "dhcpcd ${v:-?} is older than 9: no random MAC (emerge -qv dhcpcd)"
+		warn "dhcpcd ${v:-?} is older than 9: it may send your hostname (emerge -qv dhcpcd)"
 	# a hostname that says nothing
 	f=/etc/conf.d/hostname
 	if [ -f "$f" ] && ! grep -q '^hostname="host"' "$f"; then
@@ -1159,6 +1184,10 @@ ck_net() {
 		ck_info "not OpenRC: net is not for this system"
 		return
 	fi
+	if [ -e /etc/vpn/off ]; then
+		ck_info "net is off (vpn level -1): vpn on turns it back on"
+		return
+	fi
 	n=$DOTFILES/net
 	ck_same "$n/vpn" /usr/local/bin/vpn
 	ck_same "$n/vpnfw.initd" /etc/init.d/vpnfw
@@ -1216,7 +1245,10 @@ ck_net() {
 	else
 		ck_bad "/etc/resolv.conf is not vpn's (vpn sets it when it starts)"
 	fi
-	if grep -q '^anonymous' /etc/dhcpcd.conf 2>/dev/null; then ck_ok "dhcpcd: no hostname, random MAC"
+	if grep -q '^randomise_hwaddr' /etc/dhcpcd.conf 2>/dev/null; then
+		ck_bad "dhcpcd has randomise_hwaddr, which breaks Wi-Fi: su -c '$DOTFILES/install.sh net'"
+	fi
+	if grep -q '^anonymous' /etc/dhcpcd.conf 2>/dev/null; then ck_ok "dhcpcd: sends no hostname"
 	else ck_bad "dhcpcd still sends your hostname and MAC: su -c '$DOTFILES/install.sh net'"; fi
 	h=$(cat /proc/sys/kernel/hostname 2>/dev/null) || :
 	if [ "$h" = host ]; then ck_ok "hostname host"
@@ -1477,7 +1509,20 @@ for f in "$SYSBIN"/*; do
 	esac
 done
 
-for p in $parts; do say "part    $p ($(date +%H:%M:%S))"; "install_$p"; done
+# Each part on its own: one that fails (no internet for Plover, say)
+# doesn't stop the others; they are listed at the end.
+failed=
+for p in $parts; do
+	say "part    $p ($(date +%H:%M:%S))"
+	set +e
+	( set -e; "install_$p" )
+	rc=$?
+	set -e
+	if [ "$rc" -ne 0 ]; then
+		warn "part $p did not finish (error $rc); going on with the rest"
+		failed="$failed $p"
+	fi
+done
 # A root run leaves files of root's behind where programs it ran wrote
 # their caches and state (fc-cache, pip, nvim): they belong to the user,
 # or the user's programs can't update them. slock stays root's.
@@ -1495,4 +1540,9 @@ n=$(find "$HOME" ! -type l ! -path "$SYSBIN/slock" -user "$USER_NAME" \
 [ "$n" -eq 0 ] || say "private $n files and folders in $HOME (only $USER_NAME and root)"
 [ -z "$skipped" ] ||
 	say "skipped $skipped (needs root): su -c '$DOTFILES/install.sh $skipped'"
+if [ -n "$failed" ]; then
+	warn "these parts did not finish:$failed (the messages above say why;"
+	warn "no internet? parts that download: plover, moonlander, st's font, net)"
+	exit 1
+fi
 say "done"

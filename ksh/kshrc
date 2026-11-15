@@ -88,10 +88,11 @@ _pwd() {
 	esac
 }
 # Before it, when vpn (net/) is installed: VPN when something is wrong
-# with it (vpn status says what), else the level when it isn't the
-# usual 2: L0, L1, L3 or SANDBOX.
+# with it or it isn't up yet (vpn status says what), OFF at level -1,
+# else the level when it isn't the usual 2: L0, L1, L3 or SANDBOX.
 _vpn() {
 	[ -e /etc/init.d/vpn ] || return 0
+	if [ -e /etc/vpn/off ]; then printf 'OFF '; return 0; fi
 	_s= _l=
 	[ -r /run/vpn/state ] && read -r _s _l < /run/vpn/state
 	if [ -e /run/vpn/fw-off ] || [ "$_s" != ok ]; then
