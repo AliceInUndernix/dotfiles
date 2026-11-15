@@ -25,6 +25,8 @@ _hs_key() {
 	case ${.sh.edchar} in
 	$'\e[A'|$'\eOA') dir=up ;;
 	$'\e[B'|$'\eOB') dir=down ;;
+	# Enter: update the VPN marker in the prompt (see _vpn_set below)
+	$'\r'|$'\n') _hs_on= ; _vpn_set ; return ;;
 	*) _hs_on= ; return ;;
 	esac
 	# a new search, unless the last key was an arrow (any other key ends
@@ -90,57 +92,39 @@ _pwd() {
 # Before it, when vpn (net/) is installed: VPN when something is wrong
 # with it or it isn't up yet (vpn status says what), OFF at level -1,
 # else the level when it isn't the usual 2: L0, L1, L3 or SANDBOX.
-_vpn() {
+# _vpn_set puts it in _vm (only shell builtins, no programs or output);
+# _vpn prints it.
+_vpn_set() {
+	_vm=
 	[ -e /etc/init.d/vpn ] || return 0
-	if [ -e /etc/vpn/off ]; then printf 'OFF '; return 0; fi
+	if [ -e /etc/vpn/off ]; then _vm='OFF '; return 0; fi
 	_s= _l=
 	[ -r /run/vpn/state ] && read -r _s _l < /run/vpn/state
 	if [ -e /run/vpn/fw-off ] || [ "$_s" != ok ]; then
-		printf 'VPN '
+		_vm='VPN '
 	else
 		case $_l in
 		2) ;;
-		sandbox) printf 'SANDBOX ' ;;
-		*) printf 'L%s ' "$_l" ;;
+		sandbox) _vm='SANDBOX ' ;;
+		*) _vm="L$_l " ;;
 		esac
 	fi
 }
+_vpn() { _vpn_set; printf '%s' "$_vm"; }
 if [ "$(id -u)" -eq 0 ]; then _ps_end='#'; else _ps_end='$'; fi
 PS1='$(_vpn)$(_pwd) '$_ps_end' '
-# ksh93 builds the same prompt in a PS1.get function instead, without
-# $(...). A $(...) in PS1 makes ksh93 flush its output while it writes
-# the prompt, and its line editor then keeps a garbled copy of it. When
-# the window changes size (dwm resizes every new window), the editor
-# redraws that copy: st got broken escape sequences ("erresc: unknown
-# sequence ESC 0x20") and showed nothing until Ctrl+C.
-case ${KSH_VERSION:-} in *93*) eval "$(cat <<'EOF'
-function PS1.get {
-	typeset p= s= l=
-	if [[ -e /etc/init.d/vpn ]]; then
-		if [[ -e /etc/vpn/off ]]; then
-			p='OFF '
-		else
-			[[ -r /run/vpn/state ]] && read -r s l < /run/vpn/state
-			if [[ -e /run/vpn/fw-off || $s != ok ]]; then
-				p='VPN '
-			else
-				case $l in
-				2) ;;
-				sandbox) p='SANDBOX ' ;;
-				*) p="L$l " ;;
-				esac
-			fi
-		fi
-	fi
-	case $PWD in
-	"$HOME") p+='~' ;;
-	"$HOME"/*) p+="~${PWD#"$HOME"}" ;;
-	*) p+=$PWD ;;
-	esac
-	.sh.value="$p $_ps_end "
-}
-EOF
-)" ;; esac
+# ksh93: a prompt that runs code, $(...) or a PS1.get function, gets
+# garbled by its line editor when a new window is resized (dwm resizes
+# every new window): st stayed blank until Ctrl+C or clear. So in ksh93
+# PS1 runs nothing and only uses variables: the folder comes from $PWD,
+# and the VPN marker from _vm, which is set here and again each time
+# you press Enter (in _hs_key above). It shows the state from when your
+# last command started; it still reads only the local files above.
+case ${KSH_VERSION:-} in *93*)
+	_vpn_set
+	PS1='${_vm}${PWD/#"$HOME"/\~} '$_ps_end' '
+	;;
+esac
 
 alias ls='ls -F'          # / after folders, * after programs, @ after links; no colours
 alias ll='ls -lh'
