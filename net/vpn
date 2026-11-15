@@ -1488,8 +1488,13 @@ cmd_selftest() {
     # to a fake IPv6 address, which says nothing about the firewall
     st ".onion names resolve (into Tor)" \
         "$(as_nobody "getent ahostsv4 $ONION") | grep -q '^10\.'"
+    # curl itself refuses to look up .onion names (RFC 7686), so ask
+    # the system for the address Tor gives it, and connect to that
+    oip=$(sh -c "$(as_nobody "getent ahostsv4 $ONION")" 2>/dev/null |
+        sed -n '1s/ .*//p')
     st "an .onion site opens without a proxy (through Tor)" \
-        "$(as_nobody "curl -4 -sS -o /dev/null -m 90 http://$ONION/")"
+        "$(as_nobody "curl -sS -o /dev/null -m 90 -H \"Host: $ONION\" \
+            http://${oip:-0.0.0.0}/")"
     if [ -n "$router" ]; then
         was=off
         [ ! -e "$ETC/lan" ] || was=on
