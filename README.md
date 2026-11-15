@@ -103,7 +103,7 @@ when the dependencies are already there:
 
 ```sh
 ./install.sh all        # everything, no menu
-./install.sh            # a numbered menu (Enter alone: everything)
+./install.sh            # a numbered menu (Enter alone: all but the browsers)
 ./install.sh nvim       # only some parts: ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver moonlander plover net icecat chromium
 su -c '~user/dotfiles/install.sh icecat'    # a browser: icecat (20) or chromium (21)
 ./install.sh 4 12       # the same by number (0 is --deps)

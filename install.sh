@@ -1017,13 +1017,6 @@ install_net() {
 	say "        rc-service vpnfw start && rc-service vpn start"
 }
 
-# --- check (./install.sh check) --------------------------------------------
-# Only looks, changes nothing: for each part what is installed, missing,
-# out of date or not as the repo has it. Asks git whether this repo and
-# Dotterel have newer commits (that needs the network). Exit status 1
-# when anything needs a look; each such line says what to run.
-
-CK_BAD=0
 # --- browsers --------------------------------------------------------------
 
 # The two browsers are parts of their own, only when asked for by name or
@@ -1045,6 +1038,13 @@ browser() (
 install_icecat()   { browser parona-overlay www-client/icecat; }
 install_chromium() { browser pf4public www-client/ungoogled-chromium; }
 
+# --- check (./install.sh check) --------------------------------------------
+# Only looks, changes nothing: for each part what is installed, missing,
+# out of date or not as the repo has it. Asks git whether this repo and
+# Dotterel have newer commits (that needs the network). Exit status 1
+# when anything needs a look; each such line says what to run.
+
+CK_BAD=0
 ck_ok() { printf '  ok   %s\n' "$*"; }
 ck_bad() { printf '  !!   %s\n' "$*"; CK_BAD=$((CK_BAD + 1)); }
 ck_info() { printf '  --   %s\n' "$*"; }
