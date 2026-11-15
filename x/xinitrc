@@ -26,7 +26,7 @@ fi
 
 # xss-lock runs slock when the screen blanks (only if the idle lock above
 # is on) and always before the laptop suspends, so waking needs the
-# password. Mod+Shift+l locks by hand, Mod+Shift+s suspends.
+# password. Mod+Shift+l locks by hand, Mod+Ctrl+Shift+z suspends.
 xss-lock -- slock &
 
 # Status text on the right of dwm's bar (Mod+b shows the bar): the date

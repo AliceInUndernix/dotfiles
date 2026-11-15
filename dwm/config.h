@@ -122,8 +122,11 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_r,      setlayout,      {.v = &layouts[3]} },
 	{ MODKEY,                       XK_space,  setlayout,      {0} },
 	{ MODKEY|ShiftMask,             XK_space,  togglefloating, {0} },
-	/* sticky: on every tag, floating, Mod+j/k skip it (e.g. a video) */
-	{ MODKEY,                       XK_s,      togglesticky,   {0} },
+	/* pin: the window floats and Mod+j/k skip it (e.g. a video). Mod+s
+	 * pins it on its own tag, Mod+Shift+s on every tag; the same key
+	 * again unpins it */
+	{ MODKEY,                       XK_s,      togglesticky,   {.i = 0 } },
+	{ MODKEY|ShiftMask,             XK_s,      togglesticky,   {.i = 1 } },
 	{ MODKEY,                       XK_0,      view,           {.ui = ~0 } },
 	{ MODKEY|ShiftMask,             XK_0,      tag,            {.ui = ~0 } },
 	{ MODKEY,                       XK_comma,  focusmon,       {.i = -1 } },
@@ -140,7 +143,9 @@ static const Key keys[] = {
 	TAGKEYS(                        XK_8,                      7)
 	TAGKEYS(                        XK_9,                      8)
 	{ MODKEY|ShiftMask,             XK_l,      spawn,          {.v = lockcmd } },
-	{ MODKEY|ShiftMask,             XK_s,      spawn,          {.v = suspendcmd } },
+	/* suspend needs Ctrl and Shift, and no other shortcut uses z, so a
+	 * slip on another key cannot suspend the machine */
+	{ MODKEY|ControlMask|ShiftMask, XK_z,      spawn,          {.v = suspendcmd } },
 	{ 0,                            XK_Print,  spawn,          {.v = shotcmd } },
 	{ MODKEY,                       XK_Print,  spawn,          {.v = fullshotcmd } },
 	{ MODKEY,                       XK_w,      spawn,          {.v = icecatcmd } },

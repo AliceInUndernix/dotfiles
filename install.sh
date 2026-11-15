@@ -383,7 +383,7 @@ install_x() {
 		command -v $tool >/dev/null 2>&1 || warn "$tool is not installed (try ./install.sh --deps)"
 	done
 	command -v loginctl >/dev/null 2>&1 ||
-		warn "loginctl not found: Mod+Shift+s (suspend) needs elogind or systemd"
+		warn "loginctl not found: Mod+Ctrl+Shift+z (suspend) needs elogind or systemd"
 }
 
 install_tmux() {

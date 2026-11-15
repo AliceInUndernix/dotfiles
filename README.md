@@ -12,7 +12,7 @@ script puts the whole configuration back after a fresh install.
 | `dwm/` | dwm 6.8 source (window manager) | `~/.system/bin/dwm` |
 | `st/` | st 0.9.3 source (terminal): scrollback like Alacritty (Shift+PageUp/PageDown/Home/End, mouse wheel), Symbols Nerd Font for icons | `~/.system/bin/st`, font in `~/.system/share/fonts` |
 | `dmenu/` | dmenu 5.4 source (launcher), `dmenu_apps` and its list `apps` | `~/.system/bin/dmenu`, `dmenu_apps`, `~/.config/dmenu/apps` |
-| `slock/` | slock 1.7 source (screen locker; Mod+Shift+l locks, Mod+Shift+s suspends) | `~/.system/bin/slock` |
+| `slock/` | slock 1.7 source (screen locker; Mod+Shift+l locks, Mod+Ctrl+Shift+z suspends) | `~/.system/bin/slock` |
 | `webarchiver/` | WebArchiver, our own C program: archives whole websites with wget for offline reading, keeps them updated with version history (`webarchiver/README`) | `~/.system/bin/webarchiver` |
 | `nvim/` | Neovim config (0.11+, no plugin manager) | `~/.config/nvim` (symlink), `~/.system/bin/vim` -> nvim (first in PATH) |
 | `tmux/` | tmux config | `~/.config/tmux/tmux.conf` (symlink) |

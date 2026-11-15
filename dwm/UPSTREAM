@@ -40,10 +40,15 @@ applied in this order; dwm.c already has them, so don't apply again):
                      don't drift). Corner cursors for each direction.
                      patches/dwm-resizecorners-local.diff.
   sticky             local, the idea of the suckless sticky patch:
-                     Mod+s pins the focused window to every tag of its
-                     monitor and floats it. Mod+j/k, tag changes and
-                     closing windows never focus it; click it to. Kept
-                     over dwm restart. patches/dwm-sticky-local.diff.
+                     Mod+s pins the focused window on its own tags,
+                     Mod+Shift+s on every tag of its monitor; either
+                     floats it, and the same key again unpins it.
+                     Mod+j/k, tag changes and closing windows never
+                     focus a pinned window; click it to. Kept over dwm
+                     restart. patches/dwm-sticky-local.diff is the first
+                     version (every tag only, on Mod+s); dwm.c has the
+                     current one. Suspend moved from Mod+Shift+s to
+                     Mod+Ctrl+Shift+z for it.
   snapwindows        local: moving (Mod+left-drag) and resizing
                      (Mod+right-drag) snap window edges to the edges of
                      other visible windows when they come within winsnap
