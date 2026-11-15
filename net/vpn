@@ -1356,7 +1356,9 @@ cmd_on() {
 # /run/vpn/selftest.log.
 
 ST_PASS=0 ST_FAIL=0 ST_START=
-ONION=duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion
+# the Tor Project's own site: DuckDuckGo's onion gave no answer in 90 s
+# while this one did, the same way (2026-11-15)
+ONION=2gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wid.onion
 TOR_CHECK=https://check.torproject.org/api/ip
 WEB=http://example.com/
 
