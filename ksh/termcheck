@@ -1,0 +1,80 @@
+#!/bin/sh
+# termcheck: find out why a new terminal shows no prompt until Ctrl+C.
+# Run it from a terminal that works:   sh ~/dotfiles/ksh/termcheck
+# Everything goes to ~/termcheck.txt (send it); nothing is changed.
+# Each test gives up after 10 seconds, so it can't hang itself.
+
+out=$HOME/termcheck.txt
+state=${XDG_STATE_HOME:-$HOME/.system/state}
+
+# t <seconds> <command>: run it with a time limit, say how long it took
+t() {
+    s=$(date +%s)
+    timeout -k 2 "$1" sh -c "$2"
+    rc=$?
+    e=$(( $(date +%s) - s ))
+    if [ $rc -eq 124 ] || [ $rc -eq 137 ]; then
+        echo "-> HUNG: stopped after $e s"
+    else
+        echo "-> done in $e s (exit $rc)"
+    fi
+}
+
+{
+    echo "termcheck, $(date -u '+%Y-%m-%d %H:%M:%S') UTC"
+    echo
+    echo "== versions"
+    ls -l /bin/ksh /bin/sh 2>&1
+    ksh -c 'echo "ksh: ${.sh.version}"' 2>&1 </dev/null
+    echo "SHELL=$SHELL ENV=$ENV TERM=$TERM"
+    nvim --version 2>&1 | head -n 1
+    st -v 2>&1 | head -n 1
+    echo
+    echo "== files the shell reads"
+    ls -l ~/.profile ~/.kshrc 2>&1
+    echo
+    echo "== history file (a huge or broken one can make ksh slow)"
+    ls -l "$state/ksh/" 2>&1
+    wc -c -l "$state/ksh/history" 2>&1
+    echo
+    echo "== 1. ksh without .kshrc, no terminal"
+    t 10 'ENV=/dev/null ksh -i -c exit </dev/null'
+    echo
+    echo "== 2. ksh with .kshrc, no terminal (trace of the last lines)"
+    t 10 'ksh -x -i -c exit </dev/null 2>/tmp/termcheck.$$; \
+        tail -n 25 /tmp/termcheck.$$'
+    rm -f /tmp/termcheck.$$
+    echo
+    echo "== 3. each part of .kshrc on its own"
+    t 10 'mkdir -p "$HOME/.system/state/ksh"'
+    t 10 'id -u'
+    t 10 'cat /run/vpn/state'
+    t 10 'ls -l /run/vpn/state'
+    echo
+    echo "== processes now"
+    ps -eo pid,ppid,stat,etime,tty,args --forest | tail -n 60
+} > "$out" 2>&1
+
+echo "Saved: $out"
+echo
+echo "Now the test that needs this terminal (about 10 s): an interactive"
+echo "ksh with your .kshrc. If its prompt shows, type exit. If nothing"
+echo "shows, wait: it is stopped after 10 s by itself."
+printf 'Start it? [Y/n] '
+read -r a
+case $a in n|N) exit 0 ;; esac
+{
+    echo
+    echo "== 4. ksh with .kshrc, in this terminal (trace)"
+} >> "$out"
+s=$(date +%s)
+timeout --foreground -k 2 10 ksh -x -i 2>/tmp/termcheck-tty.$$
+rc=$?
+{
+    echo "-> exit $rc after $(( $(date +%s) - s )) s (124: hung)"
+    tail -n 40 /tmp/termcheck-tty.$$
+} >> "$out"
+rm -f /tmp/termcheck-tty.$$
+stty sane 2>/dev/null
+echo
+echo "Saved: $out (send it)"

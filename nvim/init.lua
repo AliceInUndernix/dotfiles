@@ -467,7 +467,16 @@ plugin("Josiah-tan/plover-vim-tutor")
 -- The "master" branch is the one for Neovim 0.11 (the newer "main"
 -- branch needs 0.12). After moving to Neovim 0.12, switch to "main".
 -- After updating the plugin, run :TSUpdate to rebuild the parsers.
-if plugin("nvim-treesitter/nvim-treesitter", "master") then
+-- On Neovim 0.12 and newer the "master" branch breaks highlighting
+-- (an error box: "attempt to call method 'range' (a nil value)"), so
+-- there Neovim's own Tree-sitter is used instead: its built-in parsers
+-- (c, lua, markdown, query, vim, vimdoc) and any parser already on the
+-- runtimepath; every other language keeps Vim's built-in highlighting.
+if vim.fn.has("nvim-0.12") == 1 then
+  vim.api.nvim_create_autocmd("FileType", {
+    callback = function(ev) pcall(vim.treesitter.start, ev.buf) end,
+  })
+elseif plugin("nvim-treesitter/nvim-treesitter", "master") then
   -- Only the parsers that are not built yet are handed to the plugin:
   -- asking it about all of them took about 3 ms of every start.
   local missing = {}
