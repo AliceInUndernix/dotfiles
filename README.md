@@ -108,6 +108,7 @@ when the dependencies are already there:
 su -c '~user/dotfiles/install.sh icecat'    # a browser: icecat (20) or chromium (21)
 ./install.sh 4 12       # the same by number (0 is --deps)
 ./install.sh check      # only look: what is installed, missing, out of date
+./install.sh update     # the newest version: git pull, all, then check
 ./install.sh --list     # the part names
 INSTALL_USER=user ./install.sh    # as root, if the repo directory belongs to root
 ```
@@ -170,7 +171,7 @@ the script warns if the group is missing).
 ## Archive
 
 `archive/` keeps release tarballs of dwm, st, dmenu, slock and tmux, the
-seven Neovim plugins and optozorax's Moonlander libraries, with source,
+six Neovim plugins and optozorax's Moonlander libraries, with source,
 version and checksum for each in `archive/README.md`. If an upstream
 disappears, everything can still be rebuilt from this repo. The install
 script also unpacks the Neovim plugins from here, so Neovim works on

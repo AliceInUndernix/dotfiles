@@ -47,7 +47,6 @@ nvim/
 | Remember cursor, folds, undo between sessions | undofile/viewdir/shada in stdpath("state"), mkview/loadview autocmds | not confirmed |
 | Single Enter must not be pulled back into the paragraph | `pencil#autoformat = 0`; `gqip` to re-wrap | fixed after user report, not confirmed |
 | Arrows move by screen line in prose mode only | buffer-local gj/gk maps added on_open, removed on_close | not confirmed |
-| Grammar check (not spelling) | Harper LSP via vim.lsp.config, SpellCheck linter off | not confirmed |
 | Claude proofreading with the signed-in account, current file only | `Space g`: `claude -p` with no tools, no MCP, empty cwd, API-key vars unset, Sonnet, low effort | user ran it; it over-marked fine lines |
 | Show exact words, explain, offer a fix, work in prose mode | diagnostics with col ranges, popup on CursorHold, `Space f` applies | prompt tightened after over-marking, not confirmed |
 | Spell check toggle | `Space s` | not confirmed |
@@ -84,9 +83,10 @@ nvim/
   section in init.lua: the file `return`s early if zen-mode or pencil
   fail to download.
 - Leader is Space. Taken: w, p, s, g, f, G, t, T, Space, /, b, h.
-- nvim-treesitter is on the frozen `master` branch because the user is on
-  Neovim 0.11; `main` needs 0.12. Highlighting only: the user does not
-  want LSP completion or error checking for code (asked 2026-11-12).
+- No Tree-sitter plugin and no Harper (dropped 2026-11-15 at the user's
+  request): Vim's built-in syntax is enough, and Harper needed Rust. The
+  user does not want LSP completion or error checking for code (asked
+  2026-11-12).
   Declined for now: gitsigns, vim-fugitive, language servers.
   vim-tmux-navigator was tried and removed at the user's request (2026-11-12).
 - Keep the plover-vim-tutor line.

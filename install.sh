@@ -16,6 +16,8 @@
 #   ./install.sh all           everything, without the menu
 #   ./install.sh check [part]  only look: what is installed, missing or
 #                              out of date (changes nothing)
+#   ./install.sh update        the newest version: git pull, then all,
+#                              then check (as root: the root parts too)
 #   ./install.sh --deps        first install build dependencies with the
 #                              distro's package manager (emerge -qv)
 #   ./install.sh -a --deps     the same, but emerge asks first (-qva)
@@ -283,6 +285,13 @@ install_nvim() {
 	# Unpack archived plugins that are not there yet, so the first start
 	# works offline. init.lua only downloads plugins that are missing.
 	pack=$DATA/nvim/site/pack/plugins/opt
+	# Plugins the config no longer uses (nvim-treesitter: Vim's built-in
+	# syntax is used instead), with what they built (parsers)
+	for name in nvim-treesitter; do
+		[ -e "$pack/$name" ] || continue
+		rm -rf "$pack/$name"
+		say "delete  $pack/$name (no longer used)"
+	done
 	for tarball in "$DOTFILES"/archive/nvim-plugins/*.tar.gz; do
 		[ -e "$tarball" ] || continue
 		name=$(basename "$tarball" .tar.gz)
@@ -1388,6 +1397,26 @@ case ${1:-} in check|--check)
 	do_check "$named" || rc=$?
 	exit $rc ;;
 esac
+# update: the newest version from git, then everything, then check. The
+# pulled install.sh does the work (this one only pulls), so a new part or
+# fix is used at once. git runs as the repo's owner, even from root.
+case ${1:-} in update|--update)
+	[ $# -eq 1 ] || die "update takes no parts: ./install.sh update"
+	say "pull    $DOTFILES"
+	if [ "$AS_ROOT" = yes ]; then
+		su -s /bin/sh "$USER_NAME" -c "git -C '$DOTFILES' pull --ff-only" ||
+			die "git pull failed (changes not committed? no network?)"
+	else
+		git -C "$DOTFILES" pull --ff-only ||
+			die "git pull failed (changes not committed? no network?)"
+	fi
+	rc=0
+	/bin/sh "$DOTFILES/install.sh" all || rc=$?
+	echo
+	say "check"
+	/bin/sh "$DOTFILES/install.sh" check || rc=$?
+	exit $rc ;;
+esac
 # no arguments in a terminal: ask (not again in the logged run below)
 if [ $# -eq 0 ] && [ -t 0 ] && [ -z "${INSTALL_LOG:-}" ]; then
 	menu
@@ -1406,7 +1435,7 @@ for arg in "$@"; do
 		parts="$parts $p" ;;
 	-a) EMERGE_OPTS=-qva ;;
 	--list) echo "$PARTS"; exit 0 ;;
-	-h|--help) sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	-h|--help) sed -n '2,/^$/p' "$0" | sed '/^$/d; s/^# \{0,1\}//'; exit 0 ;;
 	-*) die "unknown option: $arg" ;;
 	*)
 		case " $PARTS " in *" $arg "*) ;; *) die "unknown part: $arg (see --list)" ;; esac

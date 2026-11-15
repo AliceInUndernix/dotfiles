@@ -24,9 +24,8 @@ mention `nvim-config/nvim` now mean this `nvim/` directory.
 
    From the archive instead: unpack it and copy its `nvim` directory to
    `~/.config/nvim` (`cp -r nvim-config/nvim/. ~/.config/nvim/`).
-4. Start `nvim` while online. On first start it downloads its 7 plugins (`./install.sh nvim`
-   unpacks them from `archive/` instead) and builds the Tree-sitter
-   parsers for common languages in the background (needs gcc).
+4. Start `nvim` while online. On first start it downloads its 6 plugins (`./install.sh nvim`
+   unpacks them from `archive/` instead).
 
 ## Keys
 
@@ -86,13 +85,13 @@ hand: `Ctrl-k - M` types —, `Ctrl-k - N` types –.
 | zen-mode.nvim | The distraction-free centred view |
 | vim-pencil | Proper hard wrapping at 80 for prose |
 | plover-vim-tutor | Help pages for plover-vim (see below) |
-| nvim-treesitter (`master`) | Syntax highlighting for many languages (highlighting only) |
 | mini.pick | Fuzzy finder for files, text, buffers, help |
 | mini.surround | Add, delete, replace quotes and brackets |
 | which-key.nvim | Shows what keys can follow after a pause |
 
 To update them, delete `~/.system/share/nvim/site/pack/plugins/` and
-restart Neovim; they download again. Then run `:TSUpdate` once.
+restart Neovim; they download again. Syntax colours come from Vim's
+built-in syntax files (no Tree-sitter plugin).
 
 ## Tabs and whitespace
 
@@ -102,19 +101,6 @@ feel like one tab. Real tab characters in existing files are left alone
 Trailing spaces show as dim `·` (not while you type), no-break spaces
 as `␣`, and `›` / `‹` mark lines that go past the screen edge.
 `:s/old/new` shows its changes live while you type.
-
-## Grammar check (optional)
-
-The config uses Harper, an offline grammar checker, when it's installed.
-Install it once with Rust's cargo (as root: `emerge -qv dev-lang/rust-bin`
-if you don't have cargo):
-
-    cargo install harper-ls --locked
-
-Make sure `~/.cargo/bin` is in your PATH. In Markdown, text and git
-commit files, problems are underlined; rest the cursor on one and a
-pop-up explains it. `]d` / `[d` jump between them, `Ctrl-w d` also
-shows the message, and `gra` offers a fix. Harper's spell check is off.
 
 ## Proofread with Claude (optional)
 

@@ -4,7 +4,7 @@
 -- Written for Neovim 0.11 or newer. Plugins install themselves on first start.
 --
 -- Files in this config:
---   init.lua            this file (options, keys, Harper, Claude proofread,
+--   init.lua            this file (options, keys, Claude proofread,
 --                       Plover unicode fix, plugins, prose mode)
 --   lua/typetrack.lua   optional: type a book over grey ghost text, mistakes red
 -- See README.md for the user guide and HANDOFF.md for history, decisions
@@ -184,31 +184,10 @@ vim.api.nvim_create_autocmd("BufReadPost", {
   end,
 })
 
----------------------------------------------------------------------------
--- Grammar check for prose: Harper (https://writewithharper.com)
---   Runs offline, no plugin needed, uses Neovim's built-in LSP client.
---   Only starts if the harper-ls program is installed
---   (cargo install harper-ls --locked). Harper's own spell check is off.
---   ]d / [d jump between issues, the message pops up when the cursor
---   rests on one (or <C-w>d), gra offers fixes.
----------------------------------------------------------------------------
-if vim.fn.executable("harper-ls") == 1 then
-  vim.lsp.config("harper_ls", {
-    cmd = { "harper-ls", "--stdio" },
-    filetypes = { "markdown", "text", "gitcommit" },
-    root_markers = { ".git" },
-    settings = {
-      ["harper-ls"] = {
-        linters = { SpellCheck = false },  -- spelling comes from steno
-      },
-    },
-  })
-  vim.lsp.enable("harper_ls")
-end
 -- Problems are underlined; the explanation pops up when the cursor rests
 -- on an underlined word (no text squeezed in at the end of lines, which
--- prose mode's narrow window would cut off). Applies to Harper and to
--- the Claude marks below.
+-- prose mode's narrow window would cut off). Applies to the Claude
+-- marks below.
 vim.diagnostic.config({
   virtual_text = false,
   signs = false,
@@ -455,54 +434,6 @@ local have_pencil = plugin("preservim/vim-pencil")   -- wrapping for prose
 -- The user is NOT using plover-vim for now (it needs Emily's modifiers,
 -- which they don't want to learn yet) but asked to keep this line.
 plugin("Josiah-tan/plover-vim-tutor")
-
--- Syntax highlighting with Tree-sitter: more accurate colours than
--- Vim's built-in syntax files. Each language needs a small "parser",
--- compiled once on your computer (needs gcc, which Gentoo has). The
--- common languages below are built in the background on first start;
--- any other language only when you run :TSInstall <language>.
--- Languages without a parser still get Vim's built-in highlighting,
--- which covers hundreds of file types.
--- Only highlighting is on: no error checking, no completion.
--- The "master" branch is the one for Neovim 0.11 (the newer "main"
--- branch needs 0.12). After moving to Neovim 0.12, switch to "main".
--- After updating the plugin, run :TSUpdate to rebuild the parsers.
--- On Neovim 0.12 and newer the "master" branch breaks highlighting
--- (an error box: "attempt to call method 'range' (a nil value)"), so
--- there Neovim's own Tree-sitter is used instead: its built-in parsers
--- (c, lua, markdown, query, vim, vimdoc) and any parser already on the
--- runtimepath; every other language keeps Vim's built-in highlighting.
-if vim.fn.has("nvim-0.12") == 1 then
-  vim.api.nvim_create_autocmd("FileType", {
-    callback = function(ev) pcall(vim.treesitter.start, ev.buf) end,
-  })
-elseif plugin("nvim-treesitter/nvim-treesitter", "master") then
-  -- Only the parsers that are not built yet are handed to the plugin:
-  -- asking it about all of them took about 3 ms of every start.
-  local missing = {}
-  for _, lang in ipairs({
-    "bash", "c", "cpp", "css", "csv", "diff", "dockerfile",
-    "git_config", "git_rebase", "gitcommit", "gitignore", "go", "html",
-    "ini", "java", "javascript", "jsdoc", "json", "lua", "luadoc",
-    "make", "markdown", "markdown_inline", "perl", "php", "python",
-    "query", "regex", "ruby", "rust", "sql", "toml", "tsx",
-    "typescript", "vim", "vimdoc", "xml", "yaml",
-  }) do
-    local so = pack_dir .. "nvim-treesitter/parser/" .. lang .. ".so"
-    if not vim.uv.fs_stat(so) then missing[#missing + 1] = lang end
-  end
-  require("nvim-treesitter.configs").setup({
-    ensure_installed = missing,
-    -- No auto_install: a parser for another language is downloaded and
-    -- built only when you ask for it with :TSInstall <language>.
-    auto_install = false,
-    -- These need an extra program (tree-sitter-cli) to build, so they
-    -- keep Vim's built-in highlighting instead.
-    ignore_install = { "latex", "mlir", "ocamllex", "scfg", "swift",
-      "teal", "unison" },
-    highlight = { enable = true },
-  })
-end
 
 -- Fuzzy finder (mini.pick): type a few letters of a name, Enter opens.
 -- Inside the list: Ctrl+n / Ctrl+p (or arrows) move, Esc closes,
