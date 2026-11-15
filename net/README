@@ -169,7 +169,11 @@ Privacy
 - dhcpcd sends no hostname (its anonymous mode, RFC 7844), and each
   network card gets a random MAC address once at boot, before it is
   up (not while connected: that breaks Wi-Fi). To keep the real one:
-  touch /etc/vpn/keep-mac. The hostname is "host" and
+  touch /etc/vpn/keep-mac. USB cards (docks, adapters) get one only
+  with their chip's own driver (ax88179_178a, r8152, asix), not with
+  the generic cdc_ncm or cdc_ether, which then get no DHCP answer; if
+  DHCP still fails, vpn gives the cards their own MACs back after 30 s.
+  The hostname is "host" and
   the clock is in UTC, so programs can't give away either.
 - Nothing is logged for long: the status, the events (vpn log),
   OpenVPN's and Tor's warnings are in /run/vpn, which is gone after

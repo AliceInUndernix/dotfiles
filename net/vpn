@@ -1924,8 +1924,15 @@ random_macs() {
     chmod 600 "$RUN/macs"
     for d in /sys/class/net/*; do
         [ -e "$d/device" ] || continue
+        # USB cards only with a driver of their own chip: the generic
+        # ones (cdc_ncm, cdc_ether, rndis_host) leave the device
+        # filtering on its own MAC, so DHCP gets no answer
         case $(readlink -f "$d/device/subsystem" 2>/dev/null) in
-        */usb) continue ;;
+        */usb)
+            case $(readlink "$d/device/driver" 2>/dev/null) in
+            */ax88179_178a|*/r8152|*/asix) ;;
+            *) continue ;;
+            esac ;;
         esac
         i=${d##*/}
         own=$(cat "$d/address" 2>/dev/null)
