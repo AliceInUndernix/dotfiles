@@ -103,8 +103,8 @@ o.clipboard = "unnamedplus"    -- yank/paste uses the system clipboard
                                -- installs both)
 o.updatetime = 300
 
--- Persistent history. Neovim keeps these in its own state folder
--- (~/.system/state/nvim/) so your project folders stay clean.
+-- Persistent history. Neovim keeps these in its own state directory
+-- (~/.system/state/nvim/) so your project directories stay clean.
 local state = vim.fn.stdpath("state")
 o.undofile = true              -- undo survives closing the file
 o.undodir = state .. "/undo//" -- ...stored here, one file per edited file
@@ -225,7 +225,7 @@ vim.api.nvim_create_autocmd("CursorHold", {
 -- Ask Claude to proofread: <Space>g
 --   Sends ONLY the text of the file you are in (piped in, not a path).
 --   Claude gets no tools at all, so it cannot open or read any other file,
---   run commands or browse. It runs from an empty temporary folder.
+--   run commands or browse. It runs from an empty temporary directory.
 --   API-key variables are removed so it always uses the Claude account you
 --   signed in with (`claude` then /login, done once).
 --   The wrong words get underlined. Rest the cursor on them and the
@@ -421,9 +421,9 @@ end
 -- Plugins (installed automatically on first start)
 ---------------------------------------------------------------------------
 -- No plugin manager: each plugin is cloned once with git into Neovim's
--- own package folder and loaded with :packadd. Works on Neovim 0.11+.
+-- own package directory and loaded with :packadd. Works on Neovim 0.11+.
 -- (vim.pack was tried first but needs 0.12; the user is on 0.11.7.
--- To update the plugins, delete the pack_dir folder and restart.)
+-- To update the plugins, delete the pack_dir directory and restart.)
 -- Everything that must work without plugins sits ABOVE this section,
 -- because the file stops at the `return` below if a download fails.
 local pack_dir = vim.fn.stdpath("data") .. "/site/pack/plugins/opt/"
@@ -507,7 +507,7 @@ end
 -- Fuzzy finder (mini.pick): type a few letters of a name, Enter opens.
 -- Inside the list: Ctrl+n / Ctrl+p (or arrows) move, Esc closes,
 -- Ctrl+s / Ctrl+v open in a split. Space / searches inside files: it
--- uses ripgrep (rg) if installed, otherwise only works in a git folder.
+-- uses ripgrep (rg) if installed, otherwise only works in a git directory.
 if plugin("nvim-mini/mini.pick") then
   local pick = require("mini.pick")
   pick.setup()

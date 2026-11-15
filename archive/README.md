@@ -2,7 +2,7 @@
 
 Copies of everything this setup downloads from somewhere else, so it can
 be rebuilt even if an upstream site or repository disappears. Taken
-2026-11-11. Check the files with `sha256sum -c SHA256SUMS` in this folder.
+2026-11-11. Check the files with `sha256sum -c SHA256SUMS` in this directory.
 
 These are untouched upstream copies. The versions actually used (and
 edited) live in the app directories at the top of the repo.
@@ -35,21 +35,21 @@ Full commits:
 - optozorax/moonlander `8b725d0876b16b788f18ab5530ce6440cf979b3d`
 
 The suckless tarballs match the checksums suckless publishes in each
-folder's `sha256sums.txt`. The git snapshots were made with
+directory's `sha256sums.txt`. The git snapshots were made with
 `git archive` at the commit above.
 
 ## Using them
 
 - **Neovim plugins:** `./install.sh nvim` unpacks any missing plugin from
-  here into `~/.local/share/nvim/site/pack/plugins/opt/`, so Neovim works
+  here into `~/.system/share/nvim/site/pack/plugins/opt/`, so Neovim works
   on first start without internet (Tree-sitter's language parsers are
-  still built on first start; they are not archived). Delete that folder to download fresh
+  still built on first start; they are not archived). Delete that directory to download fresh
   copies instead.
 - **suckless:** `tar xf suckless/dwm-6.8.tar.gz` gives the pristine
   source, to compare with `../dwm/` or start over from.
 - **Moonlander:** the libraries are already copied into
   `moonlander/canary/`. The tarball keeps optozorax's whole keymap; its
-  library folders are git submodules and come out empty.
+  library directories are git submodules and come out empty.
 
 ## Not archived
 

@@ -21,7 +21,7 @@ that were tried and settled. Start with the comment at the top of
 ./install.sh moonlander
 ```
 
-Everything goes into your home folder (the script runs as root, but the build runs as you):
+Everything goes into your home directory and nothing needs root (run as root, the build still runs as you):
 
 | What | Where |
 |---|---|
@@ -46,7 +46,7 @@ small DFU trailer to the .bin. Without it the build still works and says so.
 
 The libraries in `canary/` are copies of optozorax's, unchanged:
 
-| Folder | From | Commit |
+| Directory | From | Commit |
 |---|---|---|
 | `lang_shift/` | https://github.com/klavarog/lang_shift | `2a6f814` (2026-06-21) |
 | `combo/` (without the diagram images) | https://github.com/klavarog/combo | `c882759` (2026-06-21) |

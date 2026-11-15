@@ -61,18 +61,18 @@ int run_active(void)
     return res;
 }
 
-/* link to a site folder: its index.html if there is one */
-static void add_start_page(struct buf *b, const char *folder)
+/* link to a site directory: its index.html if there is one */
+static void add_start_page(struct buf *b, const char *directory)
 {
     static const char *names[] = { "index.html", "index.htm", 0 };
     char *dir, *p, *q;
     int i;
 
-    q = pct_quote(folder, "/~@!$&'()*+,;=-._");
+    q = pct_quote(directory, "/~@!$&'()*+,;=-._");
     buf_add(b, q);
     free(q);
     buf_addc(b, '/');
-    dir = path2(out_dir, folder);
+    dir = path2(out_dir, directory);
     for (i = 0; names[i]; i++) {
         p = path2(dir, names[i]);
         if (is_file(p)) {
@@ -296,7 +296,7 @@ void render_history(struct buf *b, int served)
     buf_add(b, "<h1>Archive history</h1><p class=\"n\"><a href=\""
         "archive.html\">&larr; archive</a> &middot; updated ");
     buf_add(b, when);
-    buf_add(b, " UTC. Each site folder is always its current version; "
+    buf_add(b, " UTC. Each site directory is always its current version; "
         "older versions are rebuilt on request.</p>");
     for (i = 0; i < ds.n; i++) {
         if (!strcmp(ds.v[i], "objects"))
@@ -568,7 +568,7 @@ int cmd_restore(const char *d, const char *which)
         say("Already restored: ", dest, "");
         return 1;
     }
-    /* where each content is now in the live folder */
+    /* where each content is now in the live directory */
     cache_load(d, &cache);
     tab_init(&where);
     sl_init(&live);

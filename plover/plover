@@ -1,6 +1,6 @@
 #!/bin/sh
 # Start Plover from ~/.system/plover (install.sh links this to
-# ~/.system/bin/plover). Started in a folder that holds plover.cfg, Plover
+# ~/.system/bin/plover). Started in a directory that holds plover.cfg, Plover
 # keeps everything there ("portable mode"): settings, plugins, dictionaries,
 # strokes.log. Nothing goes to ~/.config or ~/.local.
 #

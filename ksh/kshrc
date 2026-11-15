@@ -80,7 +80,7 @@ trap _hs_key KEYBD
 EOF
 )" ;; esac
 
-# Prompt: folder (~ for home), then $ for you or # for root,
+# Prompt: directory (~ for home), then $ for you or # for root,
 # e.g. "~/dotfiles $ " and "/etc # ".
 _pwd() {
 	case $PWD in
@@ -117,7 +117,7 @@ PS1='$(_vpn)$(_pwd) '$_ps_end' '
 # ksh93: a prompt that runs code, $(...) or a PS1.get function, gets
 # garbled by its line editor when a new window is resized (dwm resizes
 # every new window): st stayed blank until Ctrl+C or clear. So in ksh93
-# PS1 runs nothing and only uses variables: the folder comes from $PWD,
+# PS1 runs nothing and only uses variables: the directory comes from $PWD,
 # and the VPN marker from _vm, which is set here and again each time
 # you press Enter (in _hs_key above). It shows the state from when your
 # last command started; it still reads only the local files above.
@@ -127,7 +127,7 @@ case ${KSH_VERSION:-} in *93*)
 	;;
 esac
 
-alias ls='ls -F'          # / after folders, * after programs, @ after links; no colours
+alias ls='ls -F'          # / after directories, * after programs, @ after links; no colours
 alias ll='ls -lh'
 alias la='ls -lAh'
 alias grep='grep --color=auto'

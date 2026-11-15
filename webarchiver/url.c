@@ -275,7 +275,7 @@ char *url_origin(const char *s)
     return b.s;
 }
 
-/* folder name for a host: lower case, ':' -> '_' */
+/* directory name for a host: lower case, ':' -> '_' */
 char *host_dir(const char *host)
 {
     char *d, *p;

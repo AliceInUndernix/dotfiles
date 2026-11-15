@@ -10,9 +10,9 @@ issues, for anyone (or any Claude) picking the work up.
 
 ## Install
 
-In the dotfiles repo, `./install.sh nvim` links this folder to
+In the dotfiles repo, `./install.sh nvim` links this directory to
 `~/.config/nvim`; the steps below are the manual way. Paths below that
-mention `nvim-config/nvim` now mean this `nvim/` folder.
+mention `nvim-config/nvim` now mean this `nvim/` directory.
 
 1. You need Neovim **0.11 or newer** (`nvim --version`) and `git`.
 2. Back up any old config: `mv ~/.config/nvim ~/.config/nvim.bak`
@@ -22,7 +22,7 @@ mention `nvim-config/nvim` now mean this `nvim/` folder.
        cp ~/Downloads/init.lua ~/.config/nvim/init.lua
        cp ~/Downloads/typetrack.lua ~/.config/nvim/lua/typetrack.lua
 
-   From the archive instead: unpack it and copy its `nvim` folder to
+   From the archive instead: unpack it and copy its `nvim` directory to
    `~/.config/nvim` (`cp -r nvim-config/nvim/. ~/.config/nvim/`).
 4. Start `nvim` while online. On first start it downloads its 7 plugins (`./install.sh nvim`
    unpacks them from `archive/` instead) and builds the Tree-sitter
@@ -41,7 +41,7 @@ mention `nvim-config/nvim` now mean this `nvim/` folder.
 | `Space T` | Book typing with ghost text on and off |
 | `Space w` | Save |
 | `Space Space` | Open a file by typing part of its name |
-| `Space /` | Search text in all files (needs `rg` or a git folder) |
+| `Space /` | Search text in all files (needs `rg` or a git directory) |
 | `Space b` | Pick one of the open files |
 | `Space h` | Search Neovim's help |
 | `saiw"` / `sd"` / `sr"'` | Add / delete / replace quotes or brackets around |
@@ -130,7 +130,7 @@ Setup, once: install Claude Code (https://claude.com/claude-code), run
 
 Privacy: only the text of the current file is sent, piped in directly.
 Claude runs with every tool switched off and no connectors, from an empty
-temporary folder, so it cannot open other files or run commands. API-key
+temporary directory, so it cannot open other files or run commands. API-key
 variables are removed, so it always uses your signed-in account. The text
 does go to Claude online and counts toward your usage.
 
@@ -149,7 +149,7 @@ that; `./install.sh --deps` installs both.
 
 ## What Neovim remembers between sessions
 
-Everything is kept in `~/.system/state/nvim/`, out of your project folders:
+Everything is kept in `~/.system/state/nvim/`, out of your project directories:
 
 - `undo/`: full undo history per file, so `u` works even after a restart.
 - `view/`: your folds and cursor position per file.

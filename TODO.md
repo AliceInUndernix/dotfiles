@@ -17,4 +17,4 @@
   programs, their data, state and caches are in `~/.system`; only
   `~/.config`, `~/.profile`, `~/.kshrc`, `~/.xinitrc` (links) and
   `~/.system` remain. Programs that ignore XDG (browsers' `~/.pki`,
-  `~/.mozilla`, ssh, gnupg) still make their own folders.
+  `~/.mozilla`, ssh, gnupg) still make their own directories.

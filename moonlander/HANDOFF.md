@@ -9,16 +9,16 @@ libraries come from. This file adds the background and the history.
 
 | Path | What it is |
 |---|---|
-| `canary/keymap.c` | **Latest layout (version 87)**, comments refreshed for handoff |
-| `canary/config.h` | Latest config (version 87): debounce, RGB, audio, combo limits |
-| `canary/rules.mk` | Latest build features (version 87): steno, mouse keys, USB endpoints |
+| `canary/keymap.c` | **Latest layout (version 97)** |
+| `canary/config.h` | Latest config (version 97): debounce, RGB, audio, combo limits |
+| `canary/rules.mk` | Latest build features (version 97): steno, mouse keys, USB endpoints |
 | `knowledge/canary/` | The first working canary keymap, kept as reference |
 | `knowledge/Similar layout to what I want to achive.md` | Link to the inspiration: https://github.com/optozorax/moonlander |
 | `history/` | Every earlier numbered draft (keymap 75..86, config 71/81..86, rules 1/81..86), unchanged |
 | `UPGRADE-NOTES.md` | Notes from when the project moved from a claude.ai project |
 
-In `canary/`, only comments differ from `keymap_87.c`, `config_87.h` and
-`rules_87.mk`; the code is byte-for-byte the same once comments are removed.
+`history/` stops at version 86; versions 87 to 97 are only in git
+(`git log -- moonlander/canary`) and in the version history below.
 
 ## The layout in short
 

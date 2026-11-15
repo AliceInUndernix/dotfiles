@@ -155,7 +155,7 @@ struct dom {
 static struct dom *doms;
 static int ndoms;
 
-/* "example.org" from "https://User@Example.org:8080/x" -> folder name */
+/* "example.org" from "https://User@Example.org:8080/x" -> directory name */
 static char *link_domain(const char *link)
 {
     const char *p, *e, *at;

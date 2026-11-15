@@ -362,7 +362,7 @@ static void big_register(struct big *g, struct strlist *keys,
     global_set(keys, r);
 }
 
-/* where a big file goes: the domain folder, or _external/<host>/ */
+/* where a big file goes: the domain directory, or _external/<host>/ */
 static char *big_dest(const char *url, const char *d)
 {
     char *host, *hd, *base, *path, *raw, *dest, *dir, *tmp;

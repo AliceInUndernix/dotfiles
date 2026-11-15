@@ -24,7 +24,7 @@
 #                              ungoogled-chromium (20, 21; Gentoo, as root,
 #                              from source, takes hours; not in "all")
 #
-# The configs are for the user who owns this repo folder (or INSTALL_USER=
+# The configs are for the user who owns this repo directory (or INSTALL_USER=
 # name ./install.sh). Everything put in that user's home belongs to them,
 # not to root. Configs are symlinked, so editing them in ~/.config edits
 # this repo. Anything already in the way is moved to <name>.bak.<date>,
@@ -66,7 +66,7 @@ pw=$(getent passwd "$USER_NAME" 2>/dev/null || grep "^$USER_NAME:" /etc/passwd) 
 USER_GROUP=$(id -gn "$USER_NAME")
 pw=${pw%:*}
 HOME=${pw##*:}
-[ -d "$HOME" ] || die "home folder $HOME of $USER_NAME does not exist"
+[ -d "$HOME" ] || die "home directory $HOME of $USER_NAME does not exist"
 SYSTEM=$HOME/.system          # all installed programs live here
 SYSBIN=$SYSTEM/bin            # ...their commands here (first in PATH)
 # Where programs keep their files, the same as ~/.profile sets for the
@@ -85,7 +85,7 @@ export HOME
 # own <path>...: give files root made in the user's home to the user.
 own() { chown -hR "$USER_NAME:$USER_GROUP" "$@"; }
 
-# userdir <dir>: mkdir -p, with every folder it creates owned by the user.
+# userdir <dir>: mkdir -p, with every directory it creates owned by the user.
 userdir() {
 	[ -d "$1" ] && return
 	userdir "$(dirname "$1")"
@@ -476,8 +476,8 @@ install_webarchiver() {
 		warn "wget is not installed; webarchiver needs it (su -c '$DOTFILES/install.sh --deps')"
 }
 # st's font2 falls back to Symbols Nerd Font Mono for icons and symbols
-# Liberation Mono lacks. It goes into your home folder, nothing needs root;
-# delete the folder and run ./install.sh st again to get the newest release.
+# Liberation Mono lacks. It goes into your home directory, nothing needs root;
+# delete the directory and run ./install.sh st again to get the newest release.
 NERD_FONTS=$DATA/fonts/NerdFontsSymbolsOnly
 
 install_st() {
@@ -517,13 +517,13 @@ install_slock() {
 	build_suckless slock
 }
 
-# Moonlander: everything goes into your home folder, nothing needs root.
+# Moonlander: everything goes into your home directory, nothing needs root.
 #   ~/.system/share/qmk/zsa_qmk   ZSA's QMK source (firmware25), with qmk.patch
 #   ~/.system/share/qmk/venv      Python environment for the qmk command
 #   ~/.system/share/qmk/arm-gnu-toolchain   ARM compiler
 #   ~/.system/bin/qmk, arm-none-eabi-*     symlinks to the two above
-# Each run copies moonlander/canary into QMK fresh (like update.sh did) and
-# builds and flashes. The built .bin is also copied to moonlander/.
+# Each run copies moonlander/canary into QMK fresh, builds and flashes.
+# The built .bin is also copied to moonlander/.
 QMK_DIR=$DATA/qmk
 QMK_BIN=$SYSBIN
 QMK_BRANCH=firmware25
@@ -628,11 +628,11 @@ install_moonlander() {
 		nosuffix=DFU_SUFFIX=true
 	fi
 	say "build   $QMK_TARGET"
-	# Build as the user, not root: the QMK folder is theirs, and git (which
+	# Build as the user, not root: the QMK directory is theirs, and git (which
 	# QMK asks for its version string) refuses repositories owned by someone
 	# else when run as root ("dubious ownership"), which breaks the build.
 	# What root cloned and unpacked above must be the user's first, or
-	# the build can't write its .build folder ("Permission denied").
+	# the build can't write its .build directory ("Permission denied").
 	if [ "$AS_ROOT" = yes ]; then
 		own_qmk
 		su -s /bin/sh "$USER_NAME" -c "cd '$fw' && PATH='$QMK_DIR/venv/bin:$QMK_BIN:$PATH' make '$QMK_TARGET' $nosuffix"
@@ -741,7 +741,7 @@ install_plover() {
 	fi
 
 	# 3. Dotterel and its dark theme, from the newest commit of the
-	# dotterel repo, into Plover's own plugins folder. pip's cache is
+	# dotterel repo, into Plover's own plugins directory. pip's cache is
 	# off, so nothing lands in ~/.cache.
 	src=$PLOVER_DIR/dotterel
 	# Dotterel used to come from the moonlander repo: that old clone goes.
@@ -822,7 +822,7 @@ install_plover() {
 	fi
 }
 
-# The installed plugin's dictionaries folder, or nothing.
+# The installed plugin's dictionaries directory, or nothing.
 dotterel_dicts() {
 	find "$PLOVER_DIR/plugins" -type d -path '*/plover_dotterel/dictionaries' 2>/dev/null | head -n 1
 }
@@ -1123,10 +1123,12 @@ ck_part() {
 		*ksh) ck_ok "login shell $sh_now" ;;
 		*) ck_bad "login shell is $sh_now: su -c '$DOTFILES/install.sh ksh'" ;;
 		esac
+		rh=$(getent passwd root 2>/dev/null | cut -d: -f6)
+		rh=${rh:-/root}
 		for f in profile kshrc; do
-			if [ ! -r "/root/.$f" ]; then
+			if [ ! -r "$rh/.$f" ]; then
 				ck_info "root's .$f: only root can read it (check as root)"
-			elif cmp -s "$DOTFILES/ksh/$f" "/root/.$f"; then
+			elif cmp -s "$DOTFILES/ksh/$f" "$rh/.$f"; then
 				ck_ok "root's .$f"
 			else
 				ck_bad "root's .$f is older: su -c '$DOTFILES/install.sh ksh'"
@@ -1185,7 +1187,9 @@ ck_part() {
 		if [ -d "$PLOVER_DIR/app" ]; then ck_ok "Plover in $PLOVER_DIR"
 		else ck_bad "Plover is not installed: ./install.sh plover"; fi
 		ck_links plover
-		g=$(stat -c %G /dev/ttyACM0 2>/dev/null || echo dialout)
+		# the same group install_plover adds you to
+		g=$(stat -c %G /dev/ttyACM0 2>/dev/null || :)
+		case $g in ""|root) g=dialout ;; esac
 		case " $(id -nG "$USER_NAME") " in
 		*" $g "*) ck_ok "$USER_NAME is in group $g (the keyboard's port)" ;;
 		*) ck_bad "$USER_NAME is not in group $g: su -c '$DOTFILES/install.sh plover'" ;;
@@ -1513,10 +1517,10 @@ if [ -d "$old_bin" ] && [ ! -L "$old_bin" ]; then
 fi
 
 # ~/.local/share, ~/.local/state and ~/.cache are no longer used: their
-# contents move into ~/.system/share, state and cache (the XDG folders
+# contents move into ~/.system/share, state and cache (the XDG directories
 # ~/.profile sets), and so does ~/.ksh_history. Nothing is deleted; a
 # name already taken in the new place is kept where it was and reported.
-# moveinto <old dir> <new dir>: move every entry, merging folders. Each
+# moveinto <old dir> <new dir>: move every entry, merging directories. Each
 # file is listed in ~/.system/state/install/<date>-moved.txt; the screen
 # and the log only get how many (a browser's cache is thousands of files).
 MOVED=$LOG_DIR/$STAMP-moved.txt
@@ -1595,7 +1599,7 @@ chmod 700 "$HOME"
 # slock is left alone: it is root's, so you could no longer run it.
 n=$(find "$HOME" ! -type l ! -path "$SYSBIN/slock" -user "$USER_NAME" \
 	-perm /077 -print -exec chmod go= {} + | wc -l)
-[ "$n" -eq 0 ] || say "private $n files and folders in $HOME (only $USER_NAME and root)"
+[ "$n" -eq 0 ] || say "private $n files and directories in $HOME (only $USER_NAME and root)"
 [ -z "$skipped" ] ||
 	say "skipped $skipped (needs root): su -c '$DOTFILES/install.sh $skipped'"
 if [ -n "$failed" ]; then

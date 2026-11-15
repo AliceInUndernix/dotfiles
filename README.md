@@ -22,7 +22,7 @@ script puts the whole configuration back after a fresh install.
 | `sioyek/` | Book/PDF reader in Habamax colours (TypeTrack's green/red too); on Gentoo `--deps` builds its development version (GURU `sioyek-9999`) | `~/.config/sioyek/prefs_user.config` (symlink) |
 | `wiremix/` | PipeWire mixer in the terminal (like pavucontrol), Habamax theme | `~/.config/wiremix/wiremix.toml` (symlink) |
 | `btop/` | btop with a Habamax theme and vim keys | `~/.config/btop/` files (symlinks) |
-| `xdg/` | Download, Pictures, Music etc. all set to `~` (no capitalised folders) | `~/.config/user-dirs.dirs`, `user-dirs.conf` (symlinks) |
+| `xdg/` | Download, Pictures, Music etc. all set to `~` (no capitalised directories) | `~/.config/user-dirs.dirs`, `user-dirs.conf` (symlinks) |
 | `feh/` | feh shows pictures on Habamax grey | `~/.config/feh/themes` (symlink) |
 | `x/` | `xinitrc`: Habamax-grey wallpaper, PipeWire, idle lock off by default (`IDLE_LOCK_MINUTES`), xss-lock (slock before suspend), then dwm (run `startx`) | `~/.xinitrc` (symlink) |
 | `moonlander/` | QMK "canary" keymap for the keyboard | built into `moonlander/*.bin`, flashed with Keymapp |
@@ -39,7 +39,7 @@ there into `~/.system/bin`). `PREFIX=...` overrides this for the
 suckless tools.
 
 What programs keep for you goes there too: `~/.profile` points the XDG
-folders at `~/.system/share` (data: fonts, Neovim plugins, QMK),
+directories at `~/.system/share` (data: fonts, Neovim plugins, QMK),
 `~/.system/state` (ksh history, Neovim undo, the X cookie) and
 `~/.system/cache`, so `~/.local` and `~/.cache` are not used; install.sh
 moves what was in them, and `~/.ksh_history`, over. Settings stay in
@@ -84,9 +84,10 @@ drawing only.
 Clone and run it as yourself. Only a few things need root, and for those
 the script stops and tells you the `su -c` command (it never uses sudo
 or doas): `--deps` (system packages), `slock` (must be root's to lock
-the screen), making ksh the login shell (part `ksh`), and `net`,
-`icecat` and `chromium`, which go into the system. Run as root, it
-sets up the configs for the user who owns the repo folder, and
+the screen), making ksh the login shell (part `ksh`), adding you to the
+keyboard's serial port group once (part `plover`), and `net`, `icecat`
+and `chromium`, which go into the system. Run as root, it sets up the
+configs for the user who owns the repo directory, and
 everything it puts in that home belongs to that user, not to root.
 
 ```sh
@@ -108,7 +109,7 @@ su -c '~user/dotfiles/install.sh icecat'    # a browser: icecat (20) or chromium
 ./install.sh 4 12       # the same by number (0 is --deps)
 ./install.sh check      # only look: what is installed, missing, out of date
 ./install.sh --list     # the part names
-INSTALL_USER=user ./install.sh    # as root, if the repo folder belongs to root
+INSTALL_USER=user ./install.sh    # as root, if the repo directory belongs to root
 ```
 
 What the script does:
@@ -132,7 +133,7 @@ What the script does:
 - **Plover**: the newest release (its AppImage, unpacked) goes into
   `~/.system/plover`, with Dotterel and its dark theme from
   AliceInUndernix/dotterel. Plover runs in portable mode there, so its
-  settings, plugins and logs stay in that folder too. Each run updates both.
+  settings, plugins and logs stay in that directory too. Each run updates both.
   To read the keyboard you must be in group `dialout`:
   `su -c './install.sh plover'` adds you once (then log in again).
 
@@ -169,7 +170,7 @@ the script warns if the group is missing).
 ## Archive
 
 `archive/` keeps release tarballs of dwm, st, dmenu, slock and tmux, the
-three Neovim plugins and optozorax's Moonlander libraries, with source,
+seven Neovim plugins and optozorax's Moonlander libraries, with source,
 version and checksum for each in `archive/README.md`. If an upstream
 disappears, everything can still be rebuilt from this repo. The install
 script also unpacks the Neovim plugins from here, so Neovim works on
@@ -210,6 +211,6 @@ feature of the VPN, about 15 min). No network: `vpn rescue`.
 
 ## Moonlander
 
-`moonlander/canary/` is the current layout (version 88);
+`moonlander/canary/` is the current layout (version 97);
 `moonlander/HANDOFF.md` explains it. `./install.sh moonlander` sets up QMK
-in your home folder and builds it (see `moonlander/README.md`).
+in your home directory and builds it (see `moonlander/README.md`).

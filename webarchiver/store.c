@@ -588,7 +588,7 @@ void store_object_data(const char *data, int len, const char *sha)
     free(dst);
 }
 
-/* every archived domain (it has a state file and a folder) */
+/* every archived domain (it has a state file and a directory) */
 void all_domains(struct strlist *out)
 {
     struct strlist names;

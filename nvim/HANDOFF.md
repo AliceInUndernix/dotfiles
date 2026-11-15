@@ -8,7 +8,7 @@ current behaviour section by section.
 ## Files
 
 In the dotfiles repo (github.com/AliceInUndernix/dotfiles); install.sh
-links the whole `nvim/` folder to `~/.config/nvim`.
+links the whole `nvim/` directory to `~/.config/nvim`.
 
 ```
 nvim/
