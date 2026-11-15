@@ -8,3 +8,5 @@ dmenu/stest
 slock/slock
 # Moonlander build output
 moonlander/*.bin
+# vpn password helper build output
+net/vpnauth

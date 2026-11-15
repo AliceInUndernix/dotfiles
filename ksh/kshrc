@@ -87,7 +87,24 @@ _pwd() {
 	*) printf '%s' "$PWD" ;;
 	esac
 }
-if [ "$(id -u)" -eq 0 ]; then PS1='$(_pwd) # '; else PS1='$(_pwd) $ '; fi
+# Before it, when vpn (net/) is installed: VPN when something is wrong
+# with it (vpn status says what), else the level when it isn't the
+# usual 2: L0, L1, L3 or SANDBOX.
+_vpn() {
+	[ -e /etc/init.d/vpn ] || return 0
+	_s= _l=
+	[ -r /run/vpn/state ] && read -r _s _l < /run/vpn/state
+	if [ -e /run/vpn/fw-off ] || [ "$_s" != ok ]; then
+		printf 'VPN '
+	else
+		case $_l in
+		2) ;;
+		sandbox) printf 'SANDBOX ' ;;
+		*) printf 'L%s ' "$_l" ;;
+		esac
+	fi
+}
+if [ "$(id -u)" -eq 0 ]; then PS1='$(_vpn)$(_pwd) # '; else PS1='$(_vpn)$(_pwd) $ '; fi
 
 alias ls='ls -F'          # / after folders, * after programs, @ after links; no colours
 alias ll='ls -lh'

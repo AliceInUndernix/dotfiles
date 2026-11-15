@@ -5,9 +5,14 @@
 #   --deps   system packages          slock   must be root's to lock
 #   ksh      making ksh the login shell, and root's copies of the files
 #   plover   adding you to the serial port's group (dialout), once
+#   net      Riseup VPN, Tor and the kill switch (Gentoo with OpenRC;
+#            net/README)
 #
-#   ./install.sh               link configs and build/install everything
+#   ./install.sh               a numbered menu: type numbers, then Enter
+#                              (Enter alone: everything, as "all")
+#   ./install.sh 1 4 19        the parts with those numbers (0: --deps)
 #   ./install.sh nvim dwm      only the parts named
+#   ./install.sh all           everything, without the menu
 #   ./install.sh --deps        first install build dependencies with the
 #                              distro's package manager (emerge -qv)
 #   ./install.sh -a --deps     the same, but emerge asks first (-qva)
@@ -21,7 +26,8 @@
 # this repo. Anything already in the way is moved to <name>.bak.<date>,
 # never deleted. Every program it installs goes into the user's
 # ~/.system (commands in ~/.system/bin, first in PATH); nothing goes to
-# /usr/local. POSIX sh, no bashisms, so it runs on any distro.
+# /usr/local (but net: the VPN is the system's, see net/README).
+# POSIX sh, no bashisms, so it runs on any distro.
 # Each run is logged, with facts about the system, to
 # ~/.system/state/install/latest.log: paste it to Claude to check a run.
 
@@ -32,7 +38,7 @@ umask 022
 
 DOTFILES=$(cd "$(dirname "$0")" && pwd)
 STAMP=$(date +%Y%m%d-%H%M%S)
-PARTS="ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver moonlander plover"
+PARTS="ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver moonlander plover net"
 
 say()  { printf '==> %s\n' "$*"; }
 warn() { printf '!!  %s\n' "$*" >&2; }
@@ -822,17 +828,220 @@ dotterel_dicts() {
 	find "$PLOVER_DIR/plugins" -type d -path '*/plover_dotterel/dictionaries' 2>/dev/null | head -n 1
 }
 
+# Riseup VPN, Tor and the kill switch: net/README. Gentoo with OpenRC,
+# root only. What it puts or changes outside this repo:
+#   /usr/local/bin/vpn and vpnauth (its password helper, setuid root for
+#   group vpnctl); /etc/init.d/vpnfw (boot) and vpn (default);
+#   /etc/vpn/ (settings, Riseup's list and certificate); /etc/tor/torrc,
+#   /etc/proxychains.conf, /etc/sysctl.d/vpn.conf; /etc/dhcpcd.conf (no
+#   hostname, random MAC); hostname "host"; time zone UTC.
+# The system's own files are backed up (<name>.bak.<date>) first.
+install_net() {
+	if [ ! -x /sbin/openrc-run ] || ! command -v emerge >/dev/null 2>&1; then
+		warn "net is only for Gentoo with OpenRC: skipped"
+		return
+	fi
+	emerge $EMERGE_OPTS --noreplace net-vpn/openvpn net-vpn/tor \
+		net-firewall/nftables net-proxy/proxychains
+	net=$DOTFILES/net
+	install -d -m 755 /usr/local/bin /etc/vpn
+	install -m 755 "$net/vpn" /usr/local/bin/vpn
+	say "install /usr/local/bin/vpn"
+	# vpnctl: may run vpn's commands with their own password (vpnauth);
+	# vpnallow: what "vpn run" starts, the only programs online in the
+	# sandbox
+	for g in vpnctl vpnallow; do
+		getent group "$g" >/dev/null || { groupadd "$g"; say "group   $g"; }
+		case " $(id -nG "$USER_NAME") " in *" $g "*) ;; *)
+			usermod -aG "$g" "$USER_NAME"
+			say "group   $USER_NAME in $g (log in again)" ;;
+		esac
+	done
+	if ! make -s -C "$net" vpnauth >/dev/null 2>&1; then
+		warn "no static libcrypt: vpnauth is built dynamically"
+		warn "(for a static one: sys-libs/libxcrypt with USE=static-libs)"
+		make -s -C "$net" vpnauth LDFLAGS= ||
+			{ warn "vpnauth did not build; vpn will ask for root's password"; }
+	fi
+	if [ -f "$net/vpnauth" ]; then
+		install -o root -g vpnctl -m 4750 "$net/vpnauth" /usr/local/bin/vpnauth
+		say "install /usr/local/bin/vpnauth (setuid root, group vpnctl)"
+	fi
+	make -s -C "$net" clean
+	install -m 755 "$net/vpnfw.initd" /etc/init.d/vpnfw
+	install -m 755 "$net/vpn.initd" /etc/init.d/vpn
+	for f in openvpn.conf countries mirrors; do
+		install -m 644 "$net/$f" "/etc/vpn/$f"
+	done
+	install -d -m 755 /etc/sysctl.d
+	install -m 644 "$net/sysctl.conf" /etc/sysctl.d/vpn.conf
+	say "install /etc/init.d/vpnfw, vpn; /etc/vpn; /etc/sysctl.d/vpn.conf"
+	rootcopy "$net/proxychains.conf" /etc/proxychains.conf
+	if ! command -v proxychains >/dev/null 2>&1 &&
+		p4=$(command -v proxychains4)
+	then
+		ln -sfn "$p4" /usr/local/bin/proxychains
+		say "link    /usr/local/bin/proxychains -> $p4"
+	fi
+	# torrc: ours, with the User and DataDirectory lines of the old one
+	# (Gentoo's), or Gentoo's defaults
+	keep=$(grep -E '^[[:space:]]*(User|DataDirectory)[[:space:]]' \
+		/etc/tor/torrc 2>/dev/null) || :
+	if [ -z "$keep" ] && [ ! -f /etc/tor/torrc ]; then
+		keep=$(printf 'User tor\nDataDirectory /var/lib/tor/data')
+	fi
+	{
+		cat "$net/torrc"
+		echo
+		echo "# kept from the torrc that was here before"
+		echo "$keep"
+	} > "$net/.torrc"
+	install -d -m 755 /etc/tor
+	rootcopy "$net/.torrc" /etc/tor/torrc
+	rm -f "$net/.torrc"
+	d=$(echo "$keep" | sed -n 's/^[[:space:]]*DataDirectory[[:space:]]*//p')
+	[ -z "$d" ] || [ -d "$d" ] || install -d -o tor -g tor -m 700 "$d"
+	# dhcpcd: no hostname, a random MAC address each time, and
+	# resolv.conf left alone (vpn writes and locks it)
+	f=/etc/dhcpcd.conf
+	if [ -f "$f" ] && ! grep -q '^# vpn (dotfiles' "$f"; then
+		cp -p "$f" "$f.bak.$STAMP"
+		sed -i 's/^hostname[[:space:]]*$/#hostname  # off: net (vpn)/' "$f"
+		cat >> "$f" <<-'EOF'
+
+		# vpn (dotfiles, net/): send no hostname, use a random MAC address
+		# each time, leave /etc/resolv.conf alone (vpn sets and locks it).
+		# Keep these last: anonymous hides what comes before it.
+		nohook resolv.conf
+		randomise_hwaddr
+		anonymous
+		EOF
+		say "dhcpcd  no hostname, random MAC (backup $f.bak.$STAMP)"
+	fi
+	v=$(dhcpcd --version 2>/dev/null | sed -n '1s/[^0-9]*\([0-9]*\).*/\1/p')
+	[ "${v:-0}" -ge 9 ] 2>/dev/null ||
+		warn "dhcpcd ${v:-?} is older than 9: no random MAC (emerge -qv dhcpcd)"
+	# a hostname that says nothing
+	f=/etc/conf.d/hostname
+	if [ -f "$f" ] && ! grep -q '^hostname="host"' "$f"; then
+		cp -p "$f" "$f.bak.$STAMP"
+		if grep -q '^hostname=' "$f"; then
+			sed -i 's/^hostname=.*/hostname="host"/' "$f"
+		else
+			echo 'hostname="host"' >> "$f"
+		fi
+		say "host    hostname \"host\" at next boot (backup $f.bak.$STAMP)"
+	fi
+	if [ -f /etc/hostname ] && [ "$(cat /etc/hostname)" != host ]; then
+		cp -p /etc/hostname "/etc/hostname.bak.$STAMP"
+		echo host > /etc/hostname
+	fi
+	if ! grep -q '^127\.0\.0\.1[[:space:]].*[[:space:]]host\([[:space:]]\|$\)' /etc/hosts; then
+		cp -p /etc/hosts "/etc/hosts.bak.$STAMP"
+		printf '127.0.0.1\thost\n' >> /etc/hosts
+	fi
+	# the clock in UTC, so programs can't tell your time zone
+	if [ -f /usr/share/zoneinfo/UTC ] &&
+		[ "$(readlink /etc/localtime)" != ../usr/share/zoneinfo/UTC ]
+	then
+		ln -sfn ../usr/share/zoneinfo/UTC /etc/localtime
+		echo UTC > /etc/timezone
+		say "time    zone UTC"
+	fi
+	f=/etc/conf.d/hwclock
+	if [ -f "$f" ] && ! grep -q '^clock="UTC"' "$f"; then
+		cp -p "$f" "$f.bak.$STAMP"
+		sed -i 's/^clock=.*/clock="UTC"/' "$f"
+		grep -q '^clock=' "$f" || echo 'clock="UTC"' >> "$f"
+		say "time    hardware clock in UTC (vpn sets the time after boot)"
+	fi
+	# Riseup's list and a certificate, straight out while the firewall
+	# isn't there yet (later vpn renews them through the VPN)
+	if [ ! -s /etc/vpn/gateways ] && ! nft list table inet vpn >/dev/null 2>&1; then
+		/usr/local/bin/vpn refresh --install ||
+			warn "no server list yet: run vpn refresh before you reboot"
+	fi
+	/usr/local/bin/vpn firewall closed --check ||
+		warn "this kernel can't load the kill switch: it needs nftables (NF_TABLES, NFT_NAT, NFT_REDIR, NFT_CT, NF_TABLES_INET) and TUN"
+	# runlevels: the kill switch at boot, the VPN in default. Tor is
+	# started by vpn after OpenVPN, so it isn't in a runlevel itself.
+	for s in vpnfw:boot vpn:default; do
+		rc-update show "${s#*:}" 2>/dev/null | grep -q "^ *${s%:*} |" ||
+			rc-update add "${s%:*}" "${s#*:}"
+	done
+	for l in boot default; do
+		for s in tor nftables iptables ip6tables; do
+			rc-update show "$l" 2>/dev/null | grep -q "^ *$s |" || continue
+			rc-update del "$s" "$l"
+			say "runlevel $s out of $l (vpn handles it now)"
+		done
+		rc-update show "$l" 2>/dev/null | grep -o 'openvpn[^ ]*' |
+			while read -r s; do
+				warn "$s is in runlevel $l: vpn runs OpenVPN itself (rc-update del $s $l)"
+			done
+	done
+	say "net     ready: reboot, or start it now with"
+	say "        rc-service vpnfw start && rc-service vpn start"
+}
+
+# --- the menu --------------------------------------------------------------
+
+part_info() {
+	case $1 in
+	ksh) echo "Korn shell settings [root: ksh as login shell]" ;;
+	xdg) echo "Download, Pictures... all in ~" ;;
+	x) echo "xinitrc for startx" ;;
+	nvim) echo "Neovim" ;;
+	dwm|st|dmenu) echo "build and install $1" ;;
+	slock) echo "build and install slock [root]" ;;
+	webarchiver) echo "build and install WebArchiver" ;;
+	moonlander) echo "QMK and the keyboard's firmware" ;;
+	plover) echo "Plover and Dotterel [root once: group dialout]" ;;
+	net) echo "Riseup VPN, Tor, kill switch (Gentoo, OpenRC) [root]" ;;
+	*) echo "$1 settings" ;;
+	esac
+}
+
+# menu: the parts, numbered; MENU_ANSWER is what was typed.
+menu() {
+	echo "What should install.sh do? Type numbers or names with spaces"
+	echo "between them (like: 1 4 19), then Enter. Enter alone does"
+	echo "everything; parts marked [root] need: su -c '$DOTFILES/install.sh'"
+	echo
+	printf '  %2d  %-12s %s\n' 0 deps "system packages (emerge -qv) [root]"
+	i=1
+	for p in $PARTS; do
+		printf '  %2d  %-12s %s\n' "$i" "$p" "$(part_info "$p")"
+		i=$((i + 1))
+	done
+	printf '> '
+	read -r MENU_ANSWER || MENU_ANSWER=
+}
+
 # --- main -----------------------------------------------------------------
 
 want_deps=no
 parts=
 EMERGE_OPTS=-qv  # -a: -qva, so emerge asks before it builds anything
+# no arguments in a terminal: ask (not again in the logged run below)
+if [ $# -eq 0 ] && [ -t 0 ] && [ -z "${INSTALL_LOG:-}" ]; then
+	menu
+	set -f
+	set -- $MENU_ANSWER
+	set +f
+	[ $# -gt 0 ] || set -- all
+fi
 for arg in "$@"; do
 	case $arg in
-	--deps) want_deps=yes ;;
+	all) ;;
+	--deps|0) want_deps=yes ;;
+	[1-9]|[1-9][0-9])
+		p=$(echo $PARTS | awk -v n="$arg" '{ print $n }')
+		[ -n "$p" ] || die "there is no part $arg (see the menu: ./install.sh)"
+		parts="$parts $p" ;;
 	-a) EMERGE_OPTS=-qva ;;
 	--list) echo "$PARTS"; exit 0 ;;
-	-h|--help) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+	-h|--help) sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 	-*) die "unknown option: $arg" ;;
 	*)
 		case " $PARTS " in *" $arg "*) ;; *) die "unknown part: $arg (see --list)" ;; esac
@@ -896,8 +1105,14 @@ if [ "$AS_ROOT" = no ]; then
 		parts=$(echo " $parts " | sed 's/ slock / /')
 		skipped=slock ;;
 	esac
+	case " $parts " in *" net "*)
+		[ -z "$named" ] ||
+			die "net sets up the system's network, which needs root: su -c '$DOTFILES/install.sh net'"
+		parts=$(echo " $parts " | sed 's/ net / /')
+		skipped="${skipped:+$skipped }net" ;;
+	esac
 elif [ "$want_deps" = no ] && [ -n "$named" ]; then
-	case " $named " in *" slock "*|*" ksh "*|*" plover "*) ;; *)
+	case " $named " in *" slock "*|*" ksh "*|*" plover "*|*" net "*) ;; *)
 		say "note    these parts don't need root; next time just run ./install.sh$named" ;;
 	esac
 fi

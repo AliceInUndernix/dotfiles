@@ -1,0 +1,67 @@
+# Which countries' Riseup servers vpn may use: zone, then the country
+# code (ISO 3166, two letters). Installed as /etc/vpn/countries; edit
+# it here and run install.sh net again.
+#
+#   white  preferred: if any white server works, it is used, even if
+#          a gray one would be faster
+#   gray   used when no white one works. A country missing from this
+#          list counts as gray.
+#   black  only when nothing else works, and then everything goes
+#          through Tor (vpn level 3)
+#
+# Zones beat speed; inside a zone, the fastest of 3 random servers wins.
+# Nothing here depends on where you are.
+
+# White: no surveillance pact, no law that makes a VPN log, courts
+# that protect privacy. (Switzerland is planning to widen its
+# surveillance law to VPNs; move it to gray if that passes.)
+white CH    Switzerland
+white IS    Iceland
+white RO    Romania (its data retention law was struck down)
+white PA    Panama
+
+# Gray: the outer circles of the Five Eyes pact. Nine Eyes:
+gray  DK    Denmark
+gray  FR    France
+gray  NL    Netherlands
+gray  NO    Norway
+# Fourteen Eyes:
+gray  BE    Belgium
+gray  DE    Germany
+gray  IT    Italy
+gray  ES    Spain
+gray  SE    Sweden
+# Known partners of the Five Eyes outside the pact:
+gray  IL    Israel
+gray  JP    Japan
+gray  KR    South Korea
+gray  SG    Singapore
+
+# Black: the Five Eyes (they share almost everything they intercept,
+# and can force companies to hand over data or build in access, with
+# a gag order)...
+black US    United States
+black GB    United Kingdom
+black CA    Canada
+black AU    Australia
+black NZ    New Zealand
+# ...and countries that censor the internet, restrict VPNs or make
+# VPN providers log their users.
+black AE    United Arab Emirates
+black BY    Belarus
+black CN    China
+black CU    Cuba
+black EG    Egypt
+black IN    India (VPNs must keep logs for 5 years)
+black IR    Iran
+black KP    North Korea
+black MM    Myanmar
+black OM    Oman
+black PK    Pakistan
+black QA    Qatar
+black RU    Russia
+black SA    Saudi Arabia
+black SY    Syria
+black TM    Turkmenistan
+black TR    Turkey
+black VN    Vietnam

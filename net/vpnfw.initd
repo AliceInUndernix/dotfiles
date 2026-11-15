@@ -1,0 +1,22 @@
+#!/sbin/openrc-run
+# The kill switch (net/ in the dotfiles). In the boot runlevel, so it
+# closes the network before dhcpcd brings it up. Installed as
+# /etc/init.d/vpnfw.
+
+description="Kill switch: no network but Riseup's servers until vpn says"
+
+depend() {
+    need localmount
+    before net
+}
+
+start() {
+    ebegin "Closing the network (IPv6 off, IPv4 only to Riseup)"
+    /usr/local/bin/vpn firewall closed
+    eend $?
+}
+
+stop() {
+    # the rules stay: stopping this never opens the network
+    return 0
+}

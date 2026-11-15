@@ -1,0 +1,26 @@
+# Tor for net/ (vpn). Installed as /etc/tor/torrc by install.sh net,
+# which keeps the User and DataDirectory lines of the torrc that was
+# there. The vpn service starts Tor right after OpenVPN, so Tor always
+# goes out through the VPN (straight out only in level 0 and the
+# sandbox).
+
+# proxychains (proxychains program)
+SocksPort 127.0.0.1:9050
+# the browser: its own port, so its own circuits and exits, and
+# sites can't link it to what proxychains runs
+SocksPort 127.0.0.1:9150
+# the system's DNS: resolv.conf says 127.0.0.1 and the firewall sends
+# port 53 here (not 53 itself, so Tor needs no root for it)
+DNSPort 127.0.0.1:9053
+# vpn level 3 (everything through Tor) and .onion addresses
+TransPort 127.0.0.1:9040
+# .onion names get a fake address from this range; the firewall sends
+# connections to it into Tor, so onion sites work in every program
+AutomapHostsOnResolve 1
+VirtualAddrNetworkIPv4 10.192.0.0/10
+
+ClientUseIPv6 0
+AvoidDiskWrites 1
+SafeLogging 1
+# warnings only, in /run (gone after a reboot)
+Log warn file /run/vpn/tor.log

@@ -27,6 +27,7 @@ script puts the whole configuration back after a fresh install.
 | `x/` | `xinitrc`: Habamax-grey wallpaper, PipeWire, idle lock off by default (`IDLE_LOCK_MINUTES`), xss-lock (slock before suspend), then dwm (run `startx`) | `~/.xinitrc` (symlink) |
 | `moonlander/` | QMK "canary" keymap for the keyboard | built into `moonlander/*.bin`, flashed with Keymapp |
 | `plover/` | Plover (steno) launcher and first settings: Dotterel, Gemini PR on the Moonlander | `~/.system/plover` (newest release, Dotterel from AliceInUndernix/dotterel), `~/.system/bin/plover` |
+| `net/` | Riseup VPN, Tor and a kill switch (Gentoo, OpenRC): the fastest server of the best country zone at boot, DNS through Tor, levels 0-3 and a sandbox (`vpn level`), `proxychains` (`net/README`) | `/usr/local/bin/vpn`, `/etc/init.d/vpnfw` and `vpn`, `/etc/vpn` (root's, `su -c './install.sh net'`) |
 | `archive/` | Untouched copies of everything downloaded from elsewhere | |
 | `TODO.md` | Things decided but left for later | |
 | `install.sh` | Sets everything up | |
@@ -62,7 +63,7 @@ everything it puts in that home belongs to that user, not to root.
 ```sh
 git clone https://github.com/AliceInUndernix/dotfiles ~/dotfiles
 su -c '~user/dotfiles/install.sh --deps'    # first time: dependencies, then everything
-~/dotfiles/install.sh                       # later: everything that doesn't need root
+~/dotfiles/install.sh all                   # later: everything that doesn't need root
 ```
 
 `--deps` uses the system's package manager (emerge -qv on Gentoo; apt,
@@ -71,8 +72,10 @@ pacman, dnf and xbps are also known). Add `-a` to make emerge ask first
 when the dependencies are already there:
 
 ```sh
-./install.sh            # everything
-./install.sh nvim       # only some parts: ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver moonlander plover
+./install.sh all        # everything, no menu
+./install.sh            # a numbered menu (Enter alone: everything)
+./install.sh nvim       # only some parts: ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver moonlander plover net
+./install.sh 4 12       # the same by number (0 is --deps)
 ./install.sh --list     # the part names
 INSTALL_USER=user ./install.sh    # as root, if the repo folder belongs to root
 ```
@@ -154,6 +157,16 @@ earlier decisions and open issues. Its rules: stay close to Neovim
 defaults, no plugin manager, keep working on 0.11. Plugins download
 themselves on first start if missing; `install.sh` puts the archived
 copies in place first, so no internet is needed.
+
+## Network: VPN and Tor
+
+`net/README` explains it. In short: at boot the kill switch lets
+nothing out but Riseup's servers; the fastest of 3 random servers in
+the best zone of `net/countries` is used; Tor starts after it; DNS goes
+through Tor. `vpn status` tells you how it is; `vpn` gives a menu
+(your own password, not root's). Your prompt shows `VPN` when
+something is wrong with it. This is the one part that installs into
+the system (it needs root) instead of `~/.system`.
 
 ## Moonlander
 

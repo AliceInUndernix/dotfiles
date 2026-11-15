@@ -1,0 +1,135 @@
+net: Riseup VPN, Tor and a kill switch
+======================================
+
+For Gentoo with OpenRC. Set up as root with:
+
+    su -c '~/dotfiles/install.sh net'
+
+then reboot (or: rc-service vpnfw start && rc-service vpn start).
+
+
+What happens at boot
+--------------------
+
+1. vpnfw (boot runlevel, before the network is up) loads the kill
+   switch: no IPv6 at all, and IPv4 only from root to Riseup's
+   servers. Nothing else can get out, so nothing leaks while the rest
+   starts.
+2. vpn (default runlevel) picks a server. Zones beat speed: the zones
+   are in /etc/vpn/countries (white, then gray, then black). In the
+   first zone with any working server, up to 3 random servers are
+   speed-tested through the tunnel (5 MB or 6 seconds each, from the
+   mirrors in /etc/vpn/mirrors), and the fastest one is used. Nothing
+   depends on where you are.
+3. OpenVPN connects to that server. The clock is set from two mirrors'
+   answers through the tunnel, when they agree. If the certificate
+   expires within 14 days or the server list is a week old, both are
+   renewed, through the tunnel.
+4. Tor starts, after OpenVPN, so it goes out through the VPN.
+5. /etc/resolv.conf says "nameserver 127.0.0.1" and is locked (chattr
+   +i): every DNS lookup goes to Tor. DNS sent to any other server is
+   sent to Tor too.
+
+If the tunnel drops, vpn connects to the same server again; if that
+fails 3 times it picks again once. If it still doesn't work, or it
+drops 3 times in 10 minutes, it stops and you stay offline: your
+prompt shows VPN, and you choose what to do (vpn).
+
+A black country is only used when no white or gray server works, and
+then everything goes through Tor (level 3).
+
+
+Levels
+------
+
+    0        your own IP, DNS from Cloudflare (1.1.1.1)
+    1        VPN, Cloudflare DNS through the VPN
+    2        VPN, DNS through Tor (the usual one)
+    3        VPN, and every TCP connection goes through Tor; anything
+             else (UDP) is dropped
+    sandbox  your own IP, but only programs started with "vpn run" (and
+             Tor) can reach the network; nothing else goes out by
+             accident
+    offline  nothing goes out
+
+"vpn level 3" switches until reboot (between 1, 2 and 3 without a new
+connection); "vpn default 3" sets the level used at boot. In every
+level Tor runs for proxychains and the browser, IPv6 is off, nothing
+comes in that wasn't asked for, and .onion addresses work.
+
+The prompt shows VPN when something is wrong, or the level when it
+isn't 2 (L0, L1, L3, SANDBOX).
+
+
+Commands
+--------
+
+    vpn status          state and level (anyone)
+    vpn status -v       server, country, Tor, DNS, firewall, clock
+    vpn                 a menu with everything
+    vpn level L         0 1 2 3 sandbox offline, until reboot
+    vpn default L       the level at boot
+    vpn retry           pick a server again and connect
+    vpn refresh         a new server list and certificate from Riseup
+    vpn lan on|off      reach your local network (router, printer) or
+                        not; off by default, outgoing only
+    vpn firewall-off    no kill switch at all, until vpn firewall-on
+    vpn run PROGRAM     a program that may go online in the sandbox
+    proxychains PROGRAM run a program through Tor (port 9050)
+
+Every command but "vpn status" and "vpn run" asks for your own
+password (not root's): vpnauth checks it and runs vpn as root. You
+must be in group vpnctl (install.sh net puts you there; log in again).
+vpn run needs group vpnallow, also set up by install.sh net.
+
+The browser: set its SOCKS5 proxy to 127.0.0.1 port 9150, with DNS
+through the proxy. That port has its own Tor circuits, so sites can't
+link the browser to what proxychains runs by their exit.
+
+When the VPN can't be reached at all, "vpn refresh" offers to open the
+firewall for root only, to DNS and HTTPS, to fetch a new list and
+certificate (your ISP and your router's DNS see that you ask Riseup;
+they see that you use Riseup anyway). When Riseup's HTTPS certificate
+can't be checked, it tells you and asks whether to go on without the
+check.
+
+
+Privacy
+-------
+
+- Your ISP sees only that you use Riseup. Riseup sees your IP and that
+  you use Tor, not what you do in it. Tor's first relay sees Riseup's
+  address, not yours.
+- dhcpcd sends no hostname and uses a random MAC address each time it
+  starts (its anonymous mode, RFC 7844). The hostname is "host" and
+  the clock is in UTC, so programs can't give away either.
+- Nothing is logged for long: the status, OpenVPN's and Tor's warnings
+  are in /run/vpn, which is gone after a reboot.
+- The server list and certificate are Riseup's anonymous ones: no
+  account.
+
+Limits: proxychains can't wrap statically linked programs. In level 3
+UDP doesn't work (voice calls, some games). Programs can still learn
+things about you by other means (a browser's fingerprint).
+
+
+Files
+-----
+
+    net/vpn           /usr/local/bin/vpn
+    net/vpnauth.c     /usr/local/bin/vpnauth (setuid root, group vpnctl)
+    net/vpnfw.initd   /etc/init.d/vpnfw (boot)
+    net/vpn.initd     /etc/init.d/vpn (default)
+    net/openvpn.conf  /etc/vpn/openvpn.conf
+    net/countries     /etc/vpn/countries: edit here, install.sh net
+    net/mirrors       /etc/vpn/mirrors
+    net/torrc         /etc/tor/torrc (with the old User, DataDirectory)
+    net/proxychains.conf  /etc/proxychains.conf
+    net/sysctl.conf   /etc/sysctl.d/vpn.conf (IPv6 off)
+
+From Riseup, in /etc/vpn: gateways (one server per line: IP, country,
+place, host, ports), ca.crt, client.crt, client.key. lan exists when
+the local network is on, level holds the boot level.
+
+The way the list and certificate are fetched comes from BarbossHack's
+RiseupVPN-OpenVPN (generate.sh); vpn is our own POSIX sh version.
