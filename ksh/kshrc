@@ -105,7 +105,42 @@ _vpn() {
 		esac
 	fi
 }
-if [ "$(id -u)" -eq 0 ]; then PS1='$(_vpn)$(_pwd) # '; else PS1='$(_vpn)$(_pwd) $ '; fi
+if [ "$(id -u)" -eq 0 ]; then _ps_end='#'; else _ps_end='$'; fi
+PS1='$(_vpn)$(_pwd) '$_ps_end' '
+# ksh93 builds the same prompt in a PS1.get function instead, without
+# $(...). A $(...) in PS1 makes ksh93 flush its output while it writes
+# the prompt, and its line editor then keeps a garbled copy of it. When
+# the window changes size (dwm resizes every new window), the editor
+# redraws that copy: st got broken escape sequences ("erresc: unknown
+# sequence ESC 0x20") and showed nothing until Ctrl+C.
+case ${KSH_VERSION:-} in *93*) eval "$(cat <<'EOF'
+function PS1.get {
+	typeset p= s= l=
+	if [[ -e /etc/init.d/vpn ]]; then
+		if [[ -e /etc/vpn/off ]]; then
+			p='OFF '
+		else
+			[[ -r /run/vpn/state ]] && read -r s l < /run/vpn/state
+			if [[ -e /run/vpn/fw-off || $s != ok ]]; then
+				p='VPN '
+			else
+				case $l in
+				2) ;;
+				sandbox) p='SANDBOX ' ;;
+				*) p="L$l " ;;
+				esac
+			fi
+		fi
+	fi
+	case $PWD in
+	"$HOME") p+='~' ;;
+	"$HOME"/*) p+="~${PWD#"$HOME"}" ;;
+	*) p+=$PWD ;;
+	esac
+	.sh.value="$p $_ps_end "
+}
+EOF
+)" ;; esac
 
 alias ls='ls -F'          # / after folders, * after programs, @ after links; no colours
 alias ll='ls -lh'
