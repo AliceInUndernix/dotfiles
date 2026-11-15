@@ -1638,9 +1638,20 @@ pager_log() {
 
 help() { sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; }
 
+# the screen: vpntop (C) when it is installed, else the plain one here
 cmd_menu() {
     need_root
+    if [ -t 0 ] && [ -t 1 ] && [ -x /usr/local/bin/vpntop ]; then
+        exec /usr/local/bin/vpntop
+    fi
     screen menu
+}
+
+cmd_watch() {
+    if [ -t 0 ] && [ -t 1 ] && [ -x /usr/local/bin/vpntop ]; then
+        exec /usr/local/bin/vpntop -w
+    fi
+    screen watch
 }
 
 # vpn report: everything needed to find a problem, in one go (root),
@@ -1690,7 +1701,7 @@ esac
 case ${1:-} in
 '') cmd_menu ;;
 status) cmd_status "${2:-}" ;;
-watch) screen watch ;;
+watch) cmd_watch ;;
 report) cmd_report ;;
 log) cmd_log "${2:-}" ;;
 off) cmd_off ;;

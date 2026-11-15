@@ -10,3 +10,4 @@ slock/slock
 moonlander/*.bin
 # vpn password helper build output
 net/vpnauth
+net/vpntop

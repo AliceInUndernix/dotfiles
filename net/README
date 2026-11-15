@@ -109,17 +109,30 @@ check.
 The screen
 ----------
 
-"vpn" shows the status and redraws it every second by itself, with
-the clock at the top right, so you can see it is alive. "now:" says
-what is being done and for how many seconds so far (connecting to
-Zurich CH, server 2 of 5, speed-tested 1 of 3). The rows left at the
-bottom show the newest events of vpn log. One key does one thing,
-nothing needs Enter:
+"vpn" opens vpntop, a full screen in the style of top: the state in
+colour at the top with the clock, a line in plain words saying what
+is happening now (and for how many seconds), then panels:
 
-    0 1 2 3   level       s sandbox   o offline   - everything off
-    r reconnect (pick again)          n new server list and certificate
-    l LAN on/off          f firewall off/on
-    e the whole log       ? help      q quit (Ctrl+C too)
+    Connection      server, zone, address, speed, up for, clock, cert
+    Protection      kill switch, DNS (Tor? locked?), Tor, IPv6, LAN, MAC
+    Choosing a      how many servers each zone has, which zone is being
+     server         tested (server 4/12, speed-tested 2/3), and each
+                    server tried: its speed as a bar, or FAILED and why
+    Traffic         download and upload of the tunnel, as a graph
+    What happened   the newest lines of vpn log, failures in red
+
+Green is fine, yellow worth knowing, red a problem. It redraws twice a
+second and uses the whole window (at least 60x18). One key does one
+thing, nothing needs Enter; the keys are at the bottom:
+
+    0 1 2 3 s o   level       - everything off (asks first)
+    r reconnect (pick again)  n new server list and certificate
+    l LAN on/off              f kill switch off (asks first) / on
+    t selftest                e the whole log (j k space b g G, q back)
+    ? help                    q quit (Ctrl+C too)
+
+"vpn watch" shows the same screen to anyone, without the details and
+keys. Without vpntop (or without a terminal) vpn shows a plain screen.
 
 What it keeps to (a checklist for terminal programs):
 
@@ -164,6 +177,7 @@ Files
 
     net/vpn           /usr/local/bin/vpn
     net/vpnauth.c     /usr/local/bin/vpnauth (setuid root, group vpnctl)
+    net/vpntop.c      /usr/local/bin/vpntop (the screen of vpn)
     net/vpnfw.initd   /etc/init.d/vpnfw (boot)
     net/vpn.initd     /etc/init.d/vpn (default)
     net/openvpn.conf  /etc/vpn/openvpn.conf

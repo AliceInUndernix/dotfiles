@@ -889,6 +889,15 @@ install_net() {
 		install -o root -g vpnctl -m 4750 "$net/vpnauth" /usr/local/bin/vpnauth
 		say "install /usr/local/bin/vpnauth (setuid root, group vpnctl)"
 	fi
+	# vpntop: the screen of "vpn" (plain C, static, no libraries)
+	if make -s -C "$net" vpntop >/dev/null 2>&1 ||
+		make -s -C "$net" vpntop LDFLAGS= >/dev/null 2>&1
+	then
+		install -m 755 "$net/vpntop" /usr/local/bin/vpntop
+		say "install /usr/local/bin/vpntop (the screen of vpn)"
+	else
+		warn "vpntop did not build; vpn uses its plain screen"
+	fi
 	make -s -C "$net" clean
 	install -m 755 "$net/vpnfw.initd" /etc/init.d/vpnfw
 	install -m 755 "$net/vpn.initd" /etc/init.d/vpn
@@ -1202,6 +1211,13 @@ ck_net() {
 			ck_bad "vpnauth is older than vpnauth.c: su -c '$DOTFILES/install.sh net'"
 	else
 		ck_bad "vpnauth missing: vpn asks root's password (install.sh net)"
+	fi
+	if [ -x /usr/local/bin/vpntop ]; then
+		ck_ok "vpntop (the screen of vpn)"
+		[ -z "$(find "$n/vpntop.c" -newer /usr/local/bin/vpntop)" ] ||
+			ck_bad "vpntop is older than vpntop.c: su -c '$DOTFILES/install.sh net'"
+	else
+		ck_bad "vpntop missing: vpn shows its plain screen (install.sh net)"
 	fi
 	for t in openvpn tor nft proxychains; do ck_cmd "$t"; done
 	for g in vpnctl vpnallow; do
