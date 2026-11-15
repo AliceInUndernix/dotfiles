@@ -1249,6 +1249,12 @@ ORIG=$ETC/orig
 SYS_FILES="/etc/dhcpcd.conf /etc/conf.d/hostname /etc/hostname /etc/hosts
 /etc/timezone /etc/conf.d/hwclock /etc/tor/torrc /etc/proxychains.conf"
 
+# resolv.conf only asks 127.0.0.1 (Tor's DNSPort), or is empty
+resolv_is_tor() {
+    ! grep -v '^nameserver 127\.0\.0\.1$' /etc/resolv.conf 2>/dev/null |
+        grep -q '^nameserver'
+}
+
 cmd_off() {
     need_root off
     say "Turning everything of vpn off:"
@@ -1292,6 +1298,27 @@ cmd_off() {
     # dhcpcd writes resolv.conf again from what the network says
     if pgrep -x dhcpcd >/dev/null 2>&1; then dhcpcd -n >/dev/null 2>&1; fi
     say "  /etc/resolv.conf: unlocked, dhcpcd writes it again"
+    # Tor is stopped, so 127.0.0.1 answers nothing: wait up to 20 s for
+    # dhcpcd, then take the DNS servers from its leases by hand
+    n=0
+    while [ $n -lt 20 ] && resolv_is_tor; do sleep 1; n=$((n + 1)); done
+    if resolv_is_tor; then
+        ns=
+        re="s/^domain_name_servers='\{0,1\}\([^']*\)'\{0,1\}$/\1/p"
+        for d in /sys/class/net/*; do
+            i=${d##*/}
+            [ "$i" = lo ] && continue
+            ns="$ns $(dhcpcd -U "$i" 2>/dev/null | sed -n "$re")"
+        done
+        ns=$(echo $ns)
+        if [ -n "$ns" ]; then
+            for a in $ns; do echo "nameserver $a"; done > /etc/resolv.conf
+            say "  /etc/resolv.conf: the network's DNS ($ns)"
+        else
+            say "  /etc/resolv.conf: still 127.0.0.1, and the network gave"
+            say "  no DNS server: run dhcpcd -n, or write one in by hand"
+        fi
+    fi
     rm -f "$RUN/state" "$RUN/public" "$RUN/status"
     say ""
     say "Off. The old hostname comes back at the next boot (Chromium may"
@@ -1503,7 +1530,14 @@ cmd_selftest() {
     st "no firewall table" "! nft list table inet vpn"
     st "resolv.conf is unlocked" \
         "! lsattr /etc/resolv.conf | grep -q '^[^ ]*i'"
-    sleep 5
+    # the cards get their own MACs back and DHCP again: give it 30 s
+    n=0
+    while [ $n -lt 6 ]; do
+        sh -c "$(as_nobody "curl -s -o /dev/null -m 5 $WEB")" \
+            >/dev/null 2>&1 && break
+        sleep 5
+        n=$((n + 1))
+    done
     st_web "the web works with everything off"
     cmd_on >/dev/null 2>&1
     wait_ok 240
