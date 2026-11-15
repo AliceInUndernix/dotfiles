@@ -1,11 +1,114 @@
 #!/bin/sh
 # termcheck: find out why a new terminal shows no prompt until Ctrl+C.
 # Run it from a terminal that works:   sh ~/dotfiles/ksh/termcheck
+# or, to open new windows and look inside them: sh ~/dotfiles/ksh/termcheck new
 # Everything goes to ~/termcheck.txt (send it); nothing is changed.
 # Each test gives up after 10 seconds, so it can't hang itself.
 
 out=$HOME/termcheck.txt
 state=${XDG_STATE_HOME:-$HOME/.system/state}
+
+# termcheck new: open new st windows one after another, the way
+# Mod+Shift+Enter does, and write down what runs inside each one 3 s
+# later. A window that shows its prompt has ksh waiting for the keyboard
+# (read on the terminal); a blank one shows what it waits for instead,
+# and what Ctrl+C in it would stop. Run it from inside X.
+if [ "${1:-}" = new ]; then
+    out=$HOME/termcheck-new.txt
+    arch=$(uname -m)
+    # name of a Linux syscall number (x86_64 only), else the number
+    scname() {
+        if [ "$arch" != x86_64 ]; then echo "syscall $1"; return; fi
+        case $1 in
+        0) echo "read" ;; 7) echo "poll" ;; 23) echo "select" ;;
+        35) echo "nanosleep" ;; 61) echo "wait4 (waits for a child)" ;;
+        73) echo "flock (waits for a lock)" ;; 130) echo "rt_sigsuspend" ;;
+        202) echo "futex" ;; 230) echo "clock_nanosleep" ;;
+        257) echo "openat (a fifo or slow file?)" ;; 270) echo "pselect6" ;;
+        271) echo "ppoll" ;; running) echo "running (using the CPU)" ;;
+        *) echo "syscall $1" ;;
+        esac
+    }
+    kids() {    # every process under $1, $1 first
+        echo "$1"
+        for k in $(ps -o pid= --ppid "$1" 2>/dev/null); do kids "$k"; done
+    }
+    show() {    # one process in detail
+        p=$1
+        [ -d "/proc/$p" ] || return 0
+        ps -o pid=,ppid=,pgid=,tpgid=,stat=,etime=,tty=,args= -p "$p" \
+            | cut -c1-150
+        sc=$(cut -d' ' -f1 "/proc/$p/syscall" 2>/dev/null)
+        a=$(cut -d' ' -f2 "/proc/$p/syscall" 2>/dev/null)
+        [ -n "$sc" ] || sc=unknown
+        echo "    waits in: $(scname "$sc"), fd/arg $a," \
+            "kernel: $(cat "/proc/$p/wchan" 2>/dev/null)"
+        echo "    open files:"
+        ls -l "/proc/$p/fd" 2>/dev/null | sed 1d | \
+            sed 's/.* \([0-9]*\) -> /      \1 -> /'
+    }
+    win() {     # win <number> <what> [st arguments]
+        n=$1 what=$2
+        shift 2
+        echo "== window $n: $what (st $*)"
+        st -t "termcheck $n" "$@" 2>>"$out" &
+        spid=$!
+        sleep 3
+        all=$(kids "$spid")
+        echo "   pid    ppid   pgid  tpgid stat elapsed tty   command"
+        for p in $all; do show "$p"; done
+        # the shell: the first one under st that leads its own session
+        sh_pid=
+        for p in $(echo "$all" | sed 1d); do
+            case $(ps -o stat= -p "$p" 2>/dev/null) in
+            *s*) sh_pid=$p; break ;;
+            esac
+        done
+        if [ -n "$sh_pid" ]; then
+            fg=$(ps -o tpgid= -p "$sh_pid" | tr -d ' ')
+            echo "-> Ctrl+C in this window would go to process group $fg:"
+            ps -o pid=,stat=,args= -g "$fg" 2>/dev/null | cut -c1-150
+            sc=$(cut -d' ' -f1 "/proc/$sh_pid/syscall" 2>/dev/null)
+            a=$(cut -d' ' -f2 "/proc/$sh_pid/syscall" 2>/dev/null)
+            if [ "$arch" != x86_64 ]; then
+                echo "-> (not x86_64: read 'waits in' above by hand)"
+            elif [ "$fg" = "$sh_pid" ] && {
+                [ "$sc" = 0 ] || [ "$sc" = 7 ] || [ "$sc" = 23 ] ||
+                [ "$sc" = 270 ] || [ "$sc" = 271 ]; }
+            then
+                echo "-> OK: the shell waits for the keyboard (at its prompt)"
+            else
+                echo "-> NOT AT THE PROMPT: see 'waits in' above"
+            fi
+        else
+            echo "-> st has no shell under it (it ended or never started)"
+        fi
+        kill "$spid" 2>/dev/null
+        sleep 1
+        echo
+    }
+    rm -f "$out"
+    echo "Opening 8 windows, one at a time, each for 3 s (about 35 s)."
+    echo "Don't type in them. Count them: note which ones stayed blank"
+    echo "(7 has no prompt on purpose; 8 shows one line of text)."
+    {
+        echo "termcheck new, $(date -u '+%Y-%m-%d %H:%M:%S') UTC, $arch"
+        echo "SHELL=$SHELL ENV=$ENV TERM=$TERM DISPLAY=$DISPLAY"
+        echo
+        for i in 1 2 3 4 5; do win $i "as Mod+Shift+Enter"; done
+        win 6 "ksh without .kshrc" -e env ENV=/dev/null ksh -i
+        rm -f "$HOME/termcheck-trace.txt"
+        win 7 "ksh -x, no prompt here: it goes to the trace" -e sh -c \
+            'exec ksh -x -i 2>>"$HOME/termcheck-trace.txt"'
+        win 8 "no shell, only text" -e sh -c 'echo st draws text; sleep 9'
+    } >> "$out" 2>&1
+    echo
+    printf 'Which windows stayed blank (numbers, or "none")? '
+    read -r a
+    echo "Blank windows, you said: $a" >> "$out"
+    echo "Saved: $out (send it, and $HOME/termcheck-trace.txt)"
+    exit 0
+fi
 
 # t <seconds> <command>: run it with a time limit, say how long it took
 t() {
