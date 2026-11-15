@@ -1102,9 +1102,11 @@ ck_net() {
 	else
 		ck_bad "the vpn service is not running (reboot, or rc-service vpn start)"
 	fi
-	# Tor's DNS, or at level 1 Riseup's (the one OpenVPN was given)
+	# Tor's DNS, 1.1.1.1 (level 0, sandbox) or at level 1 Riseup's (the
+	# one OpenVPN was given)
 	rdns=$(sed -n 's/^dns=//p' /run/vpn/up 2>/dev/null)
 	if [ "$(cat /etc/resolv.conf 2>/dev/null)" = "nameserver 127.0.0.1" ] ||
+		[ "$(cat /etc/resolv.conf 2>/dev/null)" = "nameserver 1.1.1.1" ] ||
 		{ [ -n "$rdns" ] &&
 		[ "$(cat /etc/resolv.conf 2>/dev/null)" = "nameserver $rdns" ]; }
 	then

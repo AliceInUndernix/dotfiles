@@ -19,7 +19,7 @@
 #   vpn level L         switch until reboot (root). L is one of:
 #                        -1  everything off, as if vpn weren't installed
 #                            (stays off after reboot; vpn on: back on)
-#                         0  "bare": your own IP, no VPN (DNS through Tor)
+#                         0  "bare": your own IP, no VPN (DNS 1.1.1.1)
 #                         1  "vpn": all through the VPN (Riseup's DNS in it)
 #                         2  "tor dns": the VPN, DNS through Tor (usual)
 #                         3  "tor": the VPN, and everything through Tor
@@ -64,6 +64,8 @@ UP_SECS=30              # how long a tunnel may take to come up
 DROPS=3                 # this many drops ...
 DROP_WINDOW=600         # ... in 10 minutes: stop and tell
 LAN_NETS="10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16"
+BARE_DNS=1.1.1.1        # level 0 and the sandbox: not Tor, for when
+                        # Tor's DNS can't resolve a name
 TOR_DNS=9053            # Tor's DNSPort (torrc)
 TOR_TRANS=9040          # Tor's TransPort (torrc)
 ONION_NET=10.192.0.0/10 # Tor's VirtualAddrNetworkIPv4 (torrc)
@@ -933,14 +935,14 @@ daemon() {
     put starting
     case $S_LEVEL in
     0)
-        set_resolv 127.0.0.1
+        set_resolv "$BARE_DNS"
         firewall direct
         start_tor
         S_SINCE=$(now_utc)
         put ok
         idle ;;
     sandbox)
-        set_resolv 127.0.0.1
+        set_resolv "$BARE_DNS"
         firewall sandbox
         start_tor
         S_SINCE=$(now_utc)
@@ -1016,7 +1018,7 @@ cmd_status() {
         no="$no ($(($(date +%s) - ss)) s so far)"
     fi
     case $lv in
-    0) d="bare: your own IP, no VPN (DNS through Tor)" ;;
+    0) d="bare: your own IP, no VPN (DNS 1.1.1.1)" ;;
     1) d="vpn: all through the VPN (Riseup's DNS in it)" ;;
     2) d="tor dns: the VPN, DNS through Tor" ;;
     3) d="tor: the VPN, and everything through Tor" ;;
@@ -1869,14 +1871,7 @@ cmd_rescue() {
         cmd_level 0 >/dev/null 2>&1
         rwait_state 40
         sleep 3
-        # DNS goes through Tor at level 0 too: give it time to start
         rtry "level 0" && worked="level 0 (no VPN)"
-        for t in 1 2; do
-            [ -z "$worked" ] || break
-            sleep 15
-            rtry "level 0, $((t * 15)) s later" &&
-                worked="level 0 (no VPN)"
-        done
     fi
 
     if [ -z "$worked" ]; then

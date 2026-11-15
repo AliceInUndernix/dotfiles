@@ -1676,6 +1676,8 @@ static void draw_protection(int top, int left, int h, int w)
             pen(c_green, "Tor");
         else if (dns[0] && same(sv("level"), "1"))
             pen(c_yellow, "Riseup's, through the VPN");
+        else if (same(dns, "1.1.1.1"))
+            pen(c_yellow, "1.1.1.1, not through the VPN");
         else
             pen(c_yellow, dns[0] ? dns : "none");
         pen(c_dim, locked ? ", locked" : ", not locked");
