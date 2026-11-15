@@ -2,7 +2,7 @@
  * ==========================================================================
  *  ZSA Moonlander (rev B), keymap "canary"
  *  Canary letter layout, built on optozorax's keymap libraries.
- *  Version 95 (the latest; earlier drafts were numbered 75..94).
+ *  Version 96 (the latest; earlier drafts were numbered 75..95).
  * ==========================================================================
  *
  * HOW TO READ THIS FILE
@@ -301,7 +301,7 @@ enum custom_keycodes {
 #define D_MIX   DWM_MOD(KC_A)            // wiremix sound mixer (Super+a)
 #define D_TOP   DWM_MOD(KC_ESC)          // btop (Super+Escape)
 #define D_LOCK  DWM_MOD_SFT(KC_L)        // lock the screen, slock (Super+Shift+l)
-#define D_SUSP  DWM_MOD_SFT(KC_S)        // suspend (Super+Shift+s)
+#define D_SUSP  LCTL(LSFT(KC_Z))         // suspend (Super+Ctrl+Shift+z; version 96)
 // D_SHOT (plain Print, Flameshot's picker) is an own keycode in section 2,
 // because it has to let go of the held Super for a moment.
 
@@ -320,7 +320,8 @@ enum custom_keycodes {
 #define D_MONO  DWM_MOD(KC_M)            // monocle (one window fills the screen)
 #define D_DECK  DWM_MOD(KC_R)            // doubledeck
 #define D_TFLT  DWM_MOD_SFT(KC_SPC)      // float / unfloat the focused window
-#define D_STKY  DWM_MOD(KC_S)            // pin / unpin the window on every tag (Super+s)
+#define D_STKY  DWM_MOD(KC_S)            // pin / unpin the window on its tag (Super+s;
+                                         //   Shift: on every tag, Super+Shift+s)
 #define D_BAR   DWM_MOD(KC_B)            // show / hide the bar
 
 // Monitors (hold Shift too to send the window to the other monitor)
@@ -644,6 +645,9 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      * Layout chosen by the owner key by key (version 90). Version 91: Kill,
      * Menu and the new Tmux key on the home row, Web moved up to the top row.
      * Version 92: Stky on the empty key left of TFlt.
+     * Version 96: Stky pins on the window's own tag, with Shift on every
+     * tag; Susp sends Super+Ctrl+Shift+z (dwm moved suspend off Super+
+     * Shift+s so that Shift+Stky can't suspend).
      *
      * top      Web  Flt  Tile Deck Mono Bar  --       Stky TFlt Mst+ Mon> Mon< Mst- Susp
      * home     Kill Menu Tmux Scr  Term Lock --       --   Zoom Shrk Next Prev Grow Top
@@ -664,8 +668,9 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      *   Mst+ Mst-  one more / fewer window in master (Super+i / d)
      *   Mon< Mon>  focus previous / next monitor (Super+, .)
      *   TFlt     float / unfloat the window (Super+Shift+Space)
-     *   Stky     pin / unpin the window: on every tag, floating, and
-     *            Next/Prev skip it (Super+s; version 92)
+     *   Stky     pin / unpin the window: it floats and Next/Prev skip it.
+     *            Plain: only on its own tag (Super+s). With Shift: on
+     *            every tag (Super+Shift+s). Version 96
      *   Flt Tile Deck Mono  floating / tiled / doubledeck / monocle (Super+f t r m)
      *   Bar      show/hide bar (Super+b)
      *   Kill     close the window (sends Super+Shift+c itself, no Shift
@@ -677,7 +682,9 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      *   Term     st (Super+Shift+Enter)         Web   IceCat (Super+w)
      *   Mix      wiremix (Super+a)              Top   btop (Super+Escape)
      *   Shot     Flameshot picker (plain Print; Ctrl+A in it takes the whole screen)
-     *   Lock     slock (Super+Shift+l)          Susp  suspend (Super+Shift+s)
+     *   Lock     slock (Super+Shift+l)
+     *   Susp     suspend (sends Super+Ctrl+Shift+z itself, no Shift needed;
+     *            version 96)
      *
      * Shift versions: hold Shift as well. Either Shift works: right thumb 1
      * (normal Shift), or left thumb 1 (Space on layer 0), which is a plain
@@ -690,6 +697,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      *   Mon< Mon>  send the window to that monitor
      *   Web      Ungoogled Chromium instead of IceCat
      *   Tmux     a new tmux session
+     *   Stky     pin the window on every tag
      * Ctrl versions of the tags (Super+Ctrl+1..9: show that tag as well)
      * work by holding the big Ctrl key too.
      */
