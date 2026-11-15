@@ -526,175 +526,72 @@ install_slock() {
 	build_suckless slock
 }
 
-# Moonlander: everything goes into your home directory, nothing needs root.
-#   ~/.system/share/qmk/zsa_qmk   ZSA's QMK source (firmware25), with qmk.patch
+# Moonlander: the layout and its build script live in their own repo,
+# AliceInUndernix/moonlander (see its README.md), so anyone can build
+# it. It is cloned into ~/.system/share/moonlander and its build.sh runs
+# as the user, with everything in the user's home:
+#   ~/.system/share/qmk/zsa_qmk   ZSA's QMK source (firmware25), patched
 #   ~/.system/share/qmk/venv      Python environment for the qmk command
 #   ~/.system/share/qmk/arm-gnu-toolchain   ARM compiler
-#   ~/.system/bin/qmk, arm-none-eabi-*     symlinks to the two above
-# Each run copies moonlander/canary into QMK fresh, builds and flashes.
-# The built .bin is also copied to moonlander/.
+#   ~/.system/bin/qmk, arm-none-eabi-*     links to the two above
+#   ~/.system/share/moonlander/zsa_moonlander_revb_canary.bin   firmware
+# Each run updates the clone, builds and flashes (as root: the user
+# builds, root flashes, since root reaches the keyboard without udev
+# rules). MOONLANDER_FLASH=no ./install.sh moonlander only builds.
+ML_REPO=https://github.com/AliceInUndernix/moonlander
+ML_SRC=$DATA/moonlander
 QMK_DIR=$DATA/qmk
-QMK_BIN=$SYSBIN
-QMK_BRANCH=firmware25
-# The owner's Moonlander is revision B (shipped since December 2025). Rev B has
-# its own bootloader ("Moonlander Bootloader", USB 3297:2003) that starts
-# the firmware at 0x08002000; rev A's is ST's (0483:df11, at 0x08000000).
-# Flashing one revision's firmware on the other doesn't work.
-QMK_TARGET=zsa/moonlander/revb:canary
 ML_BIN=zsa_moonlander_revb_canary.bin
-ML_DFU_ID=3297:2003
-ML_DFU_ADDR=0x08002000
-ARM_VERSION=14.2.rel1
 
-install_moonlander() {
-	fw=$QMK_DIR/zsa_qmk
-	userdir "$QMK_DIR"
-	userdir "$QMK_BIN"
-	# whatever happens below, everything made here belongs to the user
-	own_qmk() { own "$QMK_DIR"; [ ! -e "$CONFIG/qmk" ] || own "$CONFIG/qmk"; }
-	trap own_qmk EXIT
-	command -v git >/dev/null 2>&1 || die "git not found (try ./install.sh --deps)"
-	command -v python3 >/dev/null 2>&1 || die "python3 not found"
-
-	# 1. ZSA's QMK source, only the latest commit to keep it small.
-	if [ ! -d "$fw/.git" ]; then
-		say "clone   zsa/qmk_firmware ($QMK_BRANCH) -> $fw"
-		git clone --depth 1 --branch "$QMK_BRANCH" --recurse-submodules \
-			--shallow-submodules https://github.com/zsa/qmk_firmware "$fw"
-	fi
-
-	# 2. QMK patch for arbitrary_keycode and the audio timer (applied once).
-	# root works in the user's clone (git apply, QMK's make): tell git,
-	# and every git QMK runs, that this is fine
-	export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0="$fw"
-	if git -C "$fw" apply --reverse --check "$DOTFILES/moonlander/qmk.patch" 2>/dev/null; then
-		say "ok      qmk.patch already applied"
-	else
-		git -C "$fw" apply "$DOTFILES/moonlander/qmk.patch"
-		say "patch   qmk.patch -> $fw"
-	fi
-
-	# 3. qmk command in its own Python environment.
-	# A venv can't be moved (its scripts name their old path), so one that
-	# no longer runs, e.g. after moving from ~/.local/share, is made again.
-	if [ -d "$QMK_DIR/venv" ] && ! "$QMK_DIR/venv/bin/qmk" --version >/dev/null 2>&1; then
-		rm -rf "$QMK_DIR/venv"
-	fi
-	if [ ! -x "$QMK_DIR/venv/bin/qmk" ]; then
-		say "python  qmk -> $QMK_DIR/venv"
-		python3 -m venv "$QMK_DIR/venv"
-		PIP_NO_CACHE_DIR=1 "$QMK_DIR/venv/bin/python" -m pip install --quiet qmk -r "$fw/requirements.txt"
-	fi
-	link "$QMK_DIR/venv/bin/qmk" "$QMK_BIN/qmk"
-	"$QMK_DIR/venv/bin/qmk" config user.qmk_home="$fw" >/dev/null 2>&1 ||
-		warn "could not set qmk's user.qmk_home to $fw"
-
-	# 4. ARM compiler: always our own pinned Arm GNU Toolchain, even when the
-	# system has one. Gentoo's gcc 16 built firmware that froze the
-	# keyboard after a few key presses (2026-11-11); gcc 13 built it fine.
-	# It is linked into ~/.system/bin, which comes first in the build's PATH.
-	{
-		arm=$QMK_DIR/arm-gnu-toolchain
-		if [ ! -x "$arm/bin/arm-none-eabi-gcc" ]; then
-			name=arm-gnu-toolchain-$ARM_VERSION-$(uname -m)-arm-none-eabi
-			url=https://developer.arm.com/-/media/Files/downloads/gnu/$ARM_VERSION/binrel/$name.tar.xz
-			say "fetch   $name"
-			rm -rf "$arm" "$arm.tmp" && mkdir -p "$arm.tmp"
-			curl -fL "$url" | tar -xJ -C "$arm.tmp" --strip-components=1
-			mv "$arm.tmp" "$arm"
-		fi
-		for tool in "$arm"/bin/arm-none-eabi-*; do
-			link "$tool" "$QMK_BIN/$(basename "$tool")"
-		done
-	}
-
-	# 4b. ZSA's rev B code moves the stack pointer with an asm "g"
-	# operand; gcc 16 (Gentoo's arm-none-eabi-gcc) then picks a memory
-	# operand that msr can't take ("Thumb encoding does not support an
-	# immediate here"). "r" (a register) is what msr needs, on every gcc.
-	ml=$fw/keyboards/zsa/moonlander/moonlander.c
-	if grep -q '"msr msp, %0" ::"g"' "$ml"; then
-		sed -i 's/"msr msp, %0" ::"g"/"msr msp, %0" ::"r"/' "$ml"
-		say "fix     msr operand in $ml (for gcc 16)"
-	fi
-
-	# 5. Keymap: a fresh copy of moonlander/canary.
-	km=$fw/keyboards/zsa/moonlander/keymaps/canary
-	rm -rf "$km"
-	cp -R "$DOTFILES/moonlander/canary" "$km"
-	# The build runs as the user. Files that git wrote under the user's
-	# umask 077 are 600, and root's copy keeps that mode but is root's,
-	# so the user's QMK could not read keymap.c and reported "No rule to
-	# make target 'canary'". The copy belongs to the user.
-	own "$km"
-	say "copy    moonlander/canary -> $km"
-
-	# 6. Build.
-	# dfu-suffix (from dfu-util) only adds a small DFU trailer to the .bin.
-	nosuffix=
-	if ! command -v dfu-suffix >/dev/null 2>&1; then
-		warn "dfu-suffix not found (package dfu-util): building without the DFU trailer"
-		nosuffix=DFU_SUFFIX=true
-	fi
-	say "build   $QMK_TARGET"
-	# Build as the user, not root: the QMK directory is theirs, and git (which
-	# QMK asks for its version string) refuses repositories owned by someone
-	# else when run as root ("dubious ownership"), which breaks the build.
-	# What root cloned and unpacked above must be the user's first, or
-	# the build can't write its .build directory ("Permission denied").
+# as_user <command>: run a shell command as the user (su from root).
+as_user() {
 	if [ "$AS_ROOT" = yes ]; then
-		own_qmk
-		su -s /bin/sh "$USER_NAME" -c "cd '$fw' && PATH='$QMK_DIR/venv/bin:$QMK_BIN:$PATH' make '$QMK_TARGET' $nosuffix"
+		su -s /bin/sh "$USER_NAME" -c "$1"
 	else
-		( cd "$fw" && PATH=$QMK_DIR/venv/bin:$QMK_BIN:$PATH make "$QMK_TARGET" $nosuffix )
+		sh -c "$1"
 	fi
-	cp "$fw/$ML_BIN" "$DOTFILES/moonlander/"
-	own "$DOTFILES/moonlander/$ML_BIN"
-	say "built   moonlander/$ML_BIN"
-
-	# 7. Flash, with dfu-util (root can reach the keyboard without udev
-	# rules). Waits up to 2 minutes for the keyboard to be in flashing mode;
-	# if it never shows up, the .bin is still there for Keymapp.
-	# MOONLANDER_FLASH=no ./install.sh moonlander  builds without flashing.
-	[ "${MOONLANDER_FLASH:-yes}" = no ] && return 0
-	if ! command -v dfu-util >/dev/null 2>&1; then
-		warn "dfu-util not found (try ./install.sh --deps): flash the .bin with Keymapp"
-		return 0
-	fi
-	say "flash   put the Moonlander in flashing mode now:"
-	say "        tap the far-left lower key (backlight layer), then BOOT"
-	say "        (the key next to Ctrl), or press the reset pin hole"
-	i=0
-	until dfu-util -l 2>/dev/null | grep -q "$ML_DFU_ID"; do
-		i=$((i + 1))
-		if [ "$i" -gt 120 ]; then
-			warn "no keyboard in flashing mode after 2 minutes: flash the .bin with Keymapp, or run ./install.sh moonlander again"
-			return 0
-		fi
-		sleep 1
-	done
-	if dfu-util -a 0 -d "$ML_DFU_ID" -s "$ML_DFU_ADDR:leave" -D "$DOTFILES/moonlander/$ML_BIN"; then
-		say "flashed the Moonlander"
-	else
-		warn "dfu-util reported an error; if the keyboard doesn't restart, flash the .bin with Keymapp"
-	fi
-
-	case ":$PATH:" in *":$QMK_BIN:"*) ;; *) warn "add $QMK_BIN to PATH to run qmk yourself" ;; esac
 }
 
-# Plover, the steno engine for the Moonlander's steno layer. Everything is
-# in ~/.system/plover, nothing needs root:
-#   app/          the newest Plover release from GitHub (its AppImage,
-#                 unpacked, so it runs without FUSE)
-#   plover.cfg    settings (from plover/plover.cfg the first time); Plover
-#                 keeps all its files next to it: plugins/, strokes.log, ...
-#   dotterel/     AliceInUndernix/dotterel, where Dotterel comes from
-#   ~/.system/bin/plover   starts it (plover/plover)
-# Each run updates Plover to its newest release and Dotterel (with its dark
-# theme) to the newest commit. Reading the keyboard's serial port needs
-# your user in the port's group (dialout); a root run adds you to it.
+install_moonlander() {
+	command -v git >/dev/null 2>&1 || die "git not found (try ./install.sh --deps)"
+	# what a root run of the old install_moonlander made belongs to the user
+	[ "$AS_ROOT" = no ] || [ ! -d "$QMK_DIR" ] || own "$QMK_DIR"
+	# The layout used to be in this repo (moonlander/): only its
+	# firmware, which git ignored, can be left there.
+	if [ ! -e "$DOTFILES/moonlander/canary" ] && [ -d "$DOTFILES/moonlander" ]; then
+		rm -f "$DOTFILES/moonlander/$ML_BIN"
+		rmdir "$DOTFILES/moonlander" 2>/dev/null &&
+			say "delete  $DOTFILES/moonlander (the layout is in $ML_SRC now)" || :
+	fi
+	if [ -d "$ML_SRC/.git" ]; then
+		as_user "git -C '$ML_SRC' pull --quiet --ff-only" ||
+			warn "could not update $ML_SRC; building what is there"
+	else
+		userdir "${ML_SRC%/*}"
+		say "clone   $ML_REPO -> $ML_SRC"
+		as_user "git clone --quiet '$ML_REPO' '$ML_SRC'"
+	fi
+	say "build   the Moonlander layout ($ML_SRC/build.sh)"
+	if [ "$AS_ROOT" = yes ]; then
+		as_user "QMK_DIR='$QMK_DIR' LINK_DIR='$SYSBIN' MOONLANDER_FLASH=no sh '$ML_SRC/build.sh'"
+		[ "${MOONLANDER_FLASH:-yes}" = no ] || sh "$ML_SRC/build.sh" flash
+	else
+		QMK_DIR=$QMK_DIR LINK_DIR=$SYSBIN \
+			MOONLANDER_FLASH=${MOONLANDER_FLASH:-yes} sh "$ML_SRC/build.sh"
+	fi
+}
+
+# Plover, the steno engine for the Moonlander's steno layer, and
+# Dotterel come from AliceInUndernix/dotterel, which installs both with
+# its own install.sh (see its README.md). Here it is cloned into
+# ~/.system/plover/dotterel and run with:
+#   ~/.system/plover          Plover (app/), plover.cfg, its plugins and
+#                             logs: it runs in portable mode there
+#   ~/.system/bin/plover      starts it
+# Each run updates Plover to its newest release and Dotterel to the
+# newest commit. Reading the keyboard's serial port needs your user in
+# the port's group (dialout); a root run adds you to it.
 PLOVER_DIR=$SYSTEM/plover
-PLOVER_API=https://api.github.com/repos/openstenoproject/plover/releases/latest
 PLOVER_REPO=https://github.com/AliceInUndernix/dotterel
 
 install_plover() {
@@ -714,44 +611,8 @@ install_plover() {
 	fi
 	[ "$in_group" = yes ] ||
 		warn "Plover can't read the Moonlander until you are in group $port_group: su -c '$DOTFILES/install.sh plover', then log in again"
-	command -v curl >/dev/null 2>&1 || die "curl not found"
 	command -v git >/dev/null 2>&1 || die "git not found (try ./install.sh --deps)"
 	mkdir -p "$PLOVER_DIR" "$SYSBIN"
-
-	# 1. Plover: the newest release's AppImage for this machine.
-	url=$(curl -fsSL "$PLOVER_API" |
-		grep -o '"browser_download_url": *"[^"]*-'"$(uname -m)"'\.AppImage"' |
-		sed 's/.*"\(http[^"]*\)"$/\1/' | head -n 1) || :
-	app=$PLOVER_DIR/app
-	if [ -z "$url" ]; then
-		[ -x "$app/AppRun" ] || die "could not find the newest Plover release ($PLOVER_API)"
-		warn "could not check for a newer Plover; keeping the one in $app"
-	elif [ "$(cat "$app/.release" 2>/dev/null)" = "$url" ]; then
-		say "ok      Plover ${url##*/}"
-	else
-		say "fetch   ${url##*/}"
-		rm -rf "$app.tmp" && mkdir "$app.tmp"
-		curl -fL -o "$app.tmp/plover.AppImage" "$url"
-		chmod 755 "$app.tmp/plover.AppImage"
-		( cd "$app.tmp" && ./plover.AppImage --appimage-extract >/dev/null )
-		echo "$url" > "$app.tmp/squashfs-root/.release"
-		rm -rf "$app" && mv "$app.tmp/squashfs-root" "$app" && rm -rf "$app.tmp"
-		say "install Plover -> $app"
-	fi
-	link "$DOTFILES/plover/plover" "$SYSBIN/plover"
-
-	# 2. Settings: a copy, since Plover rewrites the file (and would replace
-	# a link with a file). Yours is never overwritten.
-	if [ -e "$PLOVER_DIR/plover.cfg" ]; then
-		say "ok      $PLOVER_DIR/plover.cfg (kept yours)"
-	else
-		cp "$DOTFILES/plover/plover.cfg" "$PLOVER_DIR/plover.cfg"
-		say "copy    plover/plover.cfg -> $PLOVER_DIR/plover.cfg"
-	fi
-
-	# 3. Dotterel and its dark theme, from the newest commit of the
-	# dotterel repo, into Plover's own plugins directory. pip's cache is
-	# off, so nothing lands in ~/.cache.
 	src=$PLOVER_DIR/dotterel
 	# Dotterel used to come from the moonlander repo: that old clone goes.
 	if [ -d "$PLOVER_DIR/moonlander/.git" ]; then
@@ -765,16 +626,6 @@ install_plover() {
 		say "clone   $PLOVER_REPO -> $src"
 		git clone --quiet --depth 1 "$PLOVER_REPO" "$src"
 	fi
-	# Every run: stop Plover and delete the dictionary copies it made in
-	# ~/.system/plover (no backup). Plover makes them again from the
-	# installed Dotterel when it starts, so they are always the newest.
-	# (It copies the plugin's dictionaries there the first time it starts
-	# and never updates the copies.)
-	if pkill -u "$USER_NAME" -f "python.* -m plover\.scripts" 2>/dev/null; then
-		sleep 2
-		say "stop    Plover (start it again when this is done)"
-	fi
-	rm -f "$PLOVER_DIR"/dotterel-*.json "$PLOVER_DIR"/dotterel-*.py "$PLOVER_DIR"/dotterel-*.modal
 	# Plover outside portable mode (no plover.cfg in ~/.system/plover)
 	# writes to ~/.config/plover and ~/.system/share/plover: removed.
 	for d in "$CONFIG/plover" "$DATA/plover"; do
@@ -782,58 +633,9 @@ install_plover() {
 		rm -rf "$d"
 		say "delete  $d (Plover only uses ~/.system/plover)"
 	done
-	say "delete  $PLOVER_DIR/dotterel-* (Plover copies them again at start)"
-
-	# A clean install when the commit is new, the installed dictionaries
-	# differ from the repo's, or DOTTEREL_CLEAN=yes: Dotterel is
-	# uninstalled, every Dotterel dictionary file anywhere in
-	# ~/.system/plover is deleted (no backup), the dictionary list saved in
-	# plover.cfg is dropped so Plover uses the plugin's own list, and the
-	# plugin is installed fresh.
-	commit=$(git -C "$src" rev-parse HEAD)
-	new=$src/plover-dotterel/plover_dotterel/dictionaries
-	old=$(dotterel_dicts)
-	if [ "${DOTTEREL_CLEAN:-no}" != yes ] &&
-		[ "$(cat "$PLOVER_DIR/plugins/.dotterel" 2>/dev/null)" = "$commit" ] &&
-		[ -n "$old" ] && diff -rq -x __pycache__ "$new" "$old" >/dev/null 2>&1; then
-		say "ok      Dotterel ($(git -C "$src" log -1 --format=%h))"
-	else
-		PIP_NO_CACHE_DIR=1 "$SYSBIN/plover" -s plover_plugins uninstall -y \
-			plover-dotterel plover-dotterel-dark-theme >/dev/null 2>&1 || :
-		find "$PLOVER_DIR/plugins" -depth -name 'plover_dotterel*' -exec rm -rf {} + 2>/dev/null || :
-		find "$PLOVER_DIR" -path "$src" -prune -o -type f \
-			\( -name 'dotterel-*.json' -o -name 'dotterel-*.py' -o -name 'dotterel-*.modal' \) \
-			-print -exec rm -f {} + 2>/dev/null | sed 's/^/==> delete  /'
-		rm -rf "$STATE/plover"/dictionaries-*
-		cfg=$PLOVER_DIR/plover.cfg
-		if [ -f "$cfg" ] && grep -q '^dictionaries *=' "$cfg"; then
-			awk '/^\[/ { sec = $0 } !(sec == "[System: Dotterel]" && /^dictionaries *=/)' \
-				"$cfg" > "$cfg.tmp" && mv "$cfg.tmp" "$cfg"
-			say "reset   Dotterel's dictionary list in plover.cfg (Plover uses the plugin's)"
-		fi
-		say "plugin  Dotterel and its dark theme, fresh ($(git -C "$src" log -1 --format=%h))"
-		PIP_NO_CACHE_DIR=1 "$SYSBIN/plover" -s plover_plugins install \
-			"$src/plover-dotterel" "$src/plover-dotterel/dark-theme"
-		old=$(dotterel_dicts)
-		if [ -n "$old" ] && diff -rq -x __pycache__ "$new" "$old" >/dev/null 2>&1; then
-			echo "$commit" > "$PLOVER_DIR/plugins/.dotterel"
-			say "ok      Dotterel dictionaries match the repo; start Plover again"
-		else
-			warn "Dotterel's installed dictionaries differ from $new"
-		fi
-	fi
-
-	# Any other dictionary list in plover.cfg that still names Dotterel
-	# files outside the plugin (another system's section, say).
-	if grep '^dictionaries *=' "$PLOVER_DIR/plover.cfg" 2>/dev/null |
-		grep -o '"path": *"[^"]*"' | grep -v 'asset:plover_dotterel:' | grep -q dotterel; then
-		warn "plover.cfg still lists Dotterel dictionaries outside the plugin"
-	fi
-}
-
-# The installed plugin's dictionaries directory, or nothing.
-dotterel_dicts() {
-	find "$PLOVER_DIR/plugins" -type d -path '*/plover_dotterel/dictionaries' 2>/dev/null | head -n 1
+	rm -rf "$STATE/plover"/dictionaries-*
+	PLOVER_DIR=$PLOVER_DIR BIN_DIR=$SYSBIN \
+		DOTTEREL_CLEAN=${DOTTEREL_CLEAN:-no} sh "$src/install.sh"
 }
 
 # Riseup VPN, Tor and the kill switch: net/README. Gentoo with OpenRC,
@@ -1183,19 +985,25 @@ ck_part() {
 			ck_bad "slock is not root's setuid: su -c '$DOTFILES/install.sh slock'"
 		fi ;;
 	moonlander)
-		if [ -x "$QMK_BIN/qmk" ]; then ck_ok "qmk"; else ck_bad "qmk is missing: ./install.sh moonlander"; fi
-		b=$DOTFILES/moonlander/$ML_BIN
-		if [ ! -f "$b" ]; then
-			ck_bad "no firmware built: ./install.sh moonlander"
-		elif [ -n "$(find "$DOTFILES/moonlander/canary" -type f -newer "$b" 2>/dev/null)" ]; then
-			ck_bad "the firmware is older than the layout: ./install.sh moonlander"
+		if [ -x "$SYSBIN/qmk" ]; then ck_ok "qmk"; else ck_bad "qmk is missing: ./install.sh moonlander"; fi
+		if [ ! -d "$ML_SRC/.git" ]; then
+			ck_bad "the layout is not cloned: ./install.sh moonlander"
 		else
-			ck_ok "firmware $ML_BIN is from the current layout"
+			ck_git "$ML_SRC" "the Moonlander layout"
+			b=$ML_SRC/$ML_BIN
+			if [ ! -f "$b" ]; then
+				ck_bad "no firmware built: ./install.sh moonlander"
+			elif [ -n "$(find "$ML_SRC/canary" -type f -newer "$b" 2>/dev/null)" ]; then
+				ck_bad "the firmware is older than the layout: ./install.sh moonlander"
+			else
+				ck_ok "firmware $ML_BIN is from the current layout"
+			fi
 		fi ;;
 	plover)
 		if [ -d "$PLOVER_DIR/app" ]; then ck_ok "Plover in $PLOVER_DIR"
 		else ck_bad "Plover is not installed: ./install.sh plover"; fi
-		ck_links plover
+		if [ -x "$SYSBIN/plover" ]; then ck_ok "$SYSBIN/plover"
+		else ck_bad "$SYSBIN/plover is missing: ./install.sh plover"; fi
 		# the same group install_plover adds you to
 		g=$(stat -c %G /dev/ttyACM0 2>/dev/null || :)
 		case $g in ""|root) g=dialout ;; esac

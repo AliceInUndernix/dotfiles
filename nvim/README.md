@@ -152,10 +152,10 @@ lessons (`:help plover-vim-tutorial`) and a cheatsheet
 (`:help plover-vim-cheatsheet`). You're not using plover-vim for now;
 the line stays so it's ready later. The steno side lives in Plover:
 
-1. Close Plover, then install the plugins, e.g. with the AppImage:
-   `./plover-*.AppImage -s plover_plugins install plover_vim plover-python-dictionary`
+1. Close Plover, then install the plugins:
+   `plover -s plover_plugins install plover_vim plover-python-dictionary`
 2. Get the tutor dictionary:
-   `curl -o ~/.config/plover/vim.py https://raw.githubusercontent.com/Josiah-tan/plover-vim/main/templates/tutor/escaped_customised.py`
+   `curl -o ~/.system/plover/vim.py https://raw.githubusercontent.com/Josiah-tan/plover-vim/main/templates/tutor/escaped_customised.py`
 3. Start Plover, add `vim.py` with **+** under Dictionaries, and tick
    **Start attached** in Configure → Output.
 4. In Neovim run `:set scrolloff=9`, then `:help plover-vim-tutorial`.

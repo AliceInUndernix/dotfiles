@@ -25,8 +25,6 @@ script puts the whole configuration back after a fresh install.
 | `xdg/` | Download, Pictures, Music etc. all set to `~` (no capitalised directories) | `~/.config/user-dirs.dirs`, `user-dirs.conf` (symlinks) |
 | `feh/` | feh shows pictures on Habamax grey | `~/.config/feh/themes` (symlink) |
 | `x/` | `xinitrc`: Habamax-grey wallpaper, PipeWire, idle lock off by default (`IDLE_LOCK_MINUTES`), xss-lock (slock before suspend), then dwm (run `startx`) | `~/.xinitrc` (symlink) |
-| `moonlander/` | QMK "canary" keymap for the keyboard | built into `moonlander/*.bin`, flashed with Keymapp |
-| `plover/` | Plover (steno) launcher and first settings: Dotterel, Gemini PR on the Moonlander | `~/.system/plover` (newest release, Dotterel from AliceInUndernix/dotterel), `~/.system/bin/plover` |
 | `net/` | Riseup VPN, Tor and a kill switch (Gentoo, OpenRC): the fastest server of the best country zone at boot, DNS through Tor, levels 0-3 and a sandbox (`vpn level`), `proxychains` (`net/README`) | `/usr/local/bin/vpn`, `/etc/init.d/vpnfw` and `vpn`, `/etc/vpn` (root's, `su -c './install.sh net'`) |
 | `archive/` | Untouched copies of everything downloaded from elsewhere | |
 | `TODO.md` | Things decided but left for later | |
@@ -128,13 +126,16 @@ What the script does:
   build from source for hours, so `all` and Enter alone leave them out:
   name or number them. Only the program is installed; their settings and
   profiles are not touched. `./install.sh check` shows whether they are in.
-- **Moonlander**: QMK, its Python environment, the ARM compiler and ZSA's
-  QMK source go into `~/.system/share/qmk`, then the firmware is built into
-  `moonlander/` for Keymapp. See `moonlander/README.md`.
-- **Plover**: the newest release (its AppImage, unpacked) goes into
-  `~/.system/plover`, with Dotterel and its dark theme from
-  AliceInUndernix/dotterel. Plover runs in portable mode there, so its
-  settings, plugins and logs stay in that directory too. Each run updates both.
+- **Moonlander**: the layout is in its own repo (below); `moonlander`
+  clones it into `~/.system/share/moonlander` and runs its `build.sh`:
+  QMK, its Python environment and the ARM compiler go into
+  `~/.system/share/qmk`, then it builds and flashes the firmware.
+- **Plover**: Plover and Dotterel are in the dotterel repo (below);
+  `plover` clones it into `~/.system/plover/dotterel` and runs its
+  `install.sh`: the newest Plover release (its AppImage, unpacked) goes
+  into `~/.system/plover`, with Dotterel and its dark theme. Plover runs
+  in portable mode there, so its settings, plugins and logs stay in that
+  directory too. Each run updates both.
   To read the keyboard you must be in group `dialout`:
   `su -c './install.sh plover'` adds you once (then log in again).
 
@@ -171,7 +172,7 @@ the script warns if the group is missing).
 ## Archive
 
 `archive/` keeps release tarballs of dwm, st, dmenu, slock and tmux, the
-six Neovim plugins and optozorax's Moonlander libraries, with source,
+six Neovim plugins, with source,
 version and checksum for each in `archive/README.md`. If an upstream
 disappears, everything can still be rebuilt from this repo. The install
 script also unpacks the Neovim plugins from here, so Neovim works on
@@ -210,8 +211,13 @@ Health checks, which change nothing: `./install.sh check` (is
 everything as the repo has it?) and `vpn selftest` (every level and
 feature of the VPN, about 15 min). No network: `vpn rescue`.
 
-## Moonlander
+## Moonlander and Plover: repos of their own
 
-`moonlander/canary/` is the current layout (version 97);
-`moonlander/HANDOFF.md` explains it. `./install.sh moonlander` sets up QMK
-in your home directory and builds it (see `moonlander/README.md`).
+Everything for the keyboard is in https://github.com/AliceInUndernix/moonlander
+(the "canary" QMK layout, `layout.html`, `build.sh`), so anyone can build
+it; everything for Plover is in https://github.com/AliceInUndernix/dotterel
+(the Dotterel theory and dictionaries, and `install.sh`, which installs
+Plover and Dotterel in one go), so anyone can use the dictionaries
+without a Moonlander. Everything else is here. `./install.sh moonlander`
+and `./install.sh plover` clone them and run their own scripts; each
+run takes their newest commit.
