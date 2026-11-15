@@ -1312,14 +1312,22 @@ st_res() {    # st_res <status> <what>
     else
         ST_FAIL=$((ST_FAIL + 1))
         say "  FAIL  $2" | tee -a "$RUN/selftest.log"
+        # what it ran and what it said, for finding out why
+        if [ -n "${ST_CMD:-}" ]; then
+            say "        ran: $ST_CMD" >> "$RUN/selftest.log"
+            sed 's/^/        said: /' "$RUN/st.out" 2>/dev/null |
+                tail -n 6 >> "$RUN/selftest.log"
+        fi
     fi
+    ST_CMD=
 }
 
 # st <what> <shell command>: PASS when the command succeeds
-st() { sh -c "$2" >/dev/null 2>&1; st_res $? "$1"; }
+st() { ST_CMD=$2; sh -c "$2" > "$RUN/st.out" 2>&1; st_res $? "$1"; }
 # st_not <what> <shell command>: PASS when the command fails
 st_not() {
-    sh -c "$2" >/dev/null 2>&1
+    ST_CMD="! $2"
+    sh -c "$2" > "$RUN/st.out" 2>&1
     if [ $? -ne 0 ]; then st_res 0 "$1"; else st_res 1 "$1"; fi
 }
 
@@ -1394,7 +1402,7 @@ cmd_selftest() {
         [ -e "$d/device" ] || continue
         [ ! -e "$ETC/keep-mac" ] || break
         # the second hex digit has bit 2 set: made up, not the card's
-        st "${d##*/} has a made-up MAC address" \
+        st "${d##*/} has a made-up MAC address (set at boot only)" \
             "cut -c 2 $d/address | grep -q '[2367abefABEF]'"
         if [ -d "$d/wireless" ]; then
             say "  info  ${d##*/} (Wi-Fi) is $(cat "$d/operstate")" |
@@ -1427,7 +1435,7 @@ cmd_selftest() {
     st ".onion names resolve (into Tor)" \
         "$(as_nobody "getent ahostsv4 $ONION") | grep -q '^10\.'"
     st "an .onion site opens without a proxy (through Tor)" \
-        "$(as_nobody "curl -4 -s -o /dev/null -m 90 http://$ONION/")"
+        "$(as_nobody "curl -4 -sS -o /dev/null -m 90 http://$ONION/")"
     if [ -n "$router" ]; then
         was=off
         [ ! -e "$ETC/lan" ] || was=on
