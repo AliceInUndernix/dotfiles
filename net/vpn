@@ -1334,6 +1334,9 @@ cmd_on() {
     rm -f "$ETC/off"
     say "Turning vpn back on: $repo/install.sh net"
     "$repo/install.sh" net || die "install.sh net failed (its log says why)"
+    # vpn off gave the cards their own MACs back, and vpnfw may still
+    # count as started, so it would not make new ones until a reboot
+    random_macs
     rc-service vpnfw start
     rc-service vpn start
     say "on (vpn watch to follow it)"
