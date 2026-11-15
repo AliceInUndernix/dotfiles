@@ -16,7 +16,7 @@ script puts the whole configuration back after a fresh install.
 | `webarchiver/` | WebArchiver, our own C program: archives whole websites with wget for offline reading, keeps them updated with version history (`webarchiver/README`) | `~/.system/bin/webarchiver` |
 | `nvim/` | Neovim config (0.11+, no plugin manager) | `~/.config/nvim` (symlink), `~/.system/bin/vim` -> nvim (first in PATH) |
 | `tmux/` | tmux config | `~/.config/tmux/tmux.conf` (symlink) |
-| `ksh/` | Korn shell: `profile` (PATH, EDITOR) and `kshrc` (prompt, emacs keys, aliases) | `~/.profile`, `~/.kshrc` (symlinks); ksh becomes the login shell of the user and root |
+| `ksh/` | Korn shell: `profile` (PATH, EDITOR), `kshrc` (prompt, emacs keys, aliases) and `termcheck` (finds why a new terminal shows no prompt) | `~/.profile`, `~/.kshrc` (symlinks); ksh becomes the login shell of the user and root |
 | `flameshot/` | Screenshots: Print selects, Mod+Print copies the screen | `~/.config/flameshot/flameshot.ini` (symlink) |
 | `mpv/` | Video player: resume, Habamax OSD, vim seek keys | `~/.config/mpv` (symlink) |
 | `sioyek/` | Book/PDF reader in Habamax colours (TypeTrack's green/red too); on Gentoo `--deps` builds its development version (GURU `sioyek-9999`) | `~/.config/sioyek/prefs_user.config` (symlink) |
@@ -196,6 +196,10 @@ through Tor. `vpn status` tells you how it is; `vpn` gives a menu
 (your own password, not root's). Your prompt shows `VPN` when
 something is wrong with it. This is the one part that installs into
 the system (it needs root) instead of `~/.system`.
+
+Health checks, which change nothing: `./install.sh check` (is
+everything as the repo has it?) and `vpn selftest` (every level and
+feature of the VPN, about 15 min). No network: `vpn rescue`.
 
 ## Moonlander
 

@@ -91,7 +91,8 @@ _pwd() {
 }
 # Before it, when vpn (net/) is installed: VPN when something is wrong
 # with it or it isn't up yet (vpn status says what), OFF at level -1,
-# else the level when it isn't the usual 2: L0, L1, L3 or SANDBOX.
+# else the level when it isn't the usual 2 ("tor dns"): L0 (bare), L1 (vpn),
+# L3 (tor) or SANDBOX.
 # _vpn_set puts it in _vm (only shell builtins, no programs or output);
 # _vpn prints it.
 _vpn_set() {

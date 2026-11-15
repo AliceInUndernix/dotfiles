@@ -61,7 +61,9 @@ level Tor runs for proxychains and the browser, IPv6 is off, nothing
 comes in that wasn't asked for, and .onion addresses work.
 
 The prompt shows VPN when something is wrong, or the level when it
-isn't 2 (L0, L1, L3, SANDBOX).
+isn't 2 (L0, L1, L3, SANDBOX). It reads only /run/vpn, never the
+network; in ksh93 it is updated each time you press Enter (a prompt
+that runs code is garbled by ksh93 when a new window is resized).
 
 
 Commands
@@ -167,14 +169,14 @@ Privacy
   you use Tor, not what you do in it. Tor's first relay sees Riseup's
   address, not yours.
 - dhcpcd sends no hostname (its anonymous mode, RFC 7844), and each
-  network card gets a random MAC address once at boot, before it is
-  up (not while connected: that breaks Wi-Fi). To keep the real one:
-  touch /etc/vpn/keep-mac. USB cards (docks, adapters) get one only
-  with their chip's own driver (ax88179_178a, r8152, asix), not with
-  the generic cdc_ncm or cdc_ether, which then get no DHCP answer; if
-  DHCP still fails, vpn gives the cards their own MACs back after 30 s.
-  The hostname is "host" and
-  the clock is in UTC, so programs can't give away either.
+  network card gets a random MAC address at boot (and at vpn on),
+  before it is up (not while connected: that breaks Wi-Fi). To keep
+  the real one: touch /etc/vpn/keep-mac. USB cards (docks, adapters)
+  get one only with their chip's own driver (ax88179_178a, r8152,
+  asix), not with the generic cdc_ncm or cdc_ether, which then get no
+  DHCP answer; if DHCP still fails, vpn gives the cards their own MACs
+  back after 30 s. The hostname is "host" and the clock is in UTC, so
+  programs can't give away either.
 - Nothing is logged for long: the status, the events (vpn log),
   OpenVPN's and Tor's warnings are in /run/vpn, which is gone after
   a reboot.
