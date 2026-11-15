@@ -1209,9 +1209,9 @@ static int confirm_what;        /* the key waiting for y */
 static const char *level_text(const char *lv)
 {
     if (same(lv, "0"))
-        return "own IP, Cloudflare DNS";
+        return "own IP, no VPN";
     if (same(lv, "1"))
-        return "VPN, Cloudflare DNS";
+        return "VPN only, no Tor";
     if (same(lv, "2"))
         return "VPN, DNS through Tor";
     if (same(lv, "3"))
@@ -1388,7 +1388,7 @@ static void draw_graph(int top, int left, int h, int w)
  * on the right, the clock in the middle of the top border, the levels
  * in the bottom border */
 static const char *level_keys[] = {
-    "0", " own IP", "1", " cloudflare", "2", " tor dns", "3", " all tor",
+    "0", " own IP", "1", " vpn only", "2", " tor dns", "3", " all tor",
     "s", "andbox", "o", "ffline", "-", " all off", 0
 };
 static const char *level_names[] = {
@@ -1674,8 +1674,10 @@ static void draw_protection(int top, int left, int h, int w)
         label("DNS", 9);
         if (same(dns, "127.0.0.1"))
             pen(c_green, "Tor");
+        else if (same(dns, "1.1.1.1") && same(sv("level"), "1"))
+            pen(c_yellow, "1.1.1.1 through the VPN");
         else if (same(dns, "1.1.1.1"))
-            pen(c_yellow, "Cloudflare");
+            pen(c_yellow, "1.1.1.1, not through the VPN");
         else
             pen(c_yellow, dns[0] ? dns : "none");
         pen(c_dim, locked ? ", locked" : ", not locked");
@@ -1967,8 +1969,8 @@ static const char *help_text[] = {
     "Green is fine, brown is worth knowing, red is a problem.",
     "",
     "Levels (until reboot), in the bottom line of the top box",
-    "  0  your own IP, Cloudflare DNS    s  sandbox: own IP, only",
-    "  1  VPN, Cloudflare DNS               programs started with",
+    "  0  your own IP, no VPN            s  sandbox: own IP, only",
+    "  1  VPN only, no Tor                  programs started with",
     "  2  VPN, DNS through Tor (usual)      vpn run (and Tor) online",
     "  3  VPN, everything through Tor    o  offline: nothing goes out",
     "  -  everything off (level -1), as if vpn were not installed;",

@@ -19,8 +19,8 @@
 #   vpn level L         switch until reboot (root). L is one of:
 #                        -1  everything off, as if vpn weren't installed
 #                            (stays off after reboot; vpn on: back on)
-#                         0  your own IP, DNS from Cloudflare 1.1.1.1
-#                         1  VPN, Cloudflare DNS through the VPN
+#                         0  your own IP, no VPN (DNS 1.1.1.1)
+#                         1  VPN only, no Tor (DNS 1.1.1.1 through the VPN)
 #                         2  VPN, DNS through Tor (the usual one)
 #                         3  VPN, and everything goes through Tor
 #                         sandbox  like 0, but only programs started
@@ -1014,8 +1014,8 @@ cmd_status() {
         no="$no ($(($(date +%s) - ss)) s so far)"
     fi
     case $lv in
-    0) d="your own IP, Cloudflare DNS" ;;
-    1) d="VPN, Cloudflare DNS through the VPN" ;;
+    0) d="your own IP, no VPN (DNS 1.1.1.1)" ;;
+    1) d="VPN only, no Tor (DNS 1.1.1.1 through the VPN)" ;;
     2) d="VPN, DNS through Tor" ;;
     3) d="VPN, everything through Tor" ;;
     sandbox) d="sandbox: own IP, only vpn run programs and Tor online" ;;
@@ -1512,7 +1512,8 @@ cmd_selftest() {
     fi
 
     st_level 1
-    st "DNS is Cloudflare's" "grep -qx 'nameserver 1.1.1.1' /etc/resolv.conf"
+    st "DNS is 1.1.1.1 (through the VPN)" \
+        "grep -qx 'nameserver 1.1.1.1' /etc/resolv.conf"
     st_web "the web works through the VPN"
     [ -z "$phys" ] || st_not "kill switch: nothing goes out on $phys itself" \
         "$(as_nobody "curl -s -o /dev/null -m 10 --interface $phys $WEB")"
@@ -1609,8 +1610,7 @@ frame() {
             if [ -e "$ETC/lan" ]; then lan=on; else lan=off; fi
             if [ -e "$RUN/fw-off" ]; then fw=OFF; else fw=on; fi
             say "$LINE"
-            say "level  0 own IP  1 VPN+Cloudflare DNS  2 VPN+Tor DNS" \
-                " 3 all Tor"
+            say "level  0 own IP  1 VPN only  2 VPN+Tor DNS  3 all Tor"
             say "       s sandbox (only vpn run programs online)  o offline" \
                 " - all off"
             say "other  r reconnect  n new server list  l LAN ($lan)" \
