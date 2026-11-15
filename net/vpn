@@ -19,10 +19,10 @@
 #   vpn level L         switch until reboot (root). L is one of:
 #                        -1  everything off, as if vpn weren't installed
 #                            (stays off after reboot; vpn on: back on)
-#                         0  your own IP, no VPN (DNS 1.1.1.1)
-#                         1  VPN only, no Tor (DNS 1.1.1.1 through the VPN)
-#                         2  VPN, DNS through Tor (the usual one)
-#                         3  VPN, and everything goes through Tor
+#                         0  "bare": your own IP, no VPN (DNS 1.1.1.1)
+#                         1  "vpn": all through the VPN (DNS 1.1.1.1 in it)
+#                         2  "tor dns": the VPN, DNS through Tor (usual)
+#                         3  "tor": the VPN, and everything through Tor
 #                         sandbox  like 0, but only programs started
 #                                  with "vpn run" (and Tor) are online
 #                         offline  nothing is online
@@ -1014,10 +1014,10 @@ cmd_status() {
         no="$no ($(($(date +%s) - ss)) s so far)"
     fi
     case $lv in
-    0) d="your own IP, no VPN (DNS 1.1.1.1)" ;;
-    1) d="VPN only, no Tor (DNS 1.1.1.1 through the VPN)" ;;
-    2) d="VPN, DNS through Tor" ;;
-    3) d="VPN, everything through Tor" ;;
+    0) d="bare: your own IP, no VPN (DNS 1.1.1.1)" ;;
+    1) d="vpn: all through the VPN (DNS 1.1.1.1 in it)" ;;
+    2) d="tor dns: the VPN, DNS through Tor" ;;
+    3) d="tor: the VPN, and everything through Tor" ;;
     sandbox) d="sandbox: own IP, only vpn run programs and Tor online" ;;
     *) d="offline" ;;
     esac
@@ -1610,7 +1610,7 @@ frame() {
             if [ -e "$ETC/lan" ]; then lan=on; else lan=off; fi
             if [ -e "$RUN/fw-off" ]; then fw=OFF; else fw=on; fi
             say "$LINE"
-            say "level  0 own IP  1 VPN only  2 VPN+Tor DNS  3 all Tor"
+            say "level  0 bare  1 vpn  2 tor dns  3 tor"
             say "       s sandbox (only vpn run programs online)  o offline" \
                 " - all off"
             say "other  r reconnect  n new server list  l LAN ($lan)" \
@@ -1862,7 +1862,7 @@ cmd_rescue() {
 
     if [ -z "$worked" ] && [ ! -e "$ETC/off" ]; then
         rlog ""
-        rlog "5. level 0: your own IP, no VPN (until reboot)"
+        rlog "5. level 0 (bare): your own IP, no VPN (until reboot)"
         rm -f "$RUN/state"
         cmd_level 0 >/dev/null 2>&1
         rwait_state 40

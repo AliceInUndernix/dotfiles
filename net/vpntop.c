@@ -1209,13 +1209,13 @@ static int confirm_what;        /* the key waiting for y */
 static const char *level_text(const char *lv)
 {
     if (same(lv, "0"))
-        return "own IP, no VPN";
+        return "bare: own IP, no VPN";
     if (same(lv, "1"))
-        return "VPN only, no Tor";
+        return "vpn: all through the VPN";
     if (same(lv, "2"))
-        return "VPN, DNS through Tor";
+        return "tor dns: VPN, DNS by Tor";
     if (same(lv, "3"))
-        return "VPN, all through Tor";
+        return "tor: VPN, all through Tor";
     if (same(lv, "sandbox"))
         return "only vpn run programs";
     if (same(lv, "offline"))
@@ -1388,7 +1388,7 @@ static void draw_graph(int top, int left, int h, int w)
  * on the right, the clock in the middle of the top border, the levels
  * in the bottom border */
 static const char *level_keys[] = {
-    "0", " own IP", "1", " vpn only", "2", " tor dns", "3", " all tor",
+    "0", " bare", "1", " vpn", "2", " tor dns", "3", " tor",
     "s", "andbox", "o", "ffline", "-", " all off", 0
 };
 static const char *level_names[] = {
@@ -1969,10 +1969,10 @@ static const char *help_text[] = {
     "Green is fine, brown is worth knowing, red is a problem.",
     "",
     "Levels (until reboot), in the bottom line of the top box",
-    "  0  your own IP, no VPN            s  sandbox: own IP, only",
-    "  1  VPN only, no Tor                  programs started with",
-    "  2  VPN, DNS through Tor (usual)      vpn run (and Tor) online",
-    "  3  VPN, everything through Tor    o  offline: nothing goes out",
+    "  0  bare: own IP, no VPN           s  sandbox: own IP, only",
+    "  1  vpn: all through the VPN          programs started with",
+    "  2  tor dns: VPN, DNS by Tor (usual)  vpn run (and Tor) online",
+    "  3  tor: VPN, all through Tor      o  offline: nothing goes out",
     "  -  everything off (level -1), as if vpn were not installed;",
     "     any level turns it back on (that runs install.sh net)",
     "Other keys, in the bottom lines of the boxes",
