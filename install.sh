@@ -14,6 +14,7 @@
 #   ./install.sh 1 4 19        the parts with those numbers (0: --deps)
 #   ./install.sh nvim dwm      only the parts named
 #   ./install.sh all           everything, without the menu
+#   ./install.sh all icecat    everything, and the parts named too
 #   ./install.sh check [part]  only look: what is installed, missing or
 #                              out of date (changes nothing)
 #   ./install.sh update        the newest version: git pull, then all,
@@ -1196,6 +1197,7 @@ menu() {
 # --- main -----------------------------------------------------------------
 
 want_deps=no
+want_all=no
 parts=
 EMERGE_OPTS=-qv  # -a: -qva, so emerge asks before it builds anything
 # check: only look, and before anything else is done
@@ -1240,7 +1242,7 @@ if [ $# -eq 0 ] && [ -t 0 ] && [ -z "${INSTALL_LOG:-}" ]; then
 fi
 for arg in "$@"; do
 	case $arg in
-	all) ;;
+	all) want_all=yes ;;
 	--deps|0) want_deps=yes ;;
 	[1-9]|[1-9][0-9])
 		p=$(echo $PARTS | awk -v n="$arg" '{ print $n }')
@@ -1256,10 +1258,17 @@ for arg in "$@"; do
 	esac
 done
 named=$parts
-if [ -z "$parts" ]; then
+# all (or nothing named): every part but the browsers, in the usual
+# order, with any named ones after it (all icecat: everything and IceCat)
+if [ -z "$parts" ] || [ "$want_all" = yes ]; then
+	parts=
 	for p in $PARTS; do
 		case " $ONLY_NAMED " in *" $p "*) ;; *) parts="$parts $p" ;; esac
 	done
+	for p in $named; do
+		case " $parts " in *" $p "*) ;; *) parts="$parts $p" ;; esac
+	done
+	[ "$want_all" = no ] || named=
 fi
 
 # The log: the script runs itself again with everything it prints also
