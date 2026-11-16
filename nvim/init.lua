@@ -539,3 +539,19 @@ require("zen-mode").setup({
 local function toggle_prose() require("zen-mode").toggle() end
 vim.api.nvim_create_user_command("Prose", toggle_prose, {})
 map("n", "<leader>p", toggle_prose, { desc = "Toggle prose mode" })
+
+-- :q, :wq and :x in prose mode leave Neovim, as they do anywhere else.
+-- On their own they only closed the prose window and left the file open.
+vim.api.nvim_create_autocmd("QuitPre", {
+  callback = function()
+    local view = require("zen-mode.view")
+    if not view.is_open() then return end
+    -- the ! of :q! or :wq! (the last command line typed)
+    local bang = vim.fn.histget(":", -1):match("^%s*%a+!") ~= nil
+    view.close()
+    vim.schedule(function()
+      if #vim.api.nvim_list_wins() ~= 1 then return end
+      vim.cmd(bang and "quit!" or "quit")
+    end)
+  end,
+})
