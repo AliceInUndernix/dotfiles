@@ -27,12 +27,14 @@ static void add_word(char *d, int size, const char *w)
 /* any_set: 1 when any of the n bytes at off is not 0 */
 static int any_set(int fd, long long off, long long n)
 {
+    int rc;
     unsigned char b[4096];
     long k, i;
 
     while (n > 0) {
         k = n > (long long)sizeof b ? (long)sizeof b : (long)n;
-        if (at_read(fd, off, b, k) < 0)
+        rc = at_read(fd, off, b, k);
+        if (rc < 0)
             return 1;
         for (i = 0; i < k; i++) {
             if (b[i])
@@ -47,12 +49,16 @@ static int any_set(int fd, long long off, long long n)
 /* has_text: 1 when the first 64 KB at off hold w */
 static int has_text(int fd, long long off, long long n, const char *w)
 {
+    int rc;
     static unsigned char b[65536];
     long k, i, wl;
 
     wl = strlen(w);
     k = n > (long long)sizeof b ? (long)sizeof b : (long)n;
-    if (k < wl || at_read(fd, off, b, k) < 0)
+    if (k < wl)
+        return 0;
+    rc = at_read(fd, off, b, k);
+    if (rc < 0)
         return 0;
     for (i = 0; i + wl <= k; i++) {
         if (!memcmp(b + i, w, wl))
@@ -66,6 +72,7 @@ static int has_text(int fd, long long off, long long n, const char *w)
  * video stays valid: the text is free-form) */
 static int encoder_text(int fd, long long size)
 {
+    int rc;
     static unsigned char b[65536];
     static const char *names[] = {
         "x264 - core ", "x265 (build ", "Lavc", "Lavf", 0
@@ -78,7 +85,8 @@ static int encoder_text(int fd, long long size)
     for (off = 0; off < size && off < 8LL * 1024 * 1024; off += 65000) {
         k = size - off > (long long)sizeof b ? (long)sizeof b
             : (long)(size - off);
-        if (at_read(fd, off, b, k) < 0)
+        rc = at_read(fd, off, b, k);
+        if (rc < 0)
             return 0;
         for (i = 0; i + 12 <= k; i++) {
             for (w = 0; names[w]; w++) {
@@ -105,7 +113,8 @@ static int encoder_text(int fd, long long size)
                 note("encoder settings");
                 for (j = i; j < e; j++)
                     b[j] = ' ';
-                if (at_write(fd, off + i, b + i, e - i) < 0)
+                rc = at_write(fd, off + i, b + i, e - i);
+                if (rc < 0)
                     return -1;
                 found++;
             }
@@ -126,13 +135,15 @@ static const unsigned char xmp_uuid[16] = {
 /* udta_words: what a user-data box holds, from its boxes' names */
 static void udta_words(int fd, long long off, long long end, char *d)
 {
+    int rc;
     unsigned char h[8];
     long long size;
     int n;
 
     n = 0;
     while (off + 8 <= end && n < 200) {
-        if (at_read(fd, off, h, 8) < 0)
+        rc = at_read(fd, off, h, 8);
+        if (rc < 0)
             return;
         size = (long long)get32be(h) & 0xffffffffLL;
         if (size < 8 || off + size > end)
@@ -155,7 +166,9 @@ static void udta_words(int fd, long long off, long long end, char *d)
 /* mp4_free: a box becomes "free" with only zeros in it */
 static int mp4_free(int fd, long long off, long long hdr, long long size)
 {
-    if (at_write(fd, off + 4, (const unsigned char *)"free", 4) < 0)
+    int rc;
+    rc = at_write(fd, off + 4, (const unsigned char *)"free", 4);
+    if (rc < 0)
         return -1;
     return at_zero(fd, off + hdr, size - hdr);
 }
@@ -164,6 +177,7 @@ static int mp4_free(int fd, long long off, long long hdr, long long size)
 static int mp4_program(int fd, long long off, long long hdr,
     long long size)
 {
+    int rc;
     static const char *video[] = {
         "avc1", "avc3", "hvc1", "hev1", "mp4v", "vp09", "av01", "s263",
         "jpeg", "mjpa", "apcn", "apch", "apcs", "apco", "ap4h", 0
@@ -174,22 +188,26 @@ static int mp4_program(int fd, long long off, long long hdr,
     int i;
 
     end = off + size;
-    if (at_read(fd, off + hdr + 4, h, 4) < 0)
+    rc = at_read(fd, off + hdr + 4, h, 4);
+    if (rc < 0)
         return 0;
     count = get32be(h);
     e = off + hdr + 8;
     while (count > 0 && e + 8 <= end) {
-        if (at_read(fd, e, h, 8) < 0)
+        rc = at_read(fd, e, h, 8);
+        if (rc < 0)
             return 0;
         esize = (long long)get32be(h) & 0xffffffffLL;
         if (esize < 8 || e + esize > end)
             return 0;
         for (i = 0; video[i]; i++) {
-            if (is_word(h + 4, video[i]) && esize >= 82 &&
-                any_set(fd, e + 50, 32))
-            {
+            if (!is_word(h + 4, video[i]) || esize < 82)
+                continue;
+            rc = any_set(fd, e + 50, 32);
+            if (rc) {
                 note("program");
-                if (at_zero(fd, e + 50, 32) < 0)
+                rc = at_zero(fd, e + 50, 32);
+                if (rc < 0)
                     return -1;
             }
         }
@@ -202,13 +220,20 @@ static int mp4_program(int fd, long long off, long long hdr,
 /* mp4_dates: the creation and change dates of mvhd, tkhd, mdhd */
 static int mp4_dates(int fd, long long off, long long hdr, long long size)
 {
+    int rc;
     unsigned char v;
     long long n;
 
-    if (size < hdr + 4 || at_read(fd, off + hdr, &v, 1) < 0)
+    if (size < hdr + 4)
+        return 0;
+    rc = at_read(fd, off + hdr, &v, 1);
+    if (rc < 0)
         return 0;
     n = v == 1 ? 16 : 8;
-    if (size < hdr + 4 + n || !any_set(fd, off + hdr + 4, n))
+    if (size < hdr + 4 + n)
+        return 0;
+    rc = any_set(fd, off + hdr + 4, n);
+    if (!rc)
         return 0;
     note("dates");
     return at_zero(fd, off + hdr + 4, n);
@@ -216,6 +241,7 @@ static int mp4_dates(int fd, long long off, long long hdr, long long size)
 
 static int mp4_walk(int fd, long long off, long long end, int depth)
 {
+    int rc;
     unsigned char h[24];
     long long size, hdr;
     char d[104];
@@ -223,14 +249,18 @@ static int mp4_walk(int fd, long long off, long long end, int depth)
     int r;
 
     while (off + 8 <= end) {
-        if (at_read(fd, off, h, 8) < 0) {
+        rc = at_read(fd, off, h, 8);
+        if (rc < 0) {
             why = "a broken MP4 (cut short)";
             return -1;
         }
         size = (long long)get32be(h) & 0xffffffffLL;
         hdr = 8;
         if (size == 1) {
-            if (off + 16 > end || at_read(fd, off + 8, h + 8, 8) < 0) {
+            rc = -1;
+            if (off + 16 <= end)
+                rc = at_read(fd, off + 8, h + 8, 8);
+            if (rc < 0) {
                 why = "a broken MP4";
                 return -1;
             }
@@ -270,9 +300,8 @@ static int mp4_walk(int fd, long long off, long long end, int depth)
             note2("tags", d);
             r = mp4_free(fd, off, hdr, size);
         } else if (is_word(t, "uuid") && depth == 0 && size >= hdr + 16) {
-            if (at_read(fd, off + hdr, h + 8, 16) == 0 &&
-                !memcmp(h + 8, xmp_uuid, 16))
-            {
+            rc = at_read(fd, off + hdr, h + 8, 16);
+            if (rc == 0 && !memcmp(h + 8, xmp_uuid, 16)) {
                 note("XMP");
                 r = mp4_free(fd, off, hdr, size);
             }
@@ -292,7 +321,9 @@ static int mp4_walk(int fd, long long off, long long end, int depth)
 
 int clean_mp4(int fd, long long size)
 {
-    if (mp4_walk(fd, 0, size, 0) < 0)
+    int rc;
+    rc = mp4_walk(fd, 0, size, 0);
+    if (rc < 0)
         return -1;
     return encoder_text(fd, size);
 }
@@ -323,12 +354,16 @@ struct elem {
 /* ebml_head: the element header at off */
 static int ebml_head(int fd, long long off, long long end, struct elem *e)
 {
+    int rc;
     unsigned char b[12];
     long k;
     int i, mask;
 
     k = end - off < 12 ? (long)(end - off) : 12;
-    if (k < 2 || at_read(fd, off, b, k) < 0)
+    if (k < 2)
+        return -1;
+    rc = at_read(fd, off, b, k);
+    if (rc < 0)
         return -1;
     e->idlen = 1;
     mask = 0x80;
@@ -360,6 +395,7 @@ static int ebml_head(int fd, long long off, long long end, struct elem *e)
 /* ebml_void: the element becomes a Void element of the same length */
 static int ebml_void(int fd, long long off, struct elem *e)
 {
+    int rc;
     unsigned char h[9];
     long long v;
     int k, i;
@@ -374,7 +410,8 @@ static int ebml_void(int fd, long long off, struct elem *e)
         h[i] = (unsigned char)v;
         v >>= 8;
     }
-    if (at_write(fd, off, h, 1 + k) < 0)
+    rc = at_write(fd, off, h, 1 + k);
+    if (rc < 0)
         return -1;
     return at_zero(fd, off + 1 + k,
         e->size + (e->idlen + e->szlen - 1 - k));
@@ -383,13 +420,15 @@ static int ebml_void(int fd, long long off, struct elem *e)
 /* mkv_children: walk the elements in off..end, doing what each wants */
 static int mkv_children(int fd, long long off, long long end, int level)
 {
+    int rc;
     struct elem e;
     unsigned char id[4];
     long long data;
     int r;
 
     while (off < end) {
-        if (ebml_head(fd, off, end, &e) < 0) {
+        rc = ebml_head(fd, off, end, &e);
+        if (rc < 0) {
             why = "a broken Matroska file";
             return -1;
         }
@@ -425,7 +464,8 @@ static int mkv_children(int fd, long long off, long long end, int level)
         } else if (level == 2 && (e.id == ID_DATEUTC ||
             e.id == ID_MUXAPP || e.id == ID_WRITEAPP))
         {
-            if (any_set(fd, data, e.size)) {
+            rc = any_set(fd, data, e.size);
+            if (rc) {
                 note(e.id == ID_DATEUTC ? "date" : "program");
                 r = at_zero(fd, data, e.size);
             }
@@ -433,12 +473,14 @@ static int mkv_children(int fd, long long off, long long end, int level)
             r = mkv_children(fd, data, data + e.size, 4);
             if (r == 1)
                 r = ebml_void(fd, off, &e);
-        } else if (level == 4 && e.id == ID_SEEKID && e.size == 4 &&
-            at_read(fd, data, id, 4) == 0)
-        {
+        } else if (level == 4 && e.id == ID_SEEKID && e.size == 4) {
             /* a pointer to the tags or attachments goes with them */
-            if (get32be(id) == ID_TAGS || get32be(id) == ID_ATTACH)
+            rc = at_read(fd, data, id, 4);
+            if (rc == 0 &&
+                (get32be(id) == ID_TAGS || get32be(id) == ID_ATTACH))
+            {
                 return 1;
+            }
         }
         if (r < 0)
             return -1;
@@ -463,13 +505,15 @@ int clean_mkv(int fd, long long size)
 static void id3_words(int fd, long long off, long long end, int v4,
     char *d)
 {
+    int rc;
     unsigned char h[10];
     long long size;
     int n;
 
     n = 0;
     while (off + 10 <= end && n < 300) {
-        if (at_read(fd, off, h, 10) < 0 || h[0] == 0)
+        rc = at_read(fd, off, h, 10);
+        if (rc < 0 || h[0] == 0)
             return;
         if (v4)
             size = (long long)(h[4] & 127) << 21 | (h[5] & 127) << 14 |
@@ -498,14 +542,16 @@ static void id3_words(int fd, long long off, long long end, int v4,
 static int id3_clean(int fd, long long off, long long fsize,
     long long *total)
 {
+    int rc;
     unsigned char h[10];
     long long body;
     char d[104];
     unsigned char flags;
 
-    if (off + 10 > fsize || at_read(fd, off, h, 10) < 0 ||
-        !is_word(h, "ID3"))
-    {
+    rc = -1;
+    if (off + 10 <= fsize)
+        rc = at_read(fd, off, h, 10);
+    if (rc < 0 || !is_word(h, "ID3")) {
         *total = 0;
         return 0;
     }
@@ -516,17 +562,22 @@ static int id3_clean(int fd, long long off, long long fsize,
         why = "a broken ID3 tag";
         return -1;
     }
-    if (!any_set(fd, off + 10, body > 16 ? 16 : body) && !(h[5] & 0x40))
+    rc = any_set(fd, off + 10, body > 16 ? 16 : body);
+    if (!rc && !(h[5] & 0x40))
         return 0;   /* only padding already */
     d[0] = 0;
     if (h[3] == 3 || h[3] == 4)
         id3_words(fd, off + 10, off + 10 + body, h[3] == 4, d);
     note2("ID3 tags", d);
     flags = h[5] & 0x10;
-    if (at_write(fd, off + 5, &flags, 1) < 0)
+    rc = at_write(fd, off + 5, &flags, 1);
+    if (rc < 0)
         return -1;
-    if ((h[5] & 0x10) && at_write(fd, off + 10 + body + 5, &flags, 1) < 0)
-        return -1;
+    if (h[5] & 0x10) {
+        rc = at_write(fd, off + 10 + body + 5, &flags, 1);
+        if (rc < 0)
+            return -1;
+    }
     return at_zero(fd, off + 10, body);
 }
 
@@ -640,11 +691,14 @@ int clean_mp3(int fd, long long size)
     r = id3_clean(fd, 0, size, &total);
     if (r < 0)
         return -1;
-    if (size - total >= 128 && at_read(fd, size - 128, t, 3) == 0 &&
-        is_word(t, "TAG"))
-    {
+    r = -1;
+    if (size - total >= 128)
+        r = at_read(fd, size - 128, t, 3);
+    if (r == 0 && is_word(t, "TAG")) {
         note("ID3v1 tags");
-        if (!dry_run && ftruncate(fd, (off_t)(size - 128)) < 0) {
+        if (!dry_run)
+            r = ftruncate(fd, (off_t)(size - 128));
+        if (r < 0) {
             why = "could not shorten it";
             return -1;
         }
@@ -677,12 +731,16 @@ int clean_mp3(int fd, long long size)
 /* vorbis_words: the names in a Vorbis comment block (NAME=value) */
 static void vorbis_words(int fd, long long off, long long len, char *d)
 {
+    int rc;
     static unsigned char b[65536];
     char w[24];
     long k, i, n, count, c, j, s;
 
     k = len > (long long)sizeof b ? (long)sizeof b : (long)len;
-    if (k < 8 || at_read(fd, off, b, k) < 0)
+    if (k < 8)
+        return;
+    rc = at_read(fd, off, b, k);
+    if (rc < 0)
         return;
     i = 4 + get32le(b);     /* past the encoder's name */
     if (i < 4 || i + 4 > k)
@@ -712,6 +770,7 @@ static void vorbis_words(int fd, long long off, long long len, char *d)
 
 int clean_flac(int fd, long long size)
 {
+    int rc;
     unsigned char h[4];
     long long off, len;
     char d[104];
@@ -720,13 +779,17 @@ int clean_flac(int fd, long long size)
     r = id3_clean(fd, 0, size, &off);
     if (r < 0)
         return -1;
-    if (at_read(fd, off, h, 4) < 0 || !is_word(h, "fLaC")) {
+    rc = at_read(fd, off, h, 4);
+    if (rc < 0 || !is_word(h, "fLaC")) {
         why = "a broken FLAC file";
         return -1;
     }
     off += 4;
     for (;;) {
-        if (off + 4 > size || at_read(fd, off, h, 4) < 0) {
+        rc = -1;
+        if (off + 4 <= size)
+            rc = at_read(fd, off, h, 4);
+        if (rc < 0) {
             why = "a broken FLAC file";
             return -1;
         }
@@ -747,11 +810,11 @@ int clean_flac(int fd, long long size)
                 note2("tags", d);
             }
             h[0] = (unsigned char)((h[0] & 0x80) | 1);  /* padding */
-            if (at_write(fd, off, h, 1) < 0 ||
-                at_zero(fd, off + 4, len) < 0)
-            {
+            rc = at_write(fd, off, h, 1);
+            if (rc == 0)
+                rc = at_zero(fd, off + 4, len);
+            if (rc < 0)
                 return -1;
-            }
         }
         if (h[0] & 0x80)
             break;
@@ -764,18 +827,21 @@ int clean_flac(int fd, long long size)
 
 int clean_riff(int fd, long long size)
 {
+    int rc;
     unsigned char h[12];
     long long off, end, len;
     const char *what;
 
-    if (at_read(fd, 4, h, 4) < 0)
+    rc = at_read(fd, 4, h, 4);
+    if (rc < 0)
         return -1;
     end = 8 + ((long long)get32le(h) & 0xffffffffLL);
     if (end > size)
         end = size;
     off = 12;
     while (off + 8 <= end) {
-        if (at_read(fd, off, h, off + 12 <= end ? 12 : 8) < 0) {
+        rc = at_read(fd, off, h, off + 12 <= end ? 12 : 8);
+        if (rc < 0) {
             why = "a broken RIFF file";
             return -1;
         }
@@ -795,11 +861,11 @@ int clean_riff(int fd, long long size)
                 return -1;
             }
             note(what);
-            if (at_write(fd, off, (const unsigned char *)"JUNK", 4) < 0 ||
-                at_zero(fd, off + 8, len) < 0)
-            {
+            rc = at_write(fd, off, (const unsigned char *)"JUNK", 4);
+            if (rc == 0)
+                rc = at_zero(fd, off + 8, len);
+            if (rc < 0)
                 return -1;
-            }
         }
         off += 8 + len + (len & 1);
     }
@@ -886,6 +952,7 @@ static const unsigned char empty_exif[18] = {
 static int heif_blank(int fd, long long fsize, const unsigned char *p,
     long n, struct item *it, long long idat)
 {
+    int rc;
     static unsigned char b[65536];
     int v, osz, lsz, bsz, isz, method;
     long pos, count, i, ext, k, j;
@@ -937,31 +1004,38 @@ static int heif_blank(int fd, long long fsize, const unsigned char *p,
                 if (!has_text(fd, off, elen, "<"))
                     continue;
                 note("XMP");
-                if (at_fill(fd, off, elen, ' ') < 0)
+                rc = at_fill(fd, off, elen, ' ');
+                if (rc < 0)
                     return -1;
                 continue;
             }
             j = elen > (long long)sizeof b ? (long)sizeof b : (long)elen;
-            if (at_read(fd, off, b, j) < 0)
+            rc = at_read(fd, off, b, j);
+            if (rc < 0)
                 return -1;
-            if (first && elen >= 18 && !memcmp(b, empty_exif, 18) &&
-                !any_set(fd, off + 18, elen - 18))
-            {
-                first = 0;
-                continue;   /* clean already */
+            if (first && elen >= 18 && !memcmp(b, empty_exif, 18)) {
+                rc = any_set(fd, off + 18, elen - 18);
+                if (!rc) {
+                    first = 0;
+                    continue;   /* clean already */
+                }
             }
-            if (!first && !any_set(fd, off, elen))
-                continue;
+            if (!first) {
+                rc = any_set(fd, off, elen);
+                if (!rc)
+                    continue;
+            }
             if (first && j >= 4 && 4 + get32be(b) < j)
                 exif_note(b + 4 + get32be(b), j - 4 - get32be(b), 0);
             else
                 note("EXIF");
-            if (at_zero(fd, off, elen) < 0)
+            rc = at_zero(fd, off, elen);
+            if (rc < 0)
                 return -1;
-            if (first && elen >= 18 &&
-                at_write(fd, off, empty_exif, 18) < 0)
-            {
-                return -1;
+            if (first && elen >= 18) {
+                rc = at_write(fd, off, empty_exif, 18);
+                if (rc < 0)
+                    return -1;
             }
             first = 0;
         }
@@ -971,6 +1045,7 @@ static int heif_blank(int fd, long long fsize, const unsigned char *p,
 
 int clean_heif(int fd, long long size)
 {
+    int rc;
     unsigned char h[16];
     unsigned char *m;
     struct item it[MAX_ITEMS];
@@ -981,7 +1056,8 @@ int clean_heif(int fd, long long size)
     off = 0;
     m = 0;
     while (off + 8 <= size) {
-        if (at_read(fd, off, h, 8) < 0)
+        rc = at_read(fd, off, h, 8);
+        if (rc < 0)
             break;
         bsize = (long long)get32be(h) & 0xffffffffLL;
         if (bsize == 0)
@@ -995,7 +1071,10 @@ int clean_heif(int fd, long long size)
             }
             msize = (long)bsize;
             m = malloc(msize);
-            if (!m || at_read(fd, off, m, msize) < 0) {
+            rc = -1;
+            if (m)
+                rc = at_read(fd, off, m, msize);
+            if (rc < 0) {
                 free(m);
                 why = "can't read it";
                 return -1;
@@ -1037,13 +1116,15 @@ int clean_heif(int fd, long long size)
 
 long long mkv_last(int fd, long long size)
 {
+    int rc;
     struct elem e;
     long long off, last, data;
 
     off = 0;
     last = -1;
     while (off < size) {
-        if (ebml_head(fd, off, size, &e) < 0)
+        rc = ebml_head(fd, off, size, &e);
+        if (rc < 0)
             return -1;
         data = off + e.idlen + e.szlen;
         if (e.size < 0) {

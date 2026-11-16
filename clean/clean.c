@@ -291,13 +291,15 @@ int at_write(int fd, long long off, const unsigned char *p, long n)
 
 int at_fill(int fd, long long off, long long n, int c)
 {
+    int rc;
     static unsigned char b[65536];
     long k;
 
     memset(b, c, sizeof b);
     while (n > 0) {
         k = n > (long long)sizeof b ? (long)sizeof b : (long)n;
-        if (at_write(fd, off, b, k) < 0)
+        rc = at_write(fd, off, b, k);
+        if (rc < 0)
             return -1;
         off += k;
         n -= k;
@@ -346,6 +348,7 @@ static int read_file(int fd, long long size, struct buf *b)
 /* copy_file: from to to (made new, mode 600); -1 on error */
 static int copy_file(const char *from, const char *to, int excl)
 {
+    int rc;
     static unsigned char block[65536];
     int in, out, flags;
     long r;
@@ -362,7 +365,8 @@ static int copy_file(const char *from, const char *to, int excl)
     }
     bad = 0;
     while ((r = read(in, block, sizeof block)) > 0) {
-        if (write_all(out, block, r) < 0) {
+        rc = write_all(out, block, r);
+        if (rc < 0) {
             bad = 1;
             break;
         }
@@ -466,11 +470,13 @@ static void stamp(char *s)
 /* backup: copy path into the backup directory and add it to the list */
 static int backup(const char *path, const char *abs)
 {
+    int rc;
     char name[64], file[4200], list[4200];
     char st[20];
     int fd, r;
 
-    if (mkdirs(backup_dir) < 0) {
+    rc = mkdirs(backup_dir);
+    if (rc < 0) {
         why = "can't make the backup directory";
         return -1;
     }
@@ -529,6 +535,7 @@ static void set_times(const char *path, const struct stat *st)
 static int replace(const char *path, const unsigned char *p, long n,
     int mode)
 {
+    int rc;
     char tmp[4200];
     int fd, r;
 
@@ -539,7 +546,8 @@ static int replace(const char *path, const unsigned char *p, long n,
         return -1;
     }
     r = write_all(fd, p, n);
-    if (close(fd) < 0)
+    rc = close(fd);
+    if (rc < 0)
         r = -1;
     if (r == 0)
         r = rename(tmp, path);
@@ -567,12 +575,16 @@ static long id3_size(const unsigned char *h)
 
 static int kind_of(int fd, long long size)
 {
+    int rc;
     unsigned char h[64], f[4];
     long n;
 
     memset(h, 0, sizeof h);
     n = size < (long long)sizeof h ? (long)size : (long)sizeof h;
-    if (n < 12 || at_read(fd, 0, h, n) < 0) {
+    rc = -1;
+    if (n >= 12)
+        rc = at_read(fd, 0, h, n);
+    if (rc < 0) {
         why = "too short to be anything clean knows";
         return k_unknown;
     }
@@ -597,12 +609,10 @@ static int kind_of(int fd, long long size)
         return k_ogg;
     if (is_word(h, "ID3")) {
         n = id3_size(h);
-        if (n + 4 <= size && at_read(fd, n, f, 4) == 0 &&
-            is_word(f, "fLaC"))
-        {
-            return k_flac;
-        }
-        return k_mp3;
+        rc = -1;
+        if (n + 4 <= size)
+            rc = at_read(fd, n, f, 4);
+        return rc == 0 && is_word(f, "fLaC") ? k_flac : k_mp3;
     }
     if (h[0] == 0xff && (h[1] & 0xe0) == 0xe0)
         return k_mp3;
@@ -651,6 +661,7 @@ static int run_in_memory(int kind, struct buf *in, struct buf *out)
 static int clean_in_memory(const char *path, const char *abs, int fd,
     struct stat *st, int kind)
 {
+    int rc;
     struct buf in, out, again;
     int r, changed;
 
@@ -661,7 +672,8 @@ static int clean_in_memory(const char *path, const char *abs, int fd,
         why = "too big (more than 256 MB)";
         return -1;
     }
-    if (read_file(fd, st->st_size, &in) < 0) {
+    rc = read_file(fd, st->st_size, &in);
+    if (rc < 0) {
         why = "can't read it";
         buf_free(&in);
         return -1;
@@ -671,7 +683,8 @@ static int clean_in_memory(const char *path, const char *abs, int fd,
     if (r == 0 && notes) {
         save_notes();
         notes = 0;
-        if (run_in_memory(kind, &out, &again) == 0 && !same_notes())
+        rc = run_in_memory(kind, &out, &again);
+        if (rc == 0 && !same_notes())
             changed = 1;
         restore_notes();
         buf_free(&again);
@@ -709,6 +722,7 @@ static int run_in_place(int fd, long long size, int kind)
 static int clean_in_place(const char *path, const char *abs, int fd,
     struct stat *st, int kind)
 {
+    int rc;
     struct stat now;
     int r, wfd, found;
 
@@ -727,13 +741,19 @@ static int clean_in_place(const char *path, const char *abs, int fd,
         return -1;
     }
     notes = 0;
-    r = found ? run_in_place(wfd, st->st_size, kind) : 0;
-    if (r == 0 && fstat(wfd, &now) == 0 &&
-        rand_place(kind, wfd, now.st_size) < 0)
-    {
-        r = -1;
+    r = 0;
+    if (found)
+        r = run_in_place(wfd, st->st_size, kind);
+    if (r == 0) {
+        rc = fstat(wfd, &now);
+        if (rc == 0) {
+            rc = rand_place(kind, wfd, now.st_size);
+            if (rc < 0)
+                r = -1;
+        }
     }
-    if (close(wfd) < 0 && r == 0) {
+    rc = close(wfd);
+    if (rc < 0 && r == 0) {
         why = "could not write";
         r = -1;
     }
@@ -746,6 +766,7 @@ static int clean_in_place(const char *path, const char *abs, int fd,
 
 static int clean_file(const char *path)
 {
+    int rc;
     struct stat st;
     char abs[4096];
     int fd, kind, r;
@@ -767,7 +788,10 @@ static int clean_file(const char *path)
         fprintf(stderr, "clean: %s: not a file\n", path);
         return -1;
     }
-    if (strchr(path, '\n') || abs_path(path, abs, sizeof abs) < 0) {
+    rc = -1;
+    if (!strchr(path, '\n'))
+        rc = abs_path(path, abs, sizeof abs);
+    if (rc < 0) {
         fprintf(stderr, "clean: %s: can't use this name\n", path);
         return -1;
     }
@@ -805,6 +829,7 @@ static int clean_file(const char *path)
 /* undo: the newest backup of path back in its place */
 static int undo_file(const char *path)
 {
+    int rc;
     char abs[4096], list[4200], from[4200], name[64], tmp[4200];
     struct stat now;
     struct buf b;
@@ -813,7 +838,8 @@ static int undo_file(const char *path)
 
     memset(&b, 0, sizeof b);
     name[0] = 0;
-    if (abs_path(path, abs, sizeof abs) < 0)
+    rc = abs_path(path, abs, sizeof abs);
+    if (rc < 0)
         return -1;
     join(list, sizeof list, backup_dir, "/list");
     fd = open(list, O_RDONLY);
@@ -850,7 +876,10 @@ static int undo_file(const char *path)
     copy_str(from + strlen(from), name, sizeof from - strlen(from));
     join(tmp, sizeof tmp, path, ".clean-new");
     r = copy_file(from, tmp, 1);
-    if (r == 0 && stat(path, &now) == 0)
+    rc = -1;
+    if (r == 0)
+        rc = stat(path, &now);
+    if (rc == 0)
         chmod(tmp, now.st_mode & 07777);
     if (r == 0)
         r = rename(tmp, path);

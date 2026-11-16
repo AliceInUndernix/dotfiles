@@ -53,13 +53,18 @@ static int fix_crc(int fd, long long off)
 {
     static unsigned char p[27 + 255 + 255 * 255];
     long n, i;
+    int r;
 
-    if (at_read(fd, off, p, 27) < 0 || at_read(fd, off + 27, p + 27, p[26]))
+    r = at_read(fd, off, p, 27);
+    if (r == 0)
+        r = at_read(fd, off + 27, p + 27, p[26]);
+    if (r < 0)
         return -1;
     n = 27 + p[26];
     for (i = 0; i < p[26]; i++)
         n += p[27 + i];
-    if (at_read(fd, off + 27 + p[26], p + 27 + p[26], n - 27 - p[26]) < 0)
+    r = at_read(fd, off + 27 + p[26], p + 27 + p[26], n - 27 - p[26]);
+    if (r < 0)
         return -1;
     memset(p + 22, 0, 4);
     put32le(p + 22, (long)ogg_crc(p, n));
@@ -160,14 +165,15 @@ static int tags(int fd, struct stream *s, int mode)
     if (!b)
         return 0;
     pos = 0;
-    for (i = 0; i < s->nex; i++) {
-        if (at_read(fd, s->ex[i].off, b + pos, s->ex[i].len) < 0) {
-            free(b);
-            return 0;
-        }
+    r = 0;
+    for (i = 0; i < s->nex && r == 0; i++) {
+        r = at_read(fd, s->ex[i].off, b + pos, s->ex[i].len);
         pos += s->ex[i].len;
     }
-    r = 0;
+    if (r < 0) {
+        r = 0;
+        goto quit;
+    }
     if (memcmp(b, magic[s->codec], m))
         goto quit;
     used = m + 8 + (s->codec == 1 ? 1 : 0);
@@ -209,16 +215,19 @@ static int ogg_walk(int fd, long long size, int mode)
     struct stream *s;
     long long off, pos;
     long serial, data;
-    int nst, i, nseg, r, len;
+    int nst, i, nseg, r, len, k;
 
     memset(st, 0, sizeof st);
     nst = 0;
     r = 0;
     off = 0;
     while (off + 27 <= size && r >= 0) {
-        if (at_read(fd, off, h, 27) < 0 || !is_word(h, "OggS") ||
-            at_read(fd, off + 27, h + 27, h[26]) < 0)
-        {
+        k = at_read(fd, off, h, 27);
+        if (k == 0 && is_word(h, "OggS"))
+            k = at_read(fd, off + 27, h + 27, h[26]);
+        else
+            k = -1;
+        if (k < 0) {
             why = "a broken Ogg file";
             r = -1;
             break;
@@ -237,7 +246,10 @@ static int ogg_walk(int fd, long long size, int mode)
             s = &st[nst];
             nst++;
             s->serial = serial;
-            if (nseg && at_read(fd, off + 27 + nseg, id, 8) == 0) {
+            k = -1;
+            if (nseg)
+                k = at_read(fd, off + 27 + nseg, id, 8);
+            if (k == 0) {
                 if (!memcmp(id, "\001vorbis", 7))
                     s->codec = 1;
                 else if (!memcmp(id, "OpusHead", 8))

@@ -25,9 +25,11 @@ static int rand_byte(void)
 
     if (pool_left == 0) {
         fd = open("/dev/urandom", O_RDONLY);
-        r = fd < 0 ? -1 : read(fd, pool, sizeof pool);
-        if (fd >= 0)
+        r = -1;
+        if (fd >= 0) {
+            r = read(fd, pool, sizeof pool);
             close(fd);
+        }
         if (r != (long)sizeof pool) {
             fprintf(stderr, "clean: can't read /dev/urandom\n");
             exit(1);
@@ -58,24 +60,19 @@ void rand_bytes(unsigned char *p, long n)
         p[i] = (unsigned char)rand_byte();
 }
 
-static int rand_fill(unsigned char *p, long n)
-{
-    rand_bytes(p, n);
-    return 0;
-}
-
 /* ------------------------------------------------------------ in memory */
 
 /* JPEG: 0 to 31 fill bytes (0xFF) before each marker up to the picture
  * data; decoders skip them */
 static int rand_jpeg(struct buf *in, struct buf *out)
 {
-    long i, len, k;
+    long i, len, k, n;
 
     buf_put(out, in->p, 2);
     i = 2;
     while (i + 4 <= in->n && in->p[i] == 0xff) {
-        for (k = rnd(32); k > 0; k--)
+        n = rnd(32);
+        for (k = 0; k < n; k++)
             buf_byte(out, 0xff);
         len = get16be(in->p + i + 2);
         if (in->p[i + 1] == 0xda || len < 2 || i + 2 + len > in->n)
@@ -301,12 +298,14 @@ static long long last_box(int fd, long long size, long long *bsize)
 {
     unsigned char h[16];
     long long off, s, last;
+    int r;
 
     off = 0;
     last = -1;
     *bsize = 0;
     while (off + 8 <= size) {
-        if (at_read(fd, off, h, 16 <= size - off ? 16 : 8) < 0)
+        r = at_read(fd, off, h, 16 <= size - off ? 16 : 8);
+        if (r < 0)
             return -1;
         s = (long long)get32be(h) & 0xffffffffLL;
         if (s == 1 && size - off >= 16)
@@ -323,24 +322,28 @@ static long long last_box(int fd, long long size, long long *bsize)
     return off == size ? last : -1;
 }
 
+/* MP4, HEIF: a free box of 32 random bytes at the end */
 static int rand_box(int fd, long long size)
 {
     unsigned char b[40], h[8];
     long long last, bsize;
+    int r;
 
     last = last_box(fd, size, &bsize);
     if (last < 0)
         return 0;
-    if (rand_fill(b + 8, 32) < 0)
-        return 0;
-    if (bsize == 40 && at_read(fd, last, h, 8) == 0 &&
-        is_word(h + 4, "free"))
-    {
-        return at_write(fd, last + 8, b + 8, 32) < 0 ? -1 : 1;
+    rand_bytes(b + 8, 32);
+    r = -1;
+    if (bsize == 40)
+        r = at_read(fd, last, h, 8);
+    if (r == 0 && is_word(h + 4, "free")) {
+        r = at_write(fd, last + 8, b + 8, 32);
+    } else {
+        put32be(b, 40);
+        memcpy(b + 4, "free", 4);
+        r = at_write(fd, size, b, 40);
     }
-    put32be(b, 40);
-    memcpy(b + 4, "free", 4);
-    return at_write(fd, size, b, 40) < 0 ? -1 : 1;
+    return r < 0 ? -1 : 1;
 }
 
 /* Matroska: a Void element of 34 bytes at the end */
@@ -348,19 +351,23 @@ static int rand_void(int fd, long long size)
 {
     unsigned char b[34];
     long long last;
+    int r;
 
     last = mkv_last(fd, size);
     if (last < 0)
         return 0;
-    rand_fill(b + 2, 32);
-    if (last == size - 34 && at_read(fd, last, b, 2) == 0 &&
-        b[0] == 0xec && b[1] == 0xa0)
-    {
-        return at_write(fd, size - 32, b + 2, 32) < 0 ? -1 : 1;
+    r = -1;
+    if (last == size - 34)
+        r = at_read(fd, last, b, 2);
+    rand_bytes(b + 2, 32);
+    if (r == 0 && b[0] == 0xec && b[1] == 0xa0) {
+        r = at_write(fd, size - 32, b + 2, 32);
+    } else {
+        b[0] = 0xec;
+        b[1] = 0xa0;
+        r = at_write(fd, size, b, 34);
     }
-    b[0] = 0xec;
-    b[1] = 0xa0;
-    return at_write(fd, size, b, 34) < 0 ? -1 : 1;
+    return r < 0 ? -1 : 1;
 }
 
 /* FLAC: random bytes at the start of the first padding block */
@@ -368,22 +375,27 @@ static int rand_flac(int fd, long long size)
 {
     unsigned char h[10], b[32];
     long long off, len;
+    int r;
 
     off = 0;
-    if (at_read(fd, 0, h, 10) < 0)
+    r = at_read(fd, 0, h, 10);
+    if (r < 0)
         return 0;
     if (is_word(h, "ID3"))
         off = 10 + ((long long)(h[6] & 127) << 21 | (h[7] & 127) << 14 |
             (h[8] & 127) << 7 | (h[9] & 127)) + (h[5] & 0x10 ? 10 : 0);
     off += 4;
     for (;;) {
-        if (off + 4 > size || at_read(fd, off, h, 4) < 0)
+        if (off + 4 > size)
+            return 0;
+        r = at_read(fd, off, h, 4);
+        if (r < 0)
             return 0;
         len = (long long)h[1] << 16 | h[2] << 8 | h[3];
         if ((h[0] & 0x7f) == 1 && len >= 32) {
-            if (rand_fill(b, 32) < 0)
-                return 0;
-            return at_write(fd, off + 4, b, 32) < 0 ? -1 : 1;
+            rand_bytes(b, 32);
+            r = at_write(fd, off + 4, b, 32);
+            return r < 0 ? -1 : 1;
         }
         if (h[0] & 0x80)
             return 0;
@@ -396,8 +408,10 @@ static int rand_riff(int fd, long long size)
 {
     unsigned char h[8], b[40];
     long long off, len, last, llen, riff;
+    int r;
 
-    if (at_read(fd, 4, h, 4) < 0)
+    r = at_read(fd, 4, h, 4);
+    if (r < 0)
         return 0;
     riff = (long long)get32le(h) & 0xffffffffLL;
     if (8 + riff != size)
@@ -406,23 +420,32 @@ static int rand_riff(int fd, long long size)
     last = -1;
     llen = 0;
     while (off + 8 <= size) {
-        if (at_read(fd, off, h, 8) < 0)
+        r = at_read(fd, off, h, 8);
+        if (r < 0)
             return 0;
         len = (long long)get32le(h + 4) & 0xffffffffLL;
         last = off;
         llen = len;
         off += 8 + len + (len & 1);
     }
-    if (off != size || rand_fill(b + 8, 32) < 0)
+    if (off != size)
         return 0;
-    if (llen == 32 && at_read(fd, last, h, 4) == 0 && is_word(h, "JUNK"))
-        return at_write(fd, last + 8, b + 8, 32) < 0 ? -1 : 1;
+    rand_bytes(b + 8, 32);
+    r = -1;
+    if (llen == 32)
+        r = at_read(fd, last, h, 4);
+    if (r == 0 && is_word(h, "JUNK")) {
+        r = at_write(fd, last + 8, b + 8, 32);
+        return r < 0 ? -1 : 1;
+    }
     memcpy(b, "JUNK", 4);
     put32le(b + 4, 32);
-    if (at_write(fd, size, b, 40) < 0)
+    r = at_write(fd, size, b, 40);
+    if (r < 0)
         return -1;
     put32le(h, (long)(riff + 40));
-    return at_write(fd, 4, h, 4) < 0 ? -1 : 1;
+    r = at_write(fd, 4, h, 4);
+    return r < 0 ? -1 : 1;
 }
 
 /* MP3: the "private" bit of each frame header, which decoders don't
@@ -460,7 +483,7 @@ static int rand_mp3(int fd, long long size)
         }
         off += len;
     }
-    return done >= 64 ? 1 : 0;
+    return done >= 16 ? 1 : 0;   /* fewer: too likely the same */
 }
 
 /* rand_place: 1 done, 0 no room in this file, -1 error */

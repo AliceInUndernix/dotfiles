@@ -548,6 +548,7 @@ static void lengths(const unsigned char *end)
 /* unpack: the objects inside object streams */
 static int unpack(void)
 {
+    int rc;
     struct buf b;
     struct lex x;
     struct tok t, t2;
@@ -570,9 +571,8 @@ static int unpack(void)
             return -1;
         }
         memset(&b, 0, sizeof b);
-        if (inflate_zlib(o->data, o->dlen, &b, MAX_UNPACK) < 0 ||
-            unpacked + b.n > MAX_UNPACK_ALL)
-        {
+        rc = inflate_zlib(o->data, o->dlen, &b, MAX_UNPACK);
+        if (rc < 0 || unpacked + b.n > MAX_UNPACK_ALL) {
             buf_free(&b);
             why = "a PDF with a broken or too big object stream";
             return -1;
@@ -600,7 +600,10 @@ static int unpack(void)
             x.pos = first + off;
             v = parse(&x, 0);
             x.pos = save;
-            if (v && set_obj(num, v, ow) < 0)
+            rc = 0;
+            if (v)
+                rc = set_obj(num, v, ow);
+            if (rc < 0)
                 break;
         }
     }
@@ -663,6 +666,7 @@ static int drop(struct val *d, long i, int tell)
  * /Length is written as a number, so its object isn't needed */
 static void walk(struct val *v, long *stack, long *top, int stream)
 {
+    int rc;
     long i;
 
     if (!v)
@@ -684,7 +688,8 @@ static void walk(struct val *v, long *stack, long *top, int stream)
         for (i = 0; i + 1 < v->nk; i += 2) {
             if (stream && is_name(v->kids[i], "/Length"))
                 continue;
-            if (!drop(v, i, 1))
+            rc = drop(v, i, 1);
+            if (!rc)
                 walk(v->kids[i + 1], stack, top, 0);
         }
     }
@@ -727,6 +732,7 @@ static void info_note(void)
 static void put_val(struct buf *b, struct val *v, int is_stream_dict,
     long dlen)
 {
+    int rc;
     long i;
     int first;
 
@@ -755,7 +761,8 @@ static void put_val(struct buf *b, struct val *v, int is_stream_dict,
         buf_str(b, "<<");
         first = 1;
         for (i = 0; i + 1 < v->nk; i += 2) {
-            if (drop(v, i, 0))
+            rc = drop(v, i, 0);
+            if (rc)
                 continue;
             if (is_stream_dict && is_name(v->kids[i], "/Length"))
                 continue;
@@ -777,6 +784,7 @@ static void put_val(struct buf *b, struct val *v, int is_stream_dict,
 
 int clean_pdf(const unsigned char *in, long n, struct buf *out)
 {
+    int rc;
     struct val *root;
     long *stack, top, i, k, count, unused, xref, hl;
     long *where;
@@ -796,7 +804,8 @@ int clean_pdf(const unsigned char *in, long n, struct buf *out)
         goto quit;
     }
     lengths(in + n);
-    if (unpack() < 0)
+    rc = unpack();
+    if (rc < 0)
         goto quit;
     lengths(in + n);
     root = dict_get(trailer, "/Root");

@@ -145,6 +145,7 @@ static const short dist_extra[30] = {
 
 static int codes(struct inf *s, struct huff *lencode, struct huff *distcode)
 {
+    int rc;
     int sym, i;
     long len, dist, from;
 
@@ -153,7 +154,8 @@ static int codes(struct inf *s, struct huff *lencode, struct huff *distcode)
         if (sym < 0)
             return -1;
         if (sym < 256) {
-            if (emit(s, sym) < 0)
+            rc = emit(s, sym);
+            if (rc < 0)
                 return -1;
             continue;
         }
@@ -171,7 +173,8 @@ static int codes(struct inf *s, struct huff *lencode, struct huff *distcode)
             return -1;
         from = s->out->n - dist;
         for (i = 0; i < len; i++) {
-            if (emit(s, s->out->p[from + i]) < 0)
+            rc = emit(s, s->out->p[from + i]);
+            if (rc < 0)
                 return -1;
         }
     }
@@ -208,6 +211,7 @@ static const short order[19] = {
 
 static int dynamic(struct inf *s)
 {
+    int rc;
     struct huff lencode, distcode;
     short length[320];
     int nlen, ndist, ncode, index, sym, len, rep, err;
@@ -221,7 +225,8 @@ static int dynamic(struct inf *s)
         length[order[index]] = (short)bits(s, 3);
     for (; index < 19; index++)
         length[order[index]] = 0;
-    if (build(&lencode, length, 19) != 0)
+    rc = build(&lencode, length, 19);
+    if (rc != 0)
         return -1;
     index = 0;
     while (index < nlen + ndist) {
