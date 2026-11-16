@@ -16,3 +16,9 @@ clean/clean-bin
 seal/*.o
 seal/seal
 seal/test/vectors
+# steno build output
+steno/*.o
+steno/steno
+steno/mkwords
+steno/words.c
+steno/test/out

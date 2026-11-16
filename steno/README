@@ -1,0 +1,140 @@
+steno - Plover's typing engine in C, for the Moonlander
+=======================================================
+
+SYNOPSIS
+
+    steno [-v] [-c CONFIG] [-p PORT]   read the keyboard, type into X
+    steno -T                           paper tape and suggestions
+    steno -l WORD|OUTLINE              look it up
+    steno -a OUTLINE TRANSLATION       add a stroke
+    steno -A                           add strokes, asking for each
+    steno -t [-c CONFIG]               strokes from stdin, print what
+                                       would be typed (for tests)
+
+DESCRIPTION
+
+steno does what Plover does while you type, and nothing else: it reads
+strokes from the Moonlander's Gemini PR serial port, looks them up in
+Dotterel's dictionaries and types the text into X. It follows Plover
+5.4.2's own code step by step (translator, formatter, orthography), so
+the same strokes give the same text; on random corpora of 9,000
+strokes the output is the same as Plover's, byte for byte.
+
+It is one static binary (about 5 MB, Plover's word list included) and
+needs nothing but the kernel and a running X: no Python, no Qt, no
+libX11 (it speaks the X protocol itself, through XTEST). It starts in
+about 0.06 s and uses about 13 MB, where Plover takes about 0.7 s and
+110 MB; a stroke takes a few microseconds.
+
+What Plover's plugins did for Dotterel is built in:
+
+    Gemini PR, reconnecting by itself when the keyboard comes back
+    plover-modal-dictionary (.modal files)
+    dotterel-modifiers.py (KHR, SH, THRA, KPW and the rest)
+    plover-stitching, plover-last-translation ({*+}, {*!} ...)
+    Dotterel's raw mode (RA*U) and UK/US switch (#SU)
+
+Dotterel's other tools (Builder, Practice, Stats ...) are not, on
+purpose: they stay in Plover.
+
+Run only one of Plover and steno: both would read the same keyboard.
+
+    steno &          start it (in X)
+    steno -v         say each stroke on stderr
+
+OPTIONS
+
+    -c FILE   settings (default ~/.config/steno/config)
+    -p PORT   the serial port; auto (default) tries /dev/ttyACM0 to
+              ttyACM9, every second until the keyboard is there
+    -T        show the paper tape, with suggestions; q quits, c clears
+    -l X      what outline X gives in each dictionary, and how text X
+              is written (shortest first)
+    -a O T    add outline O -> T to the user dictionary; says first
+              what O gives now and how T is written already
+    -A        the same, asking for one outline and translation after
+              another (empty outline: done). To stroke the outline,
+              turn on raw mode (RA*U) and back off for the text.
+    -t        test mode: one stroke or outline a line on stdin; prints
+              B n (backspaces), S text, K combo
+    -v        verbose
+    -h        help
+
+SETTINGS
+
+One a line, # for comments (see config, which install.sh links to
+~/.config/steno/config):
+
+    port auto|PATH           the keyboard
+    dictionaries DIR         where dict names are looked for
+    user FILE                a dictionary, and where -a and -A write;
+                             made empty when it isn't there
+    dict NAME                a dictionary (.json, .modal, or
+                             dotterel-modifiers.py); the first wins
+    data DIR                 Dotterel's data (uk_to_us.json); default
+                             DIR/../data of dictionaries
+    undo N                   strokes * can undo (100)
+    start_capitalized yes|no
+    start_attached yes|no
+    command NAME SHELL...    {PLOVER:NAME} runs SHELL with /bin/sh
+
+The commands Plover itself knows: {PLOVER:TOGGLE}, RESUME, SUSPEND
+(each also forgets what was typed, for undo) and QUIT.
+
+A dictionary that changes on disk (steno -a, or an edit by hand) is
+read again at the next stroke; one that can't be read keeps its old
+contents.
+
+PAPER TAPE AND SUGGESTIONS
+
+steno -T shows each stroke in the paper tape's columns, what it wrote,
+and, below, the shorter ways of writing the last words when there are
+some:
+
+    #STKPWHRAO*EUFRPBLGTSDZ  translation  q quit  c clear
+             O     PB        on
+                             on  -PB  AUPB  OPB
+      T   H                  this
+                             on this  THOPB
+
+The engine sends it one line a stroke through a FIFO,
+$XDG_STATE_HOME/steno/tape (mode 0600, in a 0700 directory), and only
+while steno -T has it open. Nothing is written to disk, and without
+steno -T nothing is sent at all. Whatever you type passes through it,
+so it is yours only; don't run steno -T where others see the screen.
+
+PRIVACY
+
+No network, no log file, no history kept on disk: what you typed lives
+in memory for undo (100 strokes) and is gone when steno stops. -v
+prints strokes to stderr; leave it off where stderr is kept.
+
+KNOWN DIFFERENCES FROM PLOVER
+
+    {=...} (Plover's custom transformers) and retro currency
+        ({*($c)}) are not there.
+    Upper and lower case of letters outside Latin-1, Latin
+        Extended-A, Greek and Cyrillic are left as they are.
+    A word longer than 500 bytes is cut.
+    TOGGLE, RESUME and SUSPEND forget the history (Plover keeps it).
+
+FILES
+
+    main.c       settings, commands, the serial port, the main loop
+    dict.c       strokes, dictionaries, modal and modifier dictionaries
+    translate.c  Plover's translator: longest match, undo, macros
+    format.c     Plover's formatter: spacing, case, metas
+    ortho.c      orthography: a small regex engine and Plover's rules
+    x11.c        the X protocol: XTEST, the keymap, spare keys
+    tools.c      -T, -l, -a, -A
+    mkwords.c    builds words.c from words.txt at build time
+    words.txt    Plover's American English word list (for orthography)
+    test/        make test: a small corpus checked against Plover
+
+LICENCE
+
+steno is a port of Plover's code (https://github.com/openstenoproject/
+plover), so it is under Plover's licence, the GNU GPL version 2 or
+later. Plover's copyright belongs to its authors, who are named in
+Plover's own sources; the port is by the owner of this repo. words.txt
+is Plover's american_english_words.txt, unchanged.

@@ -1,0 +1,19 @@
+{
+"KAT": "cat",
+"-S": "{^s}",
+"-G": "{^ing}",
+"TPH-FL": "{^}\n{^}{-|}",
+"TP-PL": "{.}",
+"KW-BG": "{,}",
+"HAEPB": "{^}-{^}",
+"KR-RB": "{-|}",
+"TKPWO": "go",
+"TKPWO*ER": "{^ing}",
+"TRAOEU": "try",
+"-D": "{^ed}",
+"HAP/PEU": "happy",
+"-PBS": "{^ness}",
+"A*": "{&a}",
+"PW*": "{&b}",
+"TKPWHR-PB": "{^}\"quoted\\text"
+}

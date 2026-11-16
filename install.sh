@@ -48,7 +48,7 @@ umask 022
 
 DOTFILES=$(cd "$(dirname "$0")" && pwd)
 STAMP=$(date +%Y%m%d-%H%M%S)
-PARTS="ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver moonlander plover net icecat chromium clean seal"
+PARTS="ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver moonlander plover net icecat chromium clean seal steno"
 # only when named (or numbered): not in "all" or without arguments
 ONLY_NAMED="icecat chromium"
 
@@ -489,6 +489,20 @@ install_clean() { build_suckless clean; }
 # (see seal/README). Our own C program, built like the suckless tools;
 # unseal is a link to seal.
 install_seal() { build_suckless seal; }
+
+# steno: our own steno engine, in the way of Plover, in C (see
+# steno/README). Built like the suckless tools. It reads the
+# dictionaries of Plover's Dotterel clone (part plover, which also puts
+# you in the serial port's group) and keeps the strokes you add in
+# ~/.system/share/steno/user.json. Plover stays: run one at a time.
+install_steno() {
+	build_suckless steno
+	userdir "$CONFIG/steno"
+	link "$DOTFILES/steno/config" "$CONFIG/steno/config"
+	userdir "$DATA/steno"
+	[ -d "$PLOVER_DIR/dotterel/plover-dotterel/plover_dotterel/dictionaries" ] ||
+		warn "steno reads Dotterel's dictionaries from Plover's clone: ./install.sh plover"
+}
 
 # WebArchiver: archives whole websites (see webarchiver/README). Built
 # and installed like the suckless tools; it runs wget for every download.
@@ -1019,7 +1033,7 @@ ck_part() {
 	tmux|flameshot|mpv|sioyek|wiremix|btop)
 		ck_links "$1"
 		ck_cmd "$1" ;;
-	dwm|st|webarchiver|clean|seal) ck_built "$1" ;;
+	dwm|st|webarchiver|clean|seal|steno) ck_built "$1" ;;
 	dmenu)
 		ck_built dmenu
 		ck_links dmenu ;;

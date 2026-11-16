@@ -1,0 +1,1274 @@
+/* Dictionaries: Plover's own files, read as they are.
+ *
+ *   NAME.json    outline -> translation (what Plover writes)
+ *   NAME.modal   plover-modal-dictionary: "entry", "dict" and "exit"
+ *                tables and four switches
+ *   NAME.py      only Dotterel's modifier dictionary
+ *                (dotterel-modifiers.py), which is built in here
+ *
+ * The first dictionary given has the highest priority, as in Plover's
+ * list. Every outline becomes strokes (key sets) when it is read, so a
+ * lookup compares numbers, not text. */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+
+#include "steno.h"
+
+#define DICT_MAX 32
+#define MODS_MAX 16
+
+enum { dk_json, dk_modal, dk_mods };
+
+struct table {
+    long *keys;           /* strokes of every entry, one after another */
+    char *vals;           /* translations, each ending in 0 */
+    long nkeys, ckeys, nvals, cvals;
+    long *slot;           /* hash slots: entry number + 1, 0 = empty */
+    long *ent_key;        /* entry -> offset in keys (count first) */
+    long *ent_val;        /* entry -> offset in vals */
+    long nent, cent, cval, nslot;
+    int longest;
+};
+
+struct modal {
+    struct table entry, dict, exit;
+    int exclude_entry, exit_on_mismatch, exit_on_match, ignore_folding;
+    int new_stroke, ignore, to_activate, matched, to_deactivate;
+    int activated, dormant, dormant_buffer;
+    long current;
+};
+
+struct modkey {
+    long st;
+    char key[COMBO_MAX];
+};
+
+struct mods {
+    struct modkey *keys;
+    int nkeys, ckeys;
+    char out[COMBO_MAX + 64];
+};
+
+struct dict {
+    char path[1024];
+    int kind;
+    int enabled;
+    int raw;               /* dotterel-raw.json */
+    int longest;
+    struct table t;
+    struct modal *m;
+    struct mods *x;
+    long mtime, size;      /* to see when the file changes */
+};
+
+static struct dict dicts[DICT_MAX];
+static int ndicts;
+static int raw_on;
+static int raw_saved[DICT_MAX];
+
+/* --- strokes ------------------------------------------------------ */
+
+static const char key_letters[] = "#STKPWHRAO*EUFRPBLGTSDZ";
+
+long stroke_parse(const char *s, int n)
+{
+    long st;
+    int i, k, pos;
+
+    st = 0;
+    pos = 0;
+    for (i = 0; i < n; i++) {
+        if (s[i] == '-') {
+            if (pos < 11)
+                pos = 11;
+            continue;
+        }
+        for (k = pos; k < NUM_KEYS; k++)
+            if (key_letters[k] == s[i])
+                break;
+        if (k == NUM_KEYS)
+            return -1;
+        st |= 1L << k;
+        pos = k + 1;
+    }
+    return st;
+}
+
+void stroke_text(long st, char *out)
+{
+    int k, n;
+
+    n = 0;
+    for (k = 0; k < 10; k++)
+        if (st & (1L << k)) {
+            out[n] = key_letters[k];
+            n++;
+        }
+    /* no hyphen when A, O, *, E or U shows where the hands meet */
+    if (!(st & 0x1f00L) && (st & 0x7fe000L)) {
+        out[n] = '-';
+        n++;
+    }
+    for (k = 10; k < NUM_KEYS; k++)
+        if (st & (1L << k)) {
+            out[n] = key_letters[k];
+            n++;
+        }
+    out[n] = 0;
+}
+
+int outline_parse(const char *s, long *st, int max)
+{
+    int n, i, j;
+
+    n = 0;
+    i = 0;
+    for (;;) {
+        j = i;
+        while (s[j] && s[j] != '/')
+            j++;
+        if (n == max)
+            return -1;
+        st[n] = stroke_parse(s + i, j - i);
+        if (st[n] < 0)
+            return -1;
+        n++;
+        if (!s[j])
+            break;
+        i = j + 1;
+    }
+    return n;
+}
+
+/* --- hash tables ---------------------------------------------------- */
+
+static unsigned long hash(const long *st, int n)
+{
+    unsigned long h;
+    int i;
+
+    h = 2166136261UL;
+    for (i = 0; i < n; i++) {
+        h ^= (unsigned long)st[i];
+        h *= 16777619UL;
+        h &= 0xffffffffUL;
+    }
+    h ^= (unsigned long)n;
+    return h;
+}
+
+static void *grow(void *p, long *cap, long need, long size)
+{
+    void *q;
+    long c;
+
+    if (need <= *cap)
+        return p;
+    c = *cap ? *cap : 256;
+    while (c < need)
+        c *= 2;
+    q = malloc(c * size);
+    if (!q) {
+        say("out of memory", 0);
+        exit(1);
+    }
+    if (p) {
+        memcpy(q, p, *cap * size);
+        free(p);
+    }
+    *cap = c;
+    return q;
+}
+
+static long find(struct table *t, const long *st, int n)
+{
+    unsigned long h;
+    long i, e;
+    long *k;
+
+    if (!t->nslot)
+        return -1;
+    h = hash(st, n) % (unsigned long)t->nslot;
+    i = (long)h;
+    while (t->slot[i]) {
+        e = t->slot[i] - 1;
+        k = t->keys + t->ent_key[e];
+        if (k[0] == n && !memcmp(k + 1, st, n * sizeof(long)))
+            return e;
+        i++;
+        if (i == t->nslot)
+            i = 0;
+    }
+    return -1;
+}
+
+static void rehash(struct table *t)
+{
+    long i, e, n;
+    unsigned long h;
+    long *k;
+
+    n = t->nslot ? t->nslot * 2 : 1024;
+    while (n < t->nent * 2 + 16)
+        n *= 2;
+    free(t->slot);
+    t->slot = malloc(n * sizeof(long));
+    if (!t->slot) {
+        say("out of memory", 0);
+        exit(1);
+    }
+    memset(t->slot, 0, n * sizeof(long));
+    t->nslot = n;
+    for (e = 0; e < t->nent; e++) {
+        k = t->keys + t->ent_key[e];
+        h = hash(k + 1, (int)k[0]) % (unsigned long)n;
+        i = (long)h;
+        while (t->slot[i]) {
+            i++;
+            if (i == n)
+                i = 0;
+        }
+        t->slot[i] = e + 1;
+    }
+}
+
+/* Later entries win, as when Python reads a JSON object. */
+static void put(struct table *t, const long *st, int n, const char *v)
+{
+    long e, len, i;
+    unsigned long h;
+
+    len = strlen(v) + 1;
+    t->vals = grow(t->vals, &t->cvals, t->nvals + len, 1);
+    memcpy(t->vals + t->nvals, v, len);
+    e = find(t, st, n);
+    if (e >= 0) {
+        t->ent_val[e] = t->nvals;
+        t->nvals += len;
+        return;
+    }
+    if (t->nent * 2 + 2 > t->nslot)
+        rehash(t);
+    t->keys = grow(t->keys, &t->ckeys, t->nkeys + n + 1, sizeof(long));
+    t->keys[t->nkeys] = n;
+    memcpy(t->keys + t->nkeys + 1, st, n * sizeof(long));
+    t->ent_key = grow(t->ent_key, &t->cent, t->nent + 1, sizeof(long));
+    t->ent_val = grow(t->ent_val, &t->cval, t->nent + 1, sizeof(long));
+    t->ent_key[t->nent] = t->nkeys;
+    t->ent_val[t->nent] = t->nvals;
+    t->nkeys += n + 1;
+    t->nvals += len;
+    t->nent++;
+    h = hash(st, n) % (unsigned long)t->nslot;
+    i = (long)h;
+    while (t->slot[i]) {
+        i++;
+        if (i == t->nslot)
+            i = 0;
+    }
+    t->slot[i] = t->nent;
+    if (n > t->longest)
+        t->longest = n;
+}
+
+static const char *get(struct table *t, const long *st, int n)
+{
+    long e;
+
+    e = find(t, st, n);
+    if (e < 0)
+        return 0;
+    return t->vals + t->ent_val[e];
+}
+
+/* --- JSON (what Plover writes; only what that needs) ------------- */
+
+struct json {
+    const char *s;
+    long i, n;
+    const char *path;
+    char str[TEXT_MAX * 2];
+};
+
+static void json_ws(struct json *j)
+{
+    while (j->i < j->n && (j->s[j->i] == ' ' || j->s[j->i] == '\n' ||
+        j->s[j->i] == '\r' || j->s[j->i] == '\t'))
+    {
+        j->i++;
+    }
+}
+
+static int json_err(struct json *j, const char *what)
+{
+    char m[64];
+
+    sprintf(m, "%.40s at byte %ld", what, j->i);
+    fprintf(stderr, "steno: %s: %s\n", j->path, m);
+    return -1;
+}
+
+static int hexval(int c)
+{
+    if (c >= '0' && c <= '9')
+        return c - '0';
+    if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+    return -1;
+}
+
+static int json_u4(struct json *j, long *u)
+{
+    int k, v;
+
+    *u = 0;
+    for (k = 0; k < 4; k++) {
+        if (j->i >= j->n)
+            return -1;
+        v = hexval((unsigned char)j->s[j->i]);
+        if (v < 0)
+            return -1;
+        *u = *u * 16 + v;
+        j->i++;
+    }
+    return 0;
+}
+
+static int put_u8(char *o, long c)
+{
+    if (c < 0x80) {
+        o[0] = (char)c;
+        return 1;
+    }
+    if (c < 0x800) {
+        o[0] = (char)(0xc0 | (c >> 6));
+        o[1] = (char)(0x80 | (c & 0x3f));
+        return 2;
+    }
+    if (c < 0x10000) {
+        o[0] = (char)(0xe0 | (c >> 12));
+        o[1] = (char)(0x80 | ((c >> 6) & 0x3f));
+        o[2] = (char)(0x80 | (c & 0x3f));
+        return 3;
+    }
+    o[0] = (char)(0xf0 | (c >> 18));
+    o[1] = (char)(0x80 | ((c >> 12) & 0x3f));
+    o[2] = (char)(0x80 | ((c >> 6) & 0x3f));
+    o[3] = (char)(0x80 | (c & 0x3f));
+    return 4;
+}
+
+/* A string into j->str. */
+static int json_string(struct json *j)
+{
+    int n;
+    int c;
+    long u, u2;
+
+    json_ws(j);
+    if (j->i >= j->n || j->s[j->i] != '"')
+        return json_err(j, "a string was expected");
+    j->i++;
+    n = 0;
+    for (;;) {
+        if (j->i >= j->n)
+            return json_err(j, "unfinished string");
+        c = (unsigned char)j->s[j->i];
+        j->i++;
+        if (c == '"')
+            break;
+        if (n > (int)sizeof(j->str) - 8)
+            return json_err(j, "string too long");
+        if (c != '\\') {
+            j->str[n] = (char)c;
+            n++;
+            continue;
+        }
+        if (j->i >= j->n)
+            return json_err(j, "unfinished string");
+        c = j->s[j->i];
+        j->i++;
+        switch (c) {
+        case 'n': j->str[n] = '\n'; n++; break;
+        case 't': j->str[n] = '\t'; n++; break;
+        case 'r': j->str[n] = '\r'; n++; break;
+        case 'b': j->str[n] = '\b'; n++; break;
+        case 'f': j->str[n] = '\f'; n++; break;
+        case 'u':
+            if (json_u4(j, &u) < 0)
+                return json_err(j, "bad \\u");
+            if (u >= 0xd800 && u < 0xdc00 && j->i + 6 <= j->n &&
+                j->s[j->i] == '\\' && j->s[j->i + 1] == 'u')
+            {
+                j->i += 2;
+                if (json_u4(j, &u2) < 0)
+                    return json_err(j, "bad \\u");
+                u = 0x10000 + ((u - 0xd800) << 10) + (u2 - 0xdc00);
+            }
+            n += put_u8(j->str + n, u);
+            break;
+        default:
+            j->str[n] = (char)c;
+            n++;
+        }
+    }
+    j->str[n] = 0;
+    return n;
+}
+
+static int json_char(struct json *j, int c)
+{
+    json_ws(j);
+    if (j->i < j->n && j->s[j->i] == c) {
+        j->i++;
+        return 1;
+    }
+    return 0;
+}
+
+static void warn_key(const char *path, const char *key)
+{
+    if (verbose)
+        fprintf(stderr, "steno: %s: not steno, left out: %s\n", path, key);
+}
+
+/* An object of strings, after its "{". */
+static int json_table(struct json *j, struct table *t)
+{
+    char key[TEXT_MAX * 2];
+    long st[STROKE_MAX];
+    int n;
+
+    if (json_char(j, '}'))
+        return 0;
+    for (;;) {
+        if (json_string(j) < 0)
+            return -1;
+        scopy(key, j->str, sizeof(key));
+        if (!json_char(j, ':'))
+            return json_err(j, "':' was expected");
+        if (json_string(j) < 0)
+            return -1;
+        n = outline_parse(key, st, STROKE_MAX);
+        if (n < 0)
+            warn_key(j->path, key);
+        else
+            put(t, st, n, j->str);
+        if (json_char(j, ','))
+            continue;
+        if (json_char(j, '}'))
+            return 0;
+        return json_err(j, "',' or '}' was expected");
+    }
+}
+
+static int json_bool(struct json *j, int *v)
+{
+    json_ws(j);
+    if (j->i + 4 <= j->n && !strncmp(j->s + j->i, "true", 4)) {
+        j->i += 4;
+        *v = 1;
+        return 0;
+    }
+    if (j->i + 5 <= j->n && !strncmp(j->s + j->i, "false", 5)) {
+        j->i += 5;
+        *v = 0;
+        return 0;
+    }
+    return json_err(j, "true or false was expected");
+}
+
+static int load_json(struct dict *d, struct json *j)
+{
+    if (!json_char(j, '{'))
+        return json_err(j, "'{' was expected");
+    if (json_table(j, &d->t) < 0)
+        return -1;
+    d->longest = d->t.longest;
+    return 0;
+}
+
+static int load_modal(struct dict *d, struct json *j)
+{
+    struct modal *m;
+    char name[64];
+    int *flag;
+
+    m = malloc(sizeof(*m));
+    if (!m)
+        return -1;
+    memset(m, 0, sizeof(*m));
+    m->exit_on_mismatch = 1;
+    m->ignore_folding = 1;
+    m->new_stroke = 1;
+    d->m = m;
+    if (!json_char(j, '{'))
+        return json_err(j, "'{' was expected");
+    if (json_char(j, '}'))
+        return 0;
+    for (;;) {
+        if (json_string(j) < 0)
+            return -1;
+        scopy(name, j->str, sizeof(name));
+        if (!json_char(j, ':'))
+            return json_err(j, "':' was expected");
+        flag = 0;
+        if (!strcmp(name, "exclude_entry"))
+            flag = &m->exclude_entry;
+        else if (!strcmp(name, "exit_on_mismatch"))
+            flag = &m->exit_on_mismatch;
+        else if (!strcmp(name, "exit_on_match"))
+            flag = &m->exit_on_match;
+        else if (!strcmp(name, "ignore_folding"))
+            flag = &m->ignore_folding;
+        if (flag) {
+            if (json_bool(j, flag) < 0)
+                return -1;
+        } else if (!strcmp(name, "entry") || !strcmp(name, "dict") ||
+            !strcmp(name, "exit"))
+        {
+            if (!json_char(j, '{'))
+                return json_err(j, "only tables in the file itself");
+            if (json_table(j, name[0] == 'e' && name[1] == 'n' ?
+                &m->entry : name[0] == 'd' ? &m->dict : &m->exit) < 0)
+            {
+                return -1;
+            }
+        } else {
+            return json_err(j, "unknown setting");
+        }
+        if (json_char(j, ','))
+            continue;
+        if (json_char(j, '}'))
+            break;
+        return json_err(j, "',' or '}' was expected");
+    }
+    d->longest = m->entry.longest;
+    if (m->dict.longest > d->longest)
+        d->longest = m->dict.longest;
+    if (m->exit.longest > d->longest)
+        d->longest = m->exit.longest;
+    return 0;
+}
+
+/* --- the modal dictionary (plover-modal-dictionary) ---------------- */
+
+static const char *modal_lookup(struct modal *m, const long *st, int n)
+{
+    const char *v;
+
+    if (m->ignore || !n)
+        return 0;
+    if (m->new_stroke) {
+        m->new_stroke = 0;
+        m->current = st[n - 1];
+    } else {
+        m->matched = 0;
+        if (st[n - 1] != m->current && m->ignore_folding) {
+            m->ignore = 1;
+            return 0;
+        }
+    }
+    if (m->activated || (m->dormant && n > m->dormant_buffer)) {
+        v = get(&m->exit, st, n);
+        if (v)
+            m->to_deactivate = 1;
+        else
+            v = get(&m->dict, st, n);
+        if (v) {
+            m->matched = 1;
+            if (!m->activated)
+                m->to_activate = 1;
+            return v;
+        }
+    }
+    if (!m->activated || !m->exclude_entry) {
+        v = get(&m->entry, st, n);
+        if (v) {
+            m->matched = 1;
+            m->to_activate = 1;
+            return v;
+        }
+    }
+    return 0;
+}
+
+static void modal_stroked(struct modal *m, int longest)
+{
+    if (m->activated) {
+        if (m->to_deactivate || (m->exit_on_mismatch && !m->matched) ||
+            (m->exit_on_match && m->matched))
+        {
+            m->activated = 0;
+            m->dormant = 1;
+            m->dormant_buffer = 1;
+        }
+    } else if (m->to_activate) {
+        if (!m->to_deactivate)
+            m->activated = 1;
+    } else if (m->dormant) {
+        m->dormant_buffer++;
+        if (m->dormant_buffer >= longest) {
+            m->dormant = 0;
+            m->dormant_buffer = 0;
+        }
+    }
+    m->new_stroke = 1;
+    m->ignore = 0;
+    m->to_activate = 0;
+    m->matched = 0;
+    m->to_deactivate = 0;
+}
+
+/* --- dotterel-modifiers.py, built in ------------------------------- *
+ * A modifier stroke (KHR Ctrl, SH Shift, THRA Alt, KPW Super, and the
+ * chords for several), then a stroke that presses one key or types one
+ * character: that key with the modifiers. The keys come from the
+ * dictionaries next to the .py file, as the .py file reads them. */
+
+static const char *const mod_strokes[] = {
+    "KHR", "SH", "THRA", "KPW", "SKHR", "TKHRA", "STHRA", "STKHRA",
+    "KPWHR", "SKPWHR"
+};
+/* bits: 1 control, 2 alt, 4 shift, 8 super */
+static const int mod_bits[] = { 1, 4, 2, 8, 5, 3, 6, 7, 9, 12 };
+static long mod_st[10];
+
+static const char *const mod_sources[] = {
+    "dotterel-punctuation.json", "dotterel-commands.json",
+    "dotterel-fingerspelling.json", "dotterel-numbers.json",
+    "dotterel-movement.modal"
+};
+
+static int mod_of(long st)
+{
+    int i;
+
+    for (i = 0; i < 10; i++)
+        if (mod_st[i] == st)
+            return mod_bits[i];
+    return 0;
+}
+
+/* Remove {^} {-|} {~|} {>} {<}. */
+static void strip_spacing(const char *s, char *o, int size)
+{
+    int n, len;
+
+    n = 0;
+    while (*s && n < size - 1) {
+        len = 0;
+        if (s[0] == '{' && s[1] == '^' && s[2] == '}')
+            len = 3;
+        else if (s[0] == '{' && (s[1] == '-' || s[1] == '~') &&
+            s[2] == '|' && s[3] == '}')
+        {
+            len = 4;
+        } else if (s[0] == '{' && (s[1] == '>' || s[1] == '<') &&
+            s[2] == '}')
+        {
+            len = 3;
+        }
+        if (len) {
+            s += len;
+            continue;
+        }
+        o[n] = *s;
+        n++;
+        s++;
+    }
+    o[n] = 0;
+}
+
+static const char *char_key(int c)
+{
+    switch (c) {
+    case '\n': return "Return";
+    case '\t': return "Tab";
+    case ' ': return "space";
+    case '.': return "period";
+    case ',': return "comma";
+    case '/': return "slash";
+    case ';': return "semicolon";
+    case '\'': return "apostrophe";
+    case '[': return "bracketleft";
+    case ']': return "bracketright";
+    case '\\': return "backslash";
+    case '-': return "minus";
+    case '=': return "equal";
+    case '`': return "grave";
+    }
+    return 0;
+}
+
+static int is_alnum(int c)
+{
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
+        (c >= 'A' && c <= 'Z');
+}
+
+/* The one key a translation presses or types, or 0. */
+static int key_of(const char *tr, char *key)
+{
+    char r[TEXT_MAX];
+    const char *k;
+    int n, i, c, len;
+
+    strip_spacing(tr, r, sizeof(r));
+    n = strlen(r);
+    /* {#Up}: one key, no modifiers inside */
+    if (n > 3 && r[0] == '{' && r[1] == '#' && r[n - 1] == '}') {
+        for (i = 2; i < n - 1; i++)
+            if (r[i] == '{' || r[i] == '}' || r[i] == '(' ||
+                r[i] == ')' || is_space_at(r + i, n - i))
+            {
+                break;
+            }
+        if (i == n - 1 && n - 3 < COMBO_MAX) {
+            memcpy(key, r + 2, n - 3);
+            key[n - 3] = 0;
+            return 1;
+        }
+    }
+    /* \{(?:&|\^?~?\|?)(.)\^?\}  or one character */
+    c = -1;
+    if (n >= 3 && r[0] == '{' && r[n - 1] == '}') {
+        i = 1;
+        if (r[i] == '&') {
+            i++;
+        } else {
+            if (r[i] == '^')
+                i++;
+            if (r[i] == '~')
+                i++;
+            if (r[i] == '|')
+                i++;
+        }
+        len = u8get(r + i, n - 1 - i, 0);
+        if (len && (i + len == n - 1 ||
+            (i + len == n - 2 && r[n - 2] == '^')))
+        {
+            c = len == 1 ? (unsigned char)r[i] : 256;
+        }
+    }
+    if (c < 0) {
+        len = u8get(r, n, 0);
+        if (len && len == n)
+            c = len == 1 ? (unsigned char)r[0] : 256;
+    }
+    if (c < 0 || c == 256)
+        return 0;
+    if (is_alnum(c)) {
+        if (c >= 'A' && c <= 'Z')
+            sprintf(key, "shift_l(%c)", c - 'A' + 'a');
+        else
+            sprintf(key, "%c", c);
+        return 1;
+    }
+    k = char_key(c);
+    if (!k)
+        return 0;
+    strcpy(key, k);
+    return 1;
+}
+
+static void mods_add(struct mods *x, long st, const char *key)
+{
+    int i;
+    long c;
+
+    for (i = 0; i < x->nkeys; i++)
+        if (x->keys[i].st == st)
+            return;
+    c = x->ckeys;
+    x->keys = grow(x->keys, &c, x->nkeys + 1, sizeof(struct modkey));
+    x->ckeys = (int)c;
+    x->keys[x->nkeys].st = st;
+    scopy(x->keys[x->nkeys].key, key, COMBO_MAX);
+    x->nkeys++;
+}
+
+static void mods_read_table(struct mods *x, struct table *t)
+{
+    long e;
+    long *k;
+    char key[COMBO_MAX];
+
+    for (e = 0; e < t->nent; e++) {
+        k = t->keys + t->ent_key[e];
+        if (k[0] != 1 || mod_of(k[1]))
+            continue;
+        if (key_of(t->vals + t->ent_val[e], key))
+            mods_add(x, k[1], key);
+    }
+}
+
+static int load_mods(struct dict *d)
+{
+    struct mods *x;
+    struct dict tmp;
+    char dir[1024], path[1100];
+    char *p, *buf;
+    long size;
+    struct json j;
+    unsigned i;
+    int r;
+
+    for (i = 0; i < 10; i++)
+        mod_st[i] = stroke_parse(mod_strokes[i], strlen(mod_strokes[i]));
+    x = malloc(sizeof(*x));
+    if (!x)
+        return -1;
+    memset(x, 0, sizeof(*x));
+    d->x = x;
+    d->longest = 4;
+    scopy(dir, d->path, sizeof(dir));
+    p = strrchr(dir, '/');
+    if (p)
+        p[1] = 0;
+    else
+        dir[0] = 0;
+    for (i = 0; i < sizeof(mod_sources) / sizeof(mod_sources[0]); i++) {
+        sprintf(path, "%.1000s%s", dir, mod_sources[i]);
+        buf = read_file(path, &size);
+        if (!buf)
+            continue;
+        memset(&tmp, 0, sizeof(tmp));
+        j.s = buf;
+        j.i = 0;
+        j.n = size;
+        j.path = path;
+        if (strstr(path, ".modal"))
+            r = load_modal(&tmp, &j);
+        else
+            r = load_json(&tmp, &j);
+        /* insertion order is the file's order: keep the first one */
+        if (r == 0)
+            mods_read_table(x, tmp.m ? &tmp.m->entry : &tmp.t);
+        free(buf);
+        /* tmp's tables are small and kept: read once at start */
+    }
+    return 0;
+}
+
+static const char *mods_lookup(struct mods *x, const long *st, int n)
+{
+    int bits, i, b;
+    const char *key;
+    char k[COMBO_MAX + 64], t[COMBO_MAX + 64];
+    static const char *const names[] = { "control", "alt", "shift",
+        "super" };
+
+    for (i = 0; i < n - 1; i++)
+        if (!mod_of(st[i]))
+            return 0;
+    if (mod_of(st[n - 1]))
+        return "{#}";
+    for (i = 0; i + 1 < n - 1; i++)
+        if (st[i] == st[i + 1])
+            return 0;
+    if (n < 2)
+        return 0;
+    key = 0;
+    for (i = 0; i < x->nkeys; i++)
+        if (x->keys[i].st == st[n - 1])
+            key = x->keys[i].key;
+    if (!key)
+        return 0;
+    bits = 0;
+    for (i = 0; i < n - 1; i++)
+        bits |= mod_of(st[i]);
+    scopy(k, key, sizeof(k));
+    for (b = 3; b >= 0; b--)
+        if (bits & (1 << b)) {
+            sprintf(t, "%s_l(%.*s)", names[b], COMBO_MAX, k);
+            scopy(k, t, sizeof(k));
+        }
+    sprintf(x->out, "{^}{#%.*s}{^}", COMBO_MAX, k);
+    return x->out;
+}
+
+/* --- the collection --------------------------------------------- */
+
+static int ends_with(const char *s, const char *e)
+{
+    int n, m;
+
+    n = strlen(s);
+    m = strlen(e);
+    return n >= m && !strcmp(s + n - m, e);
+}
+
+static void file_stamp(const char *path, long *mtime, long *size)
+{
+    struct stat sb;
+
+    *mtime = -1;
+    *size = -1;
+    if (stat(path, &sb) == 0) {
+        *mtime = (long)sb.st_mtime;
+        *size = (long)sb.st_size;
+    }
+}
+
+static void table_free(struct table *t)
+{
+    free(t->keys);
+    free(t->vals);
+    free(t->slot);
+    free(t->ent_key);
+    free(t->ent_val);
+    memset(t, 0, sizeof(*t));
+}
+
+static void dict_free(struct dict *d)
+{
+    table_free(&d->t);
+    if (d->m) {
+        table_free(&d->m->entry);
+        table_free(&d->m->dict);
+        table_free(&d->m->exit);
+        free(d->m);
+        d->m = 0;
+    }
+    if (d->x) {
+        free(d->x->keys);
+        free(d->x);
+        d->x = 0;
+    }
+}
+
+static int load_into(struct dict *d, const char *path)
+{
+    struct json j;
+    char *buf;
+    long size;
+    int r;
+
+    memset(d, 0, sizeof(*d));
+    scopy(d->path, path, sizeof(d->path));
+    d->enabled = 1;
+    d->raw = ends_with(path, "/dotterel-raw.json") ||
+        !strcmp(path, "dotterel-raw.json");
+    file_stamp(path, &d->mtime, &d->size);
+    if (ends_with(path, ".py")) {
+        if (!ends_with(path, "dotterel-modifiers.py")) {
+            say("only dotterel-modifiers.py is known: %s", path);
+            return -1;
+        }
+        d->kind = dk_mods;
+        return load_mods(d);
+    }
+    buf = read_file(path, &size);
+    if (!buf) {
+        say("can't read %s", path);
+        return -1;
+    }
+    j.s = buf;
+    j.i = 0;
+    j.n = size;
+    j.path = path;
+    if (ends_with(path, ".modal")) {
+        d->kind = dk_modal;
+        r = load_modal(d, &j);
+    } else {
+        d->kind = dk_json;
+        r = load_json(d, &j);
+    }
+    free(buf);
+    if (r < 0) {
+        dict_free(d);
+        return -1;
+    }
+    return 0;
+}
+
+int dict_add(const char *path)
+{
+    if (ndicts == DICT_MAX) {
+        say("too many dictionaries", 0);
+        return -1;
+    }
+    if (load_into(&dicts[ndicts], path) < 0)
+        return -1;
+    ndicts++;
+    return 0;
+}
+
+/* Read again the dictionaries whose file changed (a word added with
+ * steno -a, or by hand). A file that can't be read keeps the old one. */
+void dict_reload(void)
+{
+    static struct dict tmp;
+    long mtime, size;
+    int i, enabled;
+
+    for (i = 0; i < ndicts; i++) {
+        if (dicts[i].kind == dk_mods)
+            continue;
+        file_stamp(dicts[i].path, &mtime, &size);
+        if (mtime == dicts[i].mtime && size == dicts[i].size)
+            continue;
+        if (load_into(&tmp, dicts[i].path) < 0) {
+            dicts[i].mtime = mtime;
+            dicts[i].size = size;
+            continue;
+        }
+        enabled = dicts[i].enabled;
+        dict_free(&dicts[i]);
+        dicts[i] = tmp;
+        dicts[i].enabled = enabled;
+        if (verbose)
+            say("read again: %s", dicts[i].path);
+    }
+}
+
+const char *dict_path(int i)
+{
+    return i >= 0 && i < ndicts ? dicts[i].path : 0;
+}
+
+static int is_deleted(const char *v)
+{
+    const char *d = "{plover:deleted}";
+    int i;
+
+    for (i = 0; d[i]; i++)
+        if (low_ascii((unsigned char)v[i]) != d[i])
+            return 0;
+    return v[i] == 0;
+}
+
+/* The translation of an outline in the plain (.json) dictionaries,
+ * the way a lookup finds it, without touching the modal state. *at is
+ * the dictionary it comes from. */
+static const char *peek_at(const long *st, int n, int *at)
+{
+    int i;
+    const char *v;
+
+    for (i = 0; i < ndicts; i++) {
+        if (!dicts[i].enabled || dicts[i].kind != dk_json)
+            continue;
+        v = get(&dicts[i].t, st, n);
+        if (v) {
+            *at = i;
+            return is_deleted(v) ? 0 : v;
+        }
+    }
+    return 0;
+}
+
+const char *dict_peek(const long *st, int n)
+{
+    int at;
+
+    return peek_at(st, n, &at);
+}
+
+static int same_text(const char *a, const char *b, int fold)
+{
+    if (!fold)
+        return !strcmp(a, b);
+    while (*a && low_ascii((unsigned char)*a) ==
+        low_ascii((unsigned char)*b))
+    {
+        a++;
+        b++;
+    }
+    return !*a && !*b;
+}
+
+#define FOUND_MAX 64
+
+/* The outlines that write text, shortest first, as "KAT  KA*T". Only
+ * ones a lookup would really reach (no higher dictionary has them).
+ * When none writes it exactly, ones that differ only in case. One
+ * pass over the entries. */
+int dict_outlines(const char *text, char *out, int size, int max)
+{
+    long e, *k, fk[FOUND_MAX];
+    int fx[FOUND_MAX], nf, exact, i, j, n, pass, at, m;
+    char one[STROKE_MAX * 32], s[32];
+    struct table *t;
+    const char *v;
+
+    out[0] = 0;
+    nf = 0;
+    exact = 0;
+    for (i = 0; i < ndicts; i++) {
+        if (!dicts[i].enabled || dicts[i].kind != dk_json)
+            continue;
+        t = &dicts[i].t;
+        for (e = 0; e < t->nent && nf < FOUND_MAX; e++) {
+            v = t->vals + t->ent_val[e];
+            if (!same_text(v, text, 1))
+                continue;
+            m = !strcmp(v, text);
+            if (exact && !m)
+                continue;
+            k = t->keys + t->ent_key[e];
+            v = peek_at(k + 1, (int)k[0], &at);
+            if (!v || at != i || !same_text(v, text, 1))
+                continue;
+            if (m && !exact) {
+                exact = 1;
+                nf = 0;        /* drop the ones that only fold */
+            }
+            fk[nf] = (long)(k - t->keys);
+            fx[nf] = i;
+            nf++;
+        }
+    }
+    /* shortest first; same length: dictionary order (stable) */
+    for (i = 1; i < nf; i++) {
+        for (j = i; j > 0; j--) {
+            if (dicts[fx[j - 1]].t.keys[fk[j - 1]] <=
+                dicts[fx[j]].t.keys[fk[j]])
+            {
+                break;
+            }
+            e = fk[j];
+            fk[j] = fk[j - 1];
+            fk[j - 1] = e;
+            at = fx[j];
+            fx[j] = fx[j - 1];
+            fx[j - 1] = at;
+        }
+    }
+    n = 0;
+    for (i = 0; i < nf && n < max; i++) {
+        k = dicts[fx[i]].t.keys + fk[i];
+        one[0] = 0;
+        for (pass = 0; pass < k[0]; pass++) {
+            stroke_text(k[1 + pass], s);
+            if (pass)
+                scat(one, "/", sizeof(one));
+            scat(one, s, sizeof(one));
+        }
+        if (n)
+            scat(out, "  ", size);
+        scat(out, one, size);
+        n++;
+    }
+    return n;
+}
+
+/* Every dictionary that has the outline, highest first: "file: text"
+ * lines, for steno -l and -a. */
+int dict_explain(const long *st, int n, char *out, int size)
+{
+    int i, c;
+    const char *v, *f;
+    char line[TEXT_MAX + 256];
+
+    out[0] = 0;
+    c = 0;
+    for (i = 0; i < ndicts; i++) {
+        if (dicts[i].kind != dk_json)
+            continue;
+        v = get(&dicts[i].t, st, n);
+        if (!v)
+            continue;
+        f = strrchr(dicts[i].path, '/');
+        f = f ? f + 1 : dicts[i].path;
+        sprintf(line, "  %.*s  (%.200s)\n", TEXT_MAX, v, f);
+        scat(out, line, size);
+        c++;
+    }
+    return c;
+}
+
+int dict_longest(void)
+{
+    int i, n;
+
+    n = 0;
+    for (i = 0; i < ndicts; i++)
+        if (dicts[i].enabled && dicts[i].longest > n)
+            n = dicts[i].longest;
+    return n;
+}
+
+const char *dict_lookup(const long *st, int n)
+{
+    int i;
+    const char *v;
+    struct dict *d;
+
+    if (n > dict_longest())
+        return 0;
+    for (i = 0; i < ndicts; i++) {
+        d = &dicts[i];
+        if (!d->enabled || n > d->longest)
+            continue;
+        if (d->kind == dk_json)
+            v = get(&d->t, st, n);
+        else if (d->kind == dk_modal)
+            v = modal_lookup(d->m, st, n);
+        else
+            v = mods_lookup(d->x, st, n);
+        if (v)
+            return is_deleted(v) ? 0 : v;
+    }
+    return 0;
+}
+
+void dict_stroked(void)
+{
+    int i;
+
+    for (i = 0; i < ndicts; i++)
+        if (dicts[i].kind == dk_modal)
+            modal_stroked(dicts[i].m, dicts[i].longest);
+}
+
+/* RA*U: every dictionary off but dotterel-raw.json, and back. */
+int dict_raw_toggle(void)
+{
+    int i, have;
+
+    have = 0;
+    for (i = 0; i < ndicts; i++)
+        if (dicts[i].raw)
+            have = 1;
+    if (!have)
+        return -1;
+    if (raw_on) {
+        for (i = 0; i < ndicts; i++)
+            dicts[i].enabled = raw_saved[i];
+        raw_on = 0;
+        return 0;
+    }
+    for (i = 0; i < ndicts; i++) {
+        raw_saved[i] = dicts[i].enabled;
+        dicts[i].enabled = dicts[i].raw;
+    }
+    raw_on = 1;
+    return 1;
+}
+
+int dict_count(void)
+{
+    return ndicts;
+}
+
+long dict_entries(void)
+{
+    long n;
+    int i;
+
+    n = 0;
+    for (i = 0; i < ndicts; i++) {
+        if (dicts[i].kind == dk_json)
+            n += dicts[i].t.nent;
+        else if (dicts[i].kind == dk_modal)
+            n += dicts[i].m->entry.nent + dicts[i].m->dict.nent +
+                dicts[i].m->exit.nent;
+    }
+    return n;
+}

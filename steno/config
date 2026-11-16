@@ -1,0 +1,36 @@
+# steno's settings (~/.config/steno/config is a link to this file).
+# One setting a line; # starts a comment. See steno/README.
+
+# The keyboard: auto tries /dev/ttyACM0 to ttyACM9 until the Moonlander
+# answers, and again whenever it is unplugged.
+port auto
+
+# Dotterel's dictionaries, from Plover's clone of the dotterel repo
+# (./install.sh plover), so both read the same files.
+dictionaries ~/.system/plover/dotterel/plover-dotterel/plover_dotterel/dictionaries
+
+# The first dictionary wins, as at the top of Plover's list. user is
+# where steno -a and -A add strokes; it is made empty the first time.
+# Point it at a file in the dotterel repo to add to the theory instead.
+user ~/.system/share/steno/user.json
+dict dotterel-base.json
+dict dotterel-proper-nouns.json
+dict dotterel-affixes.json
+dict dotterel-punctuation.json
+dict dotterel-commands.json
+dict dotterel-fingerspelling.json
+dict dotterel-numbers.json
+dict dotterel-raw.json
+dict dotterel-movement.modal
+dict dotterel-modifiers.py
+
+# uk_to_us.json and the rest of Dotterel's data (default: ../data
+# next to the dictionaries)
+#data ~/.system/plover/dotterel/plover-dotterel/plover_dotterel/data
+
+undo 100
+start_capitalized no
+start_attached no
+
+# {PLOVER:NAME} runs a shell command, for example:
+#command LOOKUP st -e steno -A
