@@ -566,6 +566,8 @@ int pack(int fd, const char *disk, const char *name, long skip_dev,
     w_no = 0;
     w_n = 0;
     p_disk = disk;
+    n_ents = 0;
+    pool_used = 0;
     p_dev = skip_dev;
     p_ino = skip_ino;
     strcpy(root_name, name);

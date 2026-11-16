@@ -45,6 +45,10 @@ PATH=$HOME/.system/bin${PATH:+:$PATH}
 unset _p; unset -f _drop
 export PATH
 
+# seal: the links to directories unsealed into RAM die with a reboot or
+# a crash; each login takes the dead ones away (seal/README).
+command -v seal >/dev/null 2>&1 && seal -c -q
+
 # Logging in on the first console (tty1) starts X; logging out of X logs
 # you out. The other consoles (Ctrl+Alt+F2...) stay text, for when X
 # breaks. Never for root.

@@ -3,9 +3,12 @@
  *
  *   seal [-k] [-q] [-s] [-o FILE] DIR     DIR -> DIR.seal, DIR removed
  *   seal -l                               what is unsealed in RAM
- *   unseal [-k] [-q] [-s] [-f] [-d DIR] FILE
+ *   unseal [-k] [-n] [-q] [-s] [-f] [-d DIR] FILE
  *                                         FILE -> RAM (or DIR)
  *   unseal -t [-q] [-s] [-f] FILE         check FILE, list what it holds
+ *   seal -a                               all in RAM back into their files
+ *   seal -c                               remove links whose directory
+ *                                         is gone (after a crash)
  *
  * unseal is the same program (a link to seal, or seal -u). */
 #define _XOPEN_SOURCE 700
@@ -37,7 +40,7 @@ int opt_quiet;
 volatile int stop_now;
 
 static const char *prog = "seal";
-static int opt_keep, opt_stdin, opt_list;
+static int opt_keep, opt_stdin, opt_list, opt_all, opt_clean, opt_nolink;
 static const char *opt_out, *opt_dest;
 
 static int tty_fd = -1;
@@ -482,9 +485,239 @@ static void write_from(const char *base, const char *name,
     close(fd);
 }
 
+/* ------------------------------------------------------------ links */
+
+/* unseal leaves a link next to the sealed file, pointing to the
+ * directory in RAM. Every link is written down first, in
+ * ~/.system/state/seal/links (one "LINK<tab>TARGET" per line), so that
+ * after a crash, when RAM is empty, seal -c still knows which links to
+ * take away. A link goes when its directory is sealed again. */
+
+static char links_file[PATH_SIZE];
+
+static int links_init(void)
+{
+    char dir[PATH_SIZE];
+    const char *s;
+    int r;
+
+    s = getenv("XDG_STATE_HOME");
+    if (s && s[0] == '/') {
+        r = join(dir, s, "");
+    } else {
+        s = getenv("HOME");
+        if (!s || s[0] != '/')
+            return -1;
+        r = join(dir, s, "/.system");
+        if (r == 0)
+            mkdir(dir, 0700);
+        if (r == 0)
+            r = join(dir, dir, "/state");
+    }
+    if (r == 0)
+        mkdir(dir, 0700);
+    if (r == 0)
+        r = join(dir, dir, "/seal");
+    if (r == 0)
+        mkdir(dir, 0700);
+    if (r == 0)
+        r = join(links_file, dir, "/links");
+    return r;
+}
+
+/* is link a symbolic link to target? */
+static int links_to(const char *link, const char *target)
+{
+    char buf[PATH_SIZE];
+    struct stat st;
+    long n;
+    int r;
+
+    r = lstat(link, &st);
+    if (r < 0 || !S_ISLNK(st.st_mode))
+        return 0;
+    n = readlink(link, buf, sizeof buf - 1);
+    if (n < 0)
+        return 0;
+    buf[n] = 0;
+    return !strcmp(buf, target);
+}
+
+/* Rewrites the list: adds add_link -> add_target (when set), takes
+ * away the links to drop_target (when set), and the links whose
+ * directory is gone (after a reboot or crash) or that no longer point
+ * to it. find set: only look up the link to find, into found. Returns
+ * how many links it took away, -1 on error. */
+static long links_update(const char *add_link, const char *add_target,
+    const char *drop_target, const char *find, char *found)
+{
+    struct stat st;
+    char *text, *line, *tab, *end, tmp[PATH_SIZE];
+    long n, size, removed;
+    int fd, out, r, keep;
+
+    if (!links_file[0])
+        return -1;
+    fd = open(links_file, O_RDONLY | O_NOFOLLOW);
+    size = 0;
+    text = 0;
+    if (fd >= 0) {
+        r = fstat(fd, &st);
+        size = r == 0 ? (long)st.st_size : 0;
+        text = malloc(size + 1);
+        if (!text) {
+            close(fd);
+            return -1;
+        }
+        n = read_full(fd, text, size);
+        close(fd);
+        size = n < 0 ? 0 : n;
+        text[size] = 0;
+    }
+    if (find) {
+        found[0] = 0;
+        line = text;
+        while (line && line < text + size) {
+            end = strchr(line, '\n');
+            if (!end)
+                break;
+            *end = 0;
+            tab = strchr(line, '\t');
+            if (tab && !strcmp(tab + 1, find)) {
+                *tab = 0;
+                if (links_to(line, find))
+                    join(found, line, "");
+            }
+            line = end + 1;
+        }
+        free(text);
+        return 0;
+    }
+
+    r = join(tmp, links_file, ".new");
+    out = r < 0 ? -1 :
+        open(tmp, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0600);
+    if (out < 0) {
+        free(text);
+        return -1;
+    }
+    removed = 0;
+    line = text;
+    while (line && line < text + size) {
+        end = strchr(line, '\n');
+        if (!end)
+            break;
+        *end = 0;
+        tab = strchr(line, '\t');
+        if (tab) {
+            *tab = 0;
+            keep = links_to(line, tab + 1) && lstat(tab + 1, &st) == 0;
+            if (drop_target && !strcmp(tab + 1, drop_target))
+                keep = 0;
+            if (!keep && links_to(line, tab + 1)) {
+                r = unlink(line);
+                if (r == 0) {
+                    removed++;
+                    if (!opt_quiet)
+                        printf("removed the link %s\n", line);
+                }
+            }
+            *tab = '\t';
+            if (keep) {
+                write_all(out, line, strlen(line));
+                write_all(out, "\n", 1);
+            }
+        }
+        line = end + 1;
+    }
+    if (add_link) {
+        write_all(out, add_link, strlen(add_link));
+        write_all(out, "\t", 1);
+        write_all(out, add_target, strlen(add_target));
+        write_all(out, "\n", 1);
+    }
+    free(text);
+    r = fsync(out);
+    n = close(out);
+    if (r < 0 || n < 0) {
+        unlink(tmp);
+        return -1;
+    }
+    r = rename(tmp, links_file);
+    return r < 0 ? -1 : removed;
+}
+
+/* the link for a directory unsealed into RAM: next to file, named
+ * like the directory */
+static void make_link(const char *file, const char *name,
+    const char *target)
+{
+    char dir[PATH_SIZE], base[PATH_SIZE], link[PATH_SIZE], cwd[PATH_SIZE];
+    struct stat st;
+    const char *s;
+    long n;
+    int r;
+
+    r = split(file, dir, base);
+    if (r == 0 && dir[0] != '/') {
+        s = getcwd(cwd, sizeof cwd);
+        r = s ? 0 : -1;
+        if (r == 0 && strcmp(dir, "."))
+            r = join(cwd, cwd, "/");
+        if (r == 0 && strcmp(dir, "."))
+            r = join(dir, cwd, dir);
+        else if (r == 0)
+            r = join(dir, cwd, "");
+    }
+    if (r == 0)
+        r = join(link, dir, strcmp(dir, "/") ? "/" : "");
+    if (r == 0)
+        r = join(link, link, name);
+    if (r < 0 || strchr(link, '\n') || strchr(link, '\t') ||
+        strchr(target, '\n') || strchr(target, '\t'))
+    {
+        warn("%s: %s", name, "no link made (an odd path)");
+        return;
+    }
+    n = lstat(link, &st);
+    if (n == 0) {
+        warn("%s exists, so no link to %s was made", link, target);
+        return;
+    }
+    /* written down before it is made: a crash leaves no link unknown */
+    n = links_update(link, target, 0, 0, 0);
+    if (n < 0) {
+        warn("can't write %s, so no link was made", links_file, 0);
+        return;
+    }
+    r = symlink(target, link);
+    if (r < 0) {
+        warn("can't make the link %s: %s", link, strerror(errno));
+        return;
+    }
+    if (!opt_quiet)
+        printf("link: %s -> %s\n", link, target);
+}
+
+/* seal -c: take away the links whose directory is gone */
+static int cmd_clean(void)
+{
+    long n;
+
+    n = links_update(0, 0, 0, 0, 0);
+    if (n < 0) {
+        warn("can't update %s", links_file, 0);
+        return 1;
+    }
+    if (n == 0 && !opt_quiet)
+        printf("no dead links\n");
+    return 0;
+}
+
 static int cmd_list(void)
 {
     char base[PATH_SIZE], from[PATH_SIZE], path[PATH_SIZE];
+    char link[PATH_SIZE];
     struct stat st;
     struct dirent *e;
     DIR *d;
@@ -508,7 +741,11 @@ static int cmd_list(void)
         if (r < 0 || !from[0])
             continue;
         r = lstat(path, &st);
-        printf("%s -> %s%s\n", path, from, r < 0 ? " (gone)" : "");
+        links_update(0, 0, 0, path, link);
+        printf("%s%s (from %s)", path, r < 0 ? " (gone)" : "", from);
+        if (link[0])
+            printf(", link %s", link);
+        printf("\n");
         n++;
     }
     if (d)
@@ -516,6 +753,58 @@ static int cmd_list(void)
     if (n == 0)
         printf("nothing is unsealed in RAM\n");
     return 0;
+}
+
+static int cmd_seal(const char *arg);
+
+/* seal -a: everything unsealed in RAM back into its file */
+static int cmd_all(void)
+{
+    char base[PATH_SIZE], from[PATH_SIZE], path[PATH_SIZE];
+    char names[64][256];
+    struct stat st;
+    struct dirent *e;
+    DIR *d;
+    long n, i;
+    int r, bad;
+
+    n = 0;
+    d = 0;
+    r = ram_base(base, 0);
+    if (r == 0)
+        r = join(path, base, "/.from");
+    if (r == 0)
+        d = opendir(path);
+    while (d && n < 64 && (e = readdir(d)) != 0) {
+        if (e->d_name[0] == '.' || strlen(e->d_name) > 255)
+            continue;
+        read_from(base, e->d_name, from);
+        r = join(path, base, "/");
+        if (r == 0)
+            r = join(path, path, e->d_name);
+        if (r == 0 && from[0])
+            r = lstat(path, &st);
+        if (r == 0 && from[0]) {
+            strcpy(names[n], e->d_name);
+            n++;
+        }
+    }
+    if (d)
+        closedir(d);
+    bad = 0;
+    for (i = 0; i < n; i++) {
+        r = join(path, base, "/");
+        if (r == 0)
+            r = join(path, path, names[i]);
+        if (r == 0)
+            r = cmd_seal(path);
+        if (r != 0)
+            bad = 1;
+    }
+    links_update(0, 0, 0, 0, 0);
+    if (n == 0 && !opt_quiet)
+        printf("nothing is unsealed in RAM\n");
+    return bad;
 }
 
 /* ------------------------------------------------------------- seal */
@@ -564,9 +853,29 @@ static int cmd_seal(const char *arg)
         return 1;
     }
     if (S_ISLNK(st.st_mode)) {
-        warn("%s: a symbolic link; seal the directory it points to",
-            dir, 0);
-        return 1;
+        /* a link unseal made: seal the directory in RAM */
+        n = readlink(dir, from, sizeof from - 1);
+        r = n > 0 ? 0 : -1;
+        if (r == 0) {
+            from[n] = 0;
+            r = split(from, parent, name);
+        }
+        if (r == 0)
+            r = ram_base(base, 0);
+        if (r == 0 && !same_file(parent, base))
+            r = -1;
+        if (r == 0)
+            r = join(dir, from, "");
+        if (r < 0) {
+            warn("%s: a symbolic link; seal the directory it points to",
+                dir, 0);
+            return 1;
+        }
+        r = lstat(dir, &st);
+        if (r < 0) {
+            warn("%s: %s", dir, strerror(errno));
+            return 1;
+        }
     }
     if (!S_ISDIR(st.st_mode)) {
         warn("%s: not a directory", dir, 0);
@@ -690,6 +999,11 @@ static int cmd_seal(const char *arg)
             n = join(state, state, name);
         if (n == 0)
             unlink(state);
+        n = join(state, base, "/");
+        if (n == 0)
+            n = join(state, state, name);
+        if (n == 0)
+            links_update(0, 0, state, 0, 0);
     }
     say_counts(dir, out, &c);
     if (r < 0) {
@@ -849,9 +1163,11 @@ static int cmd_unseal(const char *file)
     else if (!opt_keep)
         unlink(file);
     say_counts(file, final, &c);
+    if (in_ram && !opt_nolink)
+        make_link(file, name, final);
     if (in_ram && !opt_quiet)
-        printf("in RAM, gone at shutdown; put it back with: seal %s\n",
-            final);
+        printf("in RAM, gone at shutdown; put it back with: seal %s "
+            "(or seal -a)\n", opt_nolink ? final : name);
     return 0;
 }
 
@@ -863,10 +1179,13 @@ static void usage(void)
         "usage: seal [-kqs] [-o FILE] DIR   DIR -> DIR.seal, then DIR "
         "goes\n"
         "       seal -l                     what is unsealed in RAM\n"
-        "       unseal [-kqsf] [-d DIR] FILE  FILE -> RAM (-d: into "
-        "DIR)\n"
+        "       unseal [-knqsf] [-d DIR] FILE  FILE -> RAM, link (-d: "
+        "into DIR)\n"
         "       unseal -t [-qsf] FILE       check FILE, list it\n"
+        "       seal -a                     seal back all in RAM\n"
+        "       seal -c                     remove dead links\n"
         "  -k keep DIR (seal) or FILE (unseal -d)  -q quiet\n"
+        "  -n unseal: no link next to FILE\n"
         "  -s password from standard input  -f go on when it is "
         "damaged\n");
     exit(2);
@@ -903,6 +1222,9 @@ int main(int argc, char **argv)
             case 'f': opt_force = 1; break;
             case 'l': opt_list = 1; break;
             case 't': opt_list = 1; break;
+            case 'a': opt_all = 1; break;
+            case 'c': opt_clean = 1; break;
+            case 'n': opt_nolink = 1; break;
             case 'u':
                 unseal = 1;
                 prog = "unseal";
@@ -931,10 +1253,18 @@ next:
         ;
     }
     setup();
-    if (!unseal && opt_list) {
-        if (arg)
+    links_init();
+    if (!unseal && (opt_list || opt_all || opt_clean)) {
+        if (arg || opt_out)
             usage();
-        return cmd_list();
+        if (opt_clean)
+            r = cmd_clean();
+        else if (opt_all)
+            r = cmd_all();
+        else
+            r = cmd_list();
+        finish();
+        return r;
     }
     if (!arg)
         usage();

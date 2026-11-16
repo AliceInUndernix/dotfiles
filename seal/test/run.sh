@@ -11,6 +11,8 @@ RAMT=$(mktemp -d /dev/shm/sealtest.XXXXXX) || exit 1
 XDG_RUNTIME_DIR=$RAMT
 export XDG_RUNTIME_DIR
 RAM=$RAMT/seal
+XDG_STATE_HOME=$T/state
+export XDG_STATE_HOME
 trap 'chmod -R u+rwx "$T" "$RAMT" 2>/dev/null; rm -rf "$T" "$RAMT"' EXIT
 cd "$T" || exit 1
 ln -s "$SEAL" unseal
@@ -189,6 +191,44 @@ seal -o b.seal out/baba 2>/dev/null
 check "two seals of the same tree differ" '! cmp -s a.seal b.seal'
 unseal -d . a.seal
 rm -f b.seal baba.seal
+
+# --- links: unseal leaves one next to the file, seal takes it away
+seal -o vid.mp4 baba
+unseal vid.mp4 > ulog
+check "unseal makes a link next to the file" '[ -L baba ] && [ "$(readlink baba)" = "$RAM/baba" ]'
+check "and writes it down" 'grep -q "$T/baba	$RAM/baba" "$XDG_STATE_HOME/seal/links"'
+"$SEAL" -l > list
+check "seal -l shows the link" 'grep -q "link $T/baba" list'
+echo more > baba/more
+seal baba
+check "seal through the link: back into vid.mp4, link gone" '[ ! -e baba ] && [ ! -L baba ] && [ ! -e "$RAM/baba" ] && [ ! -s "$XDG_STATE_HOME/seal/links" ]'
+unseal -d . vid.mp4
+check "and the change is in it" '[ "$(cat baba/more)" = more ]'
+rm baba/more
+seal -o vid.mp4 baba
+mkdir other; echo o > other/o
+seal other
+unseal vid.mp4
+unseal other.seal
+echo x > other/x
+printf 'pw\npw\n' | "$SEAL" -s -q -a
+check "seal -a seals everything back" '[ ! -e baba ] && [ ! -e other ] && [ -z "$(ls "$RAM")" ] && [ ! -s "$XDG_STATE_HOME/seal/links" ]'
+unseal vid.mp4
+unseal other.seal
+rm -rf "$RAM/baba" "$RAM/other" "$RAM/.from"     # a reboot or crash
+check "after a crash the links are dead" '[ -L baba ] && [ ! -e baba ]'
+"$SEAL" -c -q
+check "seal -c takes the dead links away" '[ ! -L baba ] && [ ! -L other ] && [ ! -s "$XDG_STATE_HOME/seal/links" ] && [ -f vid.mp4 ] && [ -f other.seal ]'
+: > baba
+unseal vid.mp4 2>err
+check "a file in the way: no link, the rest works" '[ -f baba ] && [ -d "$RAM/baba" ] && grep -q "no link" err'
+seal "$RAM/baba"
+rm baba
+unseal -n vid.mp4
+check "unseal -n makes no link" '[ ! -e baba ] && [ -d "$RAM/baba" ]'
+seal "$RAM/baba"
+unseal -d . vid.mp4
+rm -f other.seal
 
 # --- a hard link: two copies
 ln baba/a.txt baba/hard
