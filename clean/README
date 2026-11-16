@@ -13,6 +13,7 @@ original is kept in ~/.system/state/clean first.
     clean -q FILE...       say nothing but errors
     clean -r FILE...       new random bytes, a new hash, even when
                            nothing else goes (before each share)
+    clean -b FILE...       no backup (then -u can't undo it)
     clean -u FILE...       undo: put the newest backup back
 
     find ~/pictures -type f -exec clean -q {} +    a whole directory
@@ -201,6 +202,12 @@ one was. The backups still hold all the metadata: delete them when you
 no longer need an undo:
 
     rm -r ~/.system/state/clean
+
+Or make none: clean -b. A picture or document is then still replaced
+in one step (a new file, renamed over the old one), so a crash leaves
+either the old file or the clean one. Video and audio are changed
+where they are, so a crash or a full disk in the middle can leave one
+half done: keep -b for files you have another copy of.
 
 
 Build and install

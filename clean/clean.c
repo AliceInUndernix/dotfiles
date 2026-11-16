@@ -27,7 +27,7 @@ int dry_run;
 int randomized;
 const char *why;
 
-static int opt_dry, opt_keep, opt_quiet, opt_random;
+static int opt_dry, opt_keep, opt_quiet, opt_random, opt_nobackup;
 static char note_text[MAX_NOTES][NOTE_SIZE];
 static int note_count[MAX_NOTES];
 static int notes;
@@ -723,7 +723,8 @@ static int clean_in_memory(const char *path, const char *abs, int fd,
     if (r == 0 && (changed || opt_random) && !opt_dry)
         rand_mem(kind, &out);
     if (r == 0 && (notes || randomized) && !opt_dry) {
-        r = backup(path, abs);
+        if (!opt_nobackup)
+            r = backup(path, abs);
         if (r == 0)
             r = replace(path, out.p, out.n, st->st_mode);
         if (r == 0)
@@ -765,9 +766,11 @@ static int clean_in_place(const char *path, const char *abs, int fd,
     found = notes;
     if (r < 0 || opt_dry || (!found && !opt_random))
         return r;
-    r = backup(path, abs);
-    if (r < 0)
-        return -1;
+    if (!opt_nobackup) {
+        r = backup(path, abs);
+        if (r < 0)
+            return -1;
+    }
     wfd = open(path, O_RDWR);
     if (wfd < 0) {
         why = "can't open it for writing";
@@ -930,7 +933,7 @@ static int undo_file(const char *path)
 static void usage(void)
 {
     fprintf(stderr,
-        "usage: clean [-n] [-k] [-q] [-r] FILE...\n"
+        "usage: clean [-n] [-k] [-q] [-r] [-b] FILE...\n"
         "       clean -u FILE...\n"
         "Takes the metadata out of each file, in place.\n"
         "Pictures: JPEG, PNG, GIF, WebP, HEIF/AVIF, TIFF, camera raw,\n"
@@ -945,6 +948,7 @@ static void usage(void)
         "  -q  say nothing but errors\n"
         "  -r  new random bytes, a new hash, even when nothing else\n"
         "      goes (each copy you share then differs)\n"
+        "  -b  no backup (then -u can't undo it)\n"
         "  -u  undo: put the newest backup of each file back\n");
     exit(2);
 }
@@ -965,6 +969,7 @@ int main(int argc, char **argv)
             case 'k': opt_keep = 1; break;
             case 'q': opt_quiet = 1; break;
             case 'r': opt_random = 1; break;
+            case 'b': opt_nobackup = 1; break;
             case 'u': undo = 1; break;
             default: usage();
             }
