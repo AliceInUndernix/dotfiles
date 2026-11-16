@@ -35,8 +35,16 @@ xss-lock -- slock &
 # then just says dwm-6.8); restart X for a change to take effect.
 STATUS_CLOCK=true
 STATUS_DATE="%H:%M %Z, %A, %d %B %Y"
+# The bar shows your own time; everything else stays in UTC (the system
+# zone), so no program can send your time zone anywhere. Put your zone's
+# name (a file under /usr/share/zoneinfo, e.g. Europe/Paris) in
+# ~/.config/tz. That file is yours only and not in this repo. Without it
+# the bar shows UTC.
+STATUS_TZ=$(cat "$HOME/.config/tz" 2>/dev/null)
+[ -n "$STATUS_TZ" ] && [ -f "/usr/share/zoneinfo/$STATUS_TZ" ] ||
+	STATUS_TZ=UTC
 while $STATUS_CLOCK; do
-	xsetroot -name "$(date +"$STATUS_DATE")"
+	xsetroot -name "$(TZ=$STATUS_TZ date +"$STATUS_DATE")"
 	sleep $((60 - $(date +%S | sed 's/^0//')))
 done &
 

@@ -4,11 +4,124 @@
 # goes out through the VPN (straight out only in level 0 and the
 # sandbox).
 
-# proxychains (proxychains program)
+# --- SOCKS ports: each has its own circuits and exits, so sites can't
+# link what goes through one port to what goes through another.
+
+# proxychains run as proxychains4, or with -f (not our wrapper)
 SocksPort 127.0.0.1:9050
-# the browser: its own port, so its own circuits and exits, and
-# sites can't link it to what proxychains runs
+# vpn's clock: each mirror on its own circuit (IsolateDestAddr), so one
+# exit can't fake the time for both
+SocksPort 127.0.0.1:9059 IsolateDestAddr
+# browsers, one port each (set it as SOCKS5, DNS through the proxy)
+# 9150 IceCat, 9151 Chromium, 9152 and 9153 any other
 SocksPort 127.0.0.1:9150
+SocksPort 127.0.0.1:9151
+SocksPort 127.0.0.1:9152
+SocksPort 127.0.0.1:9153
+# programs run with "proxychains PROGRAM": each program gets one of
+# these for itself (net/proxychains, the list in
+# ~/.system/state/proxychains/ports)
+SocksPort 127.0.0.1:9100
+SocksPort 127.0.0.1:9101
+SocksPort 127.0.0.1:9102
+SocksPort 127.0.0.1:9103
+SocksPort 127.0.0.1:9104
+SocksPort 127.0.0.1:9105
+SocksPort 127.0.0.1:9106
+SocksPort 127.0.0.1:9107
+SocksPort 127.0.0.1:9108
+SocksPort 127.0.0.1:9109
+SocksPort 127.0.0.1:9110
+SocksPort 127.0.0.1:9111
+SocksPort 127.0.0.1:9112
+SocksPort 127.0.0.1:9113
+SocksPort 127.0.0.1:9114
+SocksPort 127.0.0.1:9115
+SocksPort 127.0.0.1:9116
+SocksPort 127.0.0.1:9117
+SocksPort 127.0.0.1:9118
+SocksPort 127.0.0.1:9119
+SocksPort 127.0.0.1:9120
+SocksPort 127.0.0.1:9121
+SocksPort 127.0.0.1:9122
+SocksPort 127.0.0.1:9123
+SocksPort 127.0.0.1:9124
+SocksPort 127.0.0.1:9125
+SocksPort 127.0.0.1:9126
+SocksPort 127.0.0.1:9127
+SocksPort 127.0.0.1:9128
+SocksPort 127.0.0.1:9129
+SocksPort 127.0.0.1:9130
+SocksPort 127.0.0.1:9131
+SocksPort 127.0.0.1:9132
+SocksPort 127.0.0.1:9133
+SocksPort 127.0.0.1:9134
+SocksPort 127.0.0.1:9135
+SocksPort 127.0.0.1:9136
+SocksPort 127.0.0.1:9137
+SocksPort 127.0.0.1:9138
+SocksPort 127.0.0.1:9139
+SocksPort 127.0.0.1:9140
+SocksPort 127.0.0.1:9141
+SocksPort 127.0.0.1:9142
+SocksPort 127.0.0.1:9143
+SocksPort 127.0.0.1:9144
+SocksPort 127.0.0.1:9145
+SocksPort 127.0.0.1:9146
+SocksPort 127.0.0.1:9147
+SocksPort 127.0.0.1:9148
+SocksPort 127.0.0.1:9149
+SocksPort 127.0.0.1:9150
+SocksPort 127.0.0.1:9151
+SocksPort 127.0.0.1:9152
+SocksPort 127.0.0.1:9153
+SocksPort 127.0.0.1:9154
+SocksPort 127.0.0.1:9155
+SocksPort 127.0.0.1:9156
+SocksPort 127.0.0.1:9157
+SocksPort 127.0.0.1:9158
+SocksPort 127.0.0.1:9159
+SocksPort 127.0.0.1:9160
+SocksPort 127.0.0.1:9161
+SocksPort 127.0.0.1:9162
+SocksPort 127.0.0.1:9163
+SocksPort 127.0.0.1:9164
+SocksPort 127.0.0.1:9165
+SocksPort 127.0.0.1:9166
+SocksPort 127.0.0.1:9167
+SocksPort 127.0.0.1:9168
+SocksPort 127.0.0.1:9169
+SocksPort 127.0.0.1:9170
+SocksPort 127.0.0.1:9171
+SocksPort 127.0.0.1:9172
+SocksPort 127.0.0.1:9173
+SocksPort 127.0.0.1:9174
+SocksPort 127.0.0.1:9175
+SocksPort 127.0.0.1:9176
+SocksPort 127.0.0.1:9177
+SocksPort 127.0.0.1:9178
+SocksPort 127.0.0.1:9179
+SocksPort 127.0.0.1:9180
+SocksPort 127.0.0.1:9181
+SocksPort 127.0.0.1:9182
+SocksPort 127.0.0.1:9183
+SocksPort 127.0.0.1:9184
+SocksPort 127.0.0.1:9185
+SocksPort 127.0.0.1:9186
+SocksPort 127.0.0.1:9187
+SocksPort 127.0.0.1:9188
+SocksPort 127.0.0.1:9189
+SocksPort 127.0.0.1:9190
+SocksPort 127.0.0.1:9191
+SocksPort 127.0.0.1:9192
+SocksPort 127.0.0.1:9193
+SocksPort 127.0.0.1:9194
+SocksPort 127.0.0.1:9195
+SocksPort 127.0.0.1:9196
+SocksPort 127.0.0.1:9197
+SocksPort 127.0.0.1:9198
+SocksPort 127.0.0.1:9199
+
 # the system's DNS: resolv.conf says 127.0.0.1 and the firewall sends
 # port 53 here (not 53 itself, so Tor needs no root for it)
 DNSPort 127.0.0.1:9053
@@ -19,8 +132,29 @@ TransPort 127.0.0.1:9040
 AutomapHostsOnResolve 1
 VirtualAddrNetworkIPv4 10.192.0.0/10
 
+# --- the safest client settings
+
+# only a client: never a relay, a bridge or a directory for others
+ClientOnly 1
+# vanguards-lite: a small fixed set of second-hop relays for onion
+# circuits, against guard discovery (the full vanguards of tor exist
+# only as a separate Python add-on, so not here)
+VanguardsLiteEnabled 1
+# Tor runs in a seccomp sandbox: a hole in Tor reaches far less of the
+# system. install.sh net takes this line out when this tor was built
+# without seccomp (it would not start).
+Sandbox 1
+# padding on the link to the guard, against traffic analysis there
+ConnectionPadding 1
 ClientUseIPv6 0
 AvoidDiskWrites 1
 SafeLogging 1
 # warnings only, in /run (gone after a reboot)
 Log warn file /run/vpn/tor.log
+
+# --- bridges: not on yet. They hide from your ISP (and Riseup) that you
+# use Tor. They need a pluggable transport program (lyrebird for obfs4)
+# and bridge lines. Then take the # off these and add your lines:
+#UseBridges 1
+#ClientTransportPlugin obfs4 exec /usr/bin/lyrebird
+#Bridge obfs4 IP:PORT FINGERPRINT cert=... iat-mode=0

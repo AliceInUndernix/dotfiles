@@ -69,6 +69,7 @@ BARE_DNS=1.1.1.1        # level 0 and the sandbox: not Tor, for when
 TOR_DNS=9053            # Tor's DNSPort (torrc)
 TOR_TRANS=9040          # Tor's TransPort (torrc)
 ONION_NET=10.192.0.0/10 # Tor's VirtualAddrNetworkIPv4 (torrc)
+TOR_CLOCK=9059          # Tor's SocksPort for vpn's clock (torrc)
 
 say() { printf '%s\n' "$*"; }
 warn() { printf 'vpn: %s\n' "$*" >&2; }
@@ -731,37 +732,76 @@ pick() {
 PICK_WHY=
 
 # --- clock -----------------------------------------------------------
-# Set from the Date of two different mirrors' answers, through the
-# tunnel, only when they agree within a minute.
+# Set from the Date of two different mirrors' answers, only when they
+# agree within a minute. Through Tor (its own port, each mirror on its
+# own circuit, so one exit can't fake both): nobody learns where the
+# question came from. Only when Tor can't get going (it needs a clock
+# that is roughly right) is it set through the tunnel once instead,
+# and Tor started again. Never NTP.
 
-http_epoch() {
-    h=$(dnscurl "$(vpn_dns)" -sI --connect-timeout 5 --max-time 10 \
-        "$(mirror_url "$1")" </dev/null | tr -d '\r' |
-        sed -n 's/^[Dd][Aa][Tt][Ee]: *//p' | head -n 1)
+# date_epoch: the Date line of an HTTP answer (stdin) as seconds
+date_epoch() {
+    h=$(tr -d '\r' | sed -n 's/^[Dd][Aa][Tt][Ee]: *//p' | head -n 1)
     [ -n "$h" ] && date -u -d "$h" +%s 2>/dev/null
 }
 
-clock_sync() {
-    a=$(http_epoch 1)
-    b=$(http_epoch 2)
+http_epoch() {
+    dnscurl "$(vpn_dns)" -sI --connect-timeout 5 --max-time 10 \
+        "$(mirror_url "$1")" </dev/null | date_epoch
+}
+
+tor_epoch() {
+    curl -sI --socks5-hostname 127.0.0.1:$TOR_CLOCK \
+        --connect-timeout 20 --max-time 30 \
+        "$(mirror_url "$1")" </dev/null | date_epoch
+}
+
+# clock_from <how> <epoch function>: 1 when there was no answer
+clock_from() {
+    a=$($2 1)
+    b=$($2 2)
     if [ -z "$a" ] || [ -z "$b" ]; then
-        S_CLOCK="not checked: no answer"
-        return
+        S_CLOCK="not checked: no answer $1"
+        return 1
     fi
     d=$((a - b))
     [ $d -ge 0 ] || d=$((-d))
     if [ $d -gt 60 ]; then
         S_CLOCK="not set: two servers disagree by $d s"
-        return
+        return 0
     fi
     d=$(($(date -u +%s) - a))
     [ $d -ge 0 ] || d=$((-d))
     if [ $d -gt 30 ]; then
-        date -u -s "@$a" >/dev/null && S_CLOCK="set ($d s off)"
+        date -u -s "@$a" >/dev/null && S_CLOCK="set $1 ($d s off)"
     else
-        S_CLOCK="ok"
+        S_CLOCK="ok ($1)"
     fi
+    return 0
+}
+
+# clock_sync: through the tunnel (only when Tor can't)
+clock_sync() {
+    clock_from "through the tunnel" http_epoch
     ev "clock: $S_CLOCK"
+}
+
+# clock_tor <state>: through Tor, trying for about 2 minutes while Tor
+# builds its first circuits; 1 when Tor gave no answer
+clock_tor() {
+    note "setting the clock through Tor (waiting for Tor's circuits)"
+    put "$1"
+    n=0
+    while [ $n -lt 4 ]; do
+        if clock_from "through Tor" tor_epoch; then
+            ev "clock: $S_CLOCK"
+            return 0
+        fi
+        n=$((n + 1))
+        sleep 5
+    done
+    ev "clock: no answer through Tor (is Tor up? $RUN/tor.log)"
+    return 1
 }
 
 # --- Tor -------------------------------------------------------------
@@ -771,6 +811,13 @@ start_tor() {
     chown tor "$RUN/tor.log" 2>/dev/null
     if rc-service tor restart >/dev/null 2>&1; then
         S_TOR=running
+    elif grep -q '^Sandbox 1$' /etc/tor/torrc &&
+        sed -i 's/^Sandbox 1$/#Sandbox 1  # off: tor did not start with it/' \
+            /etc/tor/torrc && rc-service tor restart >/dev/null 2>&1
+    then
+        S_TOR=running
+        ev "Tor did not start in its seccomp sandbox: Sandbox 1 is off" \
+            "in /etc/tor/torrc"
     else
         S_TOR="did not start (see $RUN/tor.log)"
     fi
@@ -846,9 +893,6 @@ connect_final() {
         return 1
     fi
     ev "connected to $3 ($2) $1"
-    note "setting the clock through the tunnel"
-    put connecting
-    clock_sync
     # the certificate or list is getting old: renew through the tunnel
     if ! openssl x509 -checkend 1209600 -noout -in "$ETC/client.crt" \
         >/dev/null 2>&1 || [ -n "$(find "$ETC/gateways" -mtime +7)" ]
@@ -867,6 +911,16 @@ connect_final() {
     put connecting
     apply_level
     start_tor
+    # the clock through Tor; when Tor can't get going (a clock far off
+    # stops it), through the tunnel once, then Tor again
+    if [ "$S_TOR" = running ] && ! clock_tor connecting; then
+        clock_sync
+        case $S_CLOCK in "set "*)
+            note "starting Tor again with the right time"
+            put connecting
+            start_tor ;;
+        esac
+    fi
     S_SINCE=$(now_utc)
     if [ "$S_TOR" = running ] || [ "$S_LEVEL" = 1 ]; then
         put ok
@@ -938,6 +992,7 @@ daemon() {
         set_resolv "$BARE_DNS"
         firewall direct
         start_tor
+        [ "$S_TOR" != running ] || clock_tor starting
         S_SINCE=$(now_utc)
         put ok
         idle ;;
@@ -945,6 +1000,7 @@ daemon() {
         set_resolv "$BARE_DNS"
         firewall sandbox
         start_tor
+        [ "$S_TOR" != running ] || clock_tor starting
         S_SINCE=$(now_utc)
         put ok
         idle ;;
@@ -1038,7 +1094,7 @@ cmd_status() {
         [ -z "$sp" ] || say "speed:    $sp"
     fi
     [ -z "$si" ] || say "since:    $si"
-    [ -z "$to" ] || say "Tor:      $to (SOCKS 9050 proxychains, 9150 browser)"
+    [ -z "$to" ] || say "Tor:      $to (SOCKS 9100+ programs, 9150+ browsers)"
     say "DNS:      $(sed -n 's/^nameserver //p' /etc/resolv.conf | head -n 1)"
     if [ -e "$ETC/lan" ]; then say "LAN:      on"; else say "LAN:      off"; fi
     if [ -e "$RUN/fw-off" ]; then
@@ -1489,6 +1545,9 @@ cmd_selftest() {
         "$(as_nobody "curl -s -o /dev/null -m 10 --interface $phys $WEB")"
     st "Tor's browser port 9150 is Tor" \
         "curl -s -m 40 --socks5-hostname 127.0.0.1:9150 $TOR_CHECK |
+        grep -q '\"IsTor\":true'"
+    st "Tor's program port 9100 is Tor" \
+        "curl -s -m 40 --socks5-hostname 127.0.0.1:9100 $TOR_CHECK |
         grep -q '\"IsTor\":true'"
     st "proxychains goes through Tor" \
         "$(as_nobody "proxychains -q curl -s -m 40 $TOR_CHECK") |

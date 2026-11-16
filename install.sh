@@ -644,7 +644,8 @@ install_plover() {
 #   /usr/local/bin/vpn and vpnauth (its password helper, setuid root for
 #   group vpnctl); /etc/init.d/vpnfw (boot) and vpn (default);
 #   /etc/vpn/ (settings, Riseup's list and certificate); /etc/tor/torrc,
-#   /etc/proxychains.conf, /etc/sysctl.d/vpn.conf; /etc/dhcpcd.conf (no
+#   /etc/proxychains.conf and .d/, /usr/local/bin/proxychains,
+#   /etc/sysctl.d/vpn.conf; /etc/dhcpcd.conf (no
 #   hostname, random MAC); hostname "host"; time zone UTC.
 # The system's own files are backed up (<name>.bak.<date>) first.
 install_net() {
@@ -717,12 +718,19 @@ install_net() {
 	install -m 644 "$net/sysctl.conf" /etc/sysctl.d/vpn.conf
 	say "install /etc/init.d/vpnfw, vpn; /etc/vpn; /etc/sysctl.d/vpn.conf"
 	rootcopy "$net/proxychains.conf" /etc/proxychains.conf
-	if ! command -v proxychains >/dev/null 2>&1 &&
-		p4=$(command -v proxychains4)
-	then
-		ln -sfn "$p4" /usr/local/bin/proxychains
-		say "link    /usr/local/bin/proxychains -> $p4"
-	fi
+	# proxychains PROGRAM: each program on a Tor port of its own
+	# (9100-9199 in torrc), one config per port
+	install -d -m 755 /etc/proxychains.d
+	p=9100
+	while [ $p -le 9199 ]; do
+		sed "s/^socks5 127\.0\.0\.1 9050\$/socks5 127.0.0.1 $p/" \
+			"$net/proxychains.conf" > "/etc/proxychains.d/$p.conf"
+		chmod 644 "/etc/proxychains.d/$p.conf"
+		p=$((p + 1))
+	done
+	[ -L /usr/local/bin/proxychains ] && rm -f /usr/local/bin/proxychains
+	install -m 755 "$net/proxychains" /usr/local/bin/proxychains
+	say "install /usr/local/bin/proxychains (own Tor port per program)"
 	# torrc: ours, with the User and DataDirectory lines of the old one
 	# (Gentoo's), or Gentoo's defaults
 	keep=$(grep -E '^[[:space:]]*(User|DataDirectory)[[:space:]]' \
@@ -736,6 +744,17 @@ install_net() {
 		echo "# kept from the torrc that was here before"
 		echo "$keep"
 	} > "$net/.torrc"
+	# Sandbox 1 stops a tor built without seccomp from starting at all
+	if command -v tor >/dev/null 2>&1 &&
+		! tor --verify-config -f "$net/.torrc" >/dev/null 2>&1 &&
+		sed '/^Sandbox 1$/d' "$net/.torrc" > "$net/.torrc2" &&
+		tor --verify-config -f "$net/.torrc2" >/dev/null 2>&1
+	then
+		mv "$net/.torrc2" "$net/.torrc"
+		warn "this tor has no seccomp sandbox: Sandbox 1 left out"
+		warn "(for it: USE=seccomp on net-vpn/tor, emerge -qv net-vpn/tor)"
+	fi
+	rm -f "$net/.torrc2"
 	install -d -m 755 /etc/tor
 	rootcopy "$net/.torrc" /etc/tor/torrc
 	rm -f "$net/.torrc"
@@ -1056,6 +1075,7 @@ ck_net() {
 	for f in openvpn.conf countries mirrors; do ck_same "$n/$f" "/etc/vpn/$f"; done
 	ck_same "$n/sysctl.conf" /etc/sysctl.d/vpn.conf
 	ck_same "$n/proxychains.conf" /etc/proxychains.conf
+	ck_same "$n/proxychains" /usr/local/bin/proxychains
 	if [ -u /usr/local/bin/vpnauth ]; then
 		ck_ok "vpnauth (your password for vpn commands)"
 		[ ! -f /usr/local/bin/vpnauth ] ||

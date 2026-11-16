@@ -21,11 +21,15 @@ What happens at boot
    speed-tested through the tunnel (5 MB or 6 seconds each, from the
    mirrors in /etc/vpn/mirrors), and the fastest one is used. Nothing
    depends on where you are.
-3. OpenVPN connects to that server. The clock is set from two mirrors'
-   answers through the tunnel, when they agree. If the certificate
-   expires within 14 days or the server list is a week old, both are
-   renewed, through the tunnel.
-4. Tor starts, after OpenVPN, so it goes out through the VPN.
+3. OpenVPN connects to that server. If the certificate expires
+   within 14 days or the server list is a week old, both are renewed,
+   through the tunnel.
+4. Tor starts, after OpenVPN, so it goes out through the VPN. The
+   clock is set from two mirrors' answers through Tor (each on its own
+   circuit), when they agree; never NTP. Only if Tor can't get going
+   (a clock far off stops it) is it set through the tunnel once, and
+   Tor started again. In level 0 and the sandbox it is set through
+   Tor too.
 5. /etc/resolv.conf says "nameserver 127.0.0.1" and is locked (chattr
    +i): every DNS lookup goes to Tor. DNS sent to any other server is
    sent to Tor too.
@@ -95,16 +99,34 @@ Commands
                         not; off by default, outgoing only
     vpn firewall-off    no kill switch at all, until vpn firewall-on
     vpn run PROGRAM     a program that may go online in the sandbox
-    proxychains PROGRAM run a program through Tor (port 9050)
+    proxychains PROGRAM run a program through Tor, on a port of its
+                        own (below)
+    proxychains -l      which program has which port
 
 Every command but "vpn status", "vpn watch" and "vpn run" asks for your own
 password (not root's): vpnauth checks it and runs vpn as root. You
 must be in group vpnctl (install.sh net puts you there; log in again).
 vpn run needs group vpnallow, also set up by install.sh net.
 
-The browser: set its SOCKS5 proxy to 127.0.0.1 port 9150, with DNS
-through the proxy. That port has its own Tor circuits, so sites can't
-link the browser to what proxychains runs by their exit.
+Tor ports. Each SOCKS port has its own Tor circuits and exits, so a
+site can't link what comes through one port to what comes through
+another:
+
+    9100-9199  proxychains PROGRAM: each program gets one for itself,
+               the first time it runs, and keeps it (the list is
+               ~/.system/state/proxychains/ports; delete a line to
+               free a port). What the program starts uses its port too.
+    9150       IceCat      } set the browser's SOCKS5 proxy to
+    9151       Chromium    } 127.0.0.1 and its port, with DNS
+    9152 9153  any other   } through the proxy
+    9050       proxychains4 itself, or proxychains -f FILE
+    9059       vpn's clock
+
+Tor's settings (net/torrc): only a client, vanguards-lite (a fixed
+set of second relays for onion circuits, against guard discovery),
+padding to the guard, and Tor in its own seccomp sandbox (left out
+when tor was built without it, or doesn't start with it). Bridges are
+ready in torrc but off: they need a transport program (lyrebird).
 
 When the VPN can't be reached at all, "vpn refresh" offers to open the
 firewall for root only, to DNS and HTTPS, to fetch a new list and
@@ -177,8 +199,13 @@ Privacy
   get one only with their chip's own driver (ax88179_178a, r8152,
   asix), not with the generic cdc_ncm or cdc_ether, which then get no
   DHCP answer; if DHCP still fails, vpn gives the cards their own MACs
-  back after 30 s. The hostname is "host" and the clock is in UTC, so
-  programs can't give away either.
+  back after 30 s. The hostname is "host" and the system's time zone
+  is UTC, so programs can't give away either: browsers, git commits
+  and mail headers all say UTC. Only dwm's bar shows your own time,
+  from ~/.config/tz (see x/xinitrc); that file is not in the repo.
+  A screenshot of the whole screen shows the bar.
+- The clock is set through Tor, so no time server learns your
+  address or when you start the machine.
 - Nothing is logged for long: the status, the events (vpn log),
   OpenVPN's and Tor's warnings are in /run/vpn, which is gone after
   a reboot.
@@ -202,7 +229,9 @@ Files
     net/countries     /etc/vpn/countries: edit here, install.sh net
     net/mirrors       /etc/vpn/mirrors
     net/torrc         /etc/tor/torrc (with the old User, DataDirectory)
-    net/proxychains.conf  /etc/proxychains.conf
+    net/proxychains.conf  /etc/proxychains.conf, and one copy per
+                      port in /etc/proxychains.d (9100.conf ...)
+    net/proxychains   /usr/local/bin/proxychains (a port per program)
     net/sysctl.conf   /etc/sysctl.d/vpn.conf (IPv6 off)
 
 From Riseup, in /etc/vpn: gateways (one server per line: IP, country,

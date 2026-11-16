@@ -1589,7 +1589,7 @@ static void draw_connection(int top, int left, int h, int w)
         pen(same(sv("tor"), "running") ? c_green : c_red,
             sv("tor")[0] ? sv("tor") : "-");
         if (same(sv("tor"), "running"))
-            pen(c_dim, " 9050 9150");
+            pen(c_dim, " 9100+ 9150+");
         pen_end();
         r++;
     }
