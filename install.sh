@@ -45,7 +45,7 @@ umask 022
 
 DOTFILES=$(cd "$(dirname "$0")" && pwd)
 STAMP=$(date +%Y%m%d-%H%M%S)
-PARTS="ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver moonlander plover net icecat chromium clean"
+PARTS="ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver moonlander plover net icecat chromium clean seal"
 # only when named (or numbered): not in "all" or Enter alone
 ONLY_NAMED="icecat chromium"
 
@@ -481,6 +481,11 @@ install_dwm()   { build_suckless dwm; }
 # clean: takes metadata out of files (see clean/README). Our own C
 # program, built and installed like the suckless tools.
 install_clean() { build_suckless clean; }
+
+# seal: turns a directory into one encrypted file, unseal gives it back
+# (see seal/README). Our own C program, built like the suckless tools;
+# unseal is a link to seal.
+install_seal() { build_suckless seal; }
 
 # WebArchiver: archives whole websites (see webarchiver/README). Built
 # and installed like the suckless tools; it runs wget for every download.
@@ -1011,7 +1016,7 @@ ck_part() {
 	tmux|flameshot|mpv|sioyek|wiremix|btop)
 		ck_links "$1"
 		ck_cmd "$1" ;;
-	dwm|st|webarchiver|clean) ck_built "$1" ;;
+	dwm|st|webarchiver|clean|seal) ck_built "$1" ;;
 	dmenu)
 		ck_built dmenu
 		ck_links dmenu ;;
@@ -1206,6 +1211,7 @@ part_info() {
 	slock) echo "build and install slock [root]" ;;
 	webarchiver) echo "build and install WebArchiver" ;;
 	clean) echo "build and install clean (takes metadata out of files)" ;;
+	seal) echo "build and install seal and unseal (encrypted directories)" ;;
 	moonlander) echo "QMK and the keyboard's firmware" ;;
 	plover) echo "Plover and Dotterel [root once: group dialout]" ;;
 	net) echo "Riseup VPN, Tor, kill switch (Gentoo, OpenRC) [root]" ;;

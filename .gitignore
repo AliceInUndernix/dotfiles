@@ -12,3 +12,7 @@ net/vpntop
 # clean build output
 clean/*.o
 clean/clean-bin
+# seal build output
+seal/*.o
+seal/seal
+seal/test/vectors

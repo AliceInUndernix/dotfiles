@@ -13,6 +13,7 @@ edited) live in the app directories at the top of the repo.
 | `suckless/st-0.9.3.tar.gz` | st release | https://dl.suckless.org/st/ | 0.9.3 |
 | `suckless/dmenu-5.4.tar.gz` | dmenu release | https://dl.suckless.org/tools/ | 5.4 |
 | `suckless/slock-1.7.tar.gz` | slock release | https://dl.suckless.org/tools/ | 1.7 |
+| `monocypher/monocypher-4.0.2.tar.gz` | the crypto library `seal/crypto.c` is taken from | https://github.com/LoupVaillant/Monocypher | 4.0.2 (`0d85f98`, 2023-09-02) |
 | `tmux/tmux-3.8.tar.gz` | tmux release (if a distro ever lacks it) | https://github.com/tmux/tmux/releases | 3.8 |
 | `nvim-plugins/zen-mode.nvim.tar.gz` | prose mode view | https://github.com/folke/zen-mode.nvim | `8564ce6` (2025-10-28) |
 | `nvim-plugins/vim-pencil.tar.gz` | prose wrapping | https://github.com/preservim/vim-pencil | `6d70438` (2023-04-03) |
@@ -29,6 +30,7 @@ Full commits:
 - mini.pick `f1216d764d0c2772e88d4e1a0cef3082f5b498e1`
 - mini.surround `5357f00aca51a3b43e7775901b1ad9699f8c2678`
 - which-key.nvim `3aab2147e74890957785941f0c1ad87d0a44c15a`
+- Monocypher 4.0.2 `0d85f98c9d9b0227e42cf795cb527dff372b40a4`
 
 The suckless tarballs match the checksums suckless publishes in each
 directory's `sha256sums.txt`. The git snapshots were made with
