@@ -24,9 +24,10 @@
 #define NOTE_SIZE 120
 
 int dry_run;
+int randomized;
 const char *why;
 
-static int opt_dry, opt_keep, opt_quiet;
+static int opt_dry, opt_keep, opt_quiet, opt_random;
 static char note_text[MAX_NOTES][NOTE_SIZE];
 static int note_count[MAX_NOTES];
 static int notes;
@@ -82,18 +83,57 @@ void note2(const char *what, const char *detail)
     note(s);
 }
 
+/* notes_saved: a copy of the notes, to compare with */
+static char saved_text[MAX_NOTES][NOTE_SIZE];
+static int saved_count[MAX_NOTES];
+static int saved;
+
+static void save_notes(void)
+{
+    memcpy(saved_text, note_text, sizeof note_text);
+    memcpy(saved_count, note_count, sizeof note_count);
+    saved = notes;
+}
+
+static void restore_notes(void)
+{
+    memcpy(note_text, saved_text, sizeof note_text);
+    memcpy(note_count, saved_count, sizeof note_count);
+    notes = saved;
+}
+
+static int same_notes(void)
+{
+    int i;
+
+    if (notes != saved)
+        return 0;
+    for (i = 0; i < notes; i++) {
+        if (strcmp(note_text[i], saved_text[i]) ||
+            note_count[i] != saved_count[i])
+        {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 static void print_notes(const char *path, const char *verb)
 {
     int i;
 
     if (opt_quiet)
         return;
-    printf("%s: %s ", path, verb);
+    printf("%s:", path);
+    if (notes)
+        printf(" %s ", verb);
     for (i = 0; i < notes; i++) {
         printf("%s%s", i ? ", " : "", note_text[i]);
         if (note_count[i] > 1)
             printf(" x%d", note_count[i]);
     }
+    if (randomized)
+        printf("%s new random bytes (a hash of its own)", notes ? ";" : "");
     printf("\n");
 }
 
@@ -513,11 +553,6 @@ static int replace(const char *path, const unsigned char *p, long n,
 
 /* ------------------------------------------------------------ kinds */
 
-enum {
-    k_unknown, k_jpeg, k_png, k_gif, k_webp, k_pdf,
-    k_mp4, k_mkv, k_mp3, k_flac, k_riff, k_heif
-};
-
 static long id3_size(const unsigned char *h)
 {
     long n;
@@ -599,14 +634,29 @@ static int kind_of(int fd, long long size)
 
 /* ------------------------------------------------------------ one file */
 
+static int run_in_memory(int kind, struct buf *in, struct buf *out)
+{
+    switch (kind) {
+    case k_jpeg: return clean_jpeg(in->p, in->n, out);
+    case k_png: return clean_png(in->p, in->n, out);
+    case k_gif: return clean_gif(in->p, in->n, out);
+    case k_webp: return clean_webp(in->p, in->n, out);
+    default: return clean_pdf(in->p, in->n, out);
+    }
+}
+
+/* Something was taken out when cleaning the clean file again says less
+ * than cleaning the file did (a clean JPEG still has an EXIF with its
+ * rotation, so "EXIF" alone means nothing). */
 static int clean_in_memory(const char *path, const char *abs, int fd,
     struct stat *st, int kind)
 {
-    struct buf in, out;
-    int r;
+    struct buf in, out, again;
+    int r, changed;
 
     memset(&in, 0, sizeof in);
     memset(&out, 0, sizeof out);
+    memset(&again, 0, sizeof again);
     if (st->st_size > MAX_MEMORY) {
         why = "too big (more than 256 MB)";
         return -1;
@@ -616,16 +666,21 @@ static int clean_in_memory(const char *path, const char *abs, int fd,
         buf_free(&in);
         return -1;
     }
-    switch (kind) {
-    case k_jpeg: r = clean_jpeg(in.p, in.n, &out); break;
-    case k_png: r = clean_png(in.p, in.n, &out); break;
-    case k_gif: r = clean_gif(in.p, in.n, &out); break;
-    case k_webp: r = clean_webp(in.p, in.n, &out); break;
-    default: r = clean_pdf(in.p, in.n, &out); break;
-    }
-    if (r == 0 && out.n == in.n && !memcmp(out.p, in.p, in.n))
+    r = run_in_memory(kind, &in, &out);
+    changed = 0;
+    if (r == 0 && notes) {
+        save_notes();
         notes = 0;
-    if (r == 0 && notes && !opt_dry) {
+        if (run_in_memory(kind, &out, &again) == 0 && !same_notes())
+            changed = 1;
+        restore_notes();
+        buf_free(&again);
+    }
+    if (!changed)
+        notes = 0;
+    if (r == 0 && (changed || opt_random) && !opt_dry)
+        rand_mem(kind, &out);
+    if (r == 0 && (notes || randomized) && !opt_dry) {
         r = backup(path, abs);
         if (r == 0)
             r = replace(path, out.p, out.n, st->st_mode);
@@ -653,12 +708,14 @@ static int run_in_place(int fd, long long size, int kind)
 static int clean_in_place(const char *path, const char *abs, int fd,
     struct stat *st, int kind)
 {
-    int r, wfd;
+    struct stat now;
+    int r, wfd, found;
 
     dry_run = 1;
     r = run_in_place(fd, st->st_size, kind);
     dry_run = 0;
-    if (r < 0 || !notes || opt_dry)
+    found = notes;
+    if (r < 0 || opt_dry || (!found && !opt_random))
         return r;
     r = backup(path, abs);
     if (r < 0)
@@ -669,7 +726,12 @@ static int clean_in_place(const char *path, const char *abs, int fd,
         return -1;
     }
     notes = 0;
-    r = run_in_place(wfd, st->st_size, kind);
+    r = found ? run_in_place(wfd, st->st_size, kind) : 0;
+    if (r == 0 && fstat(wfd, &now) == 0 &&
+        rand_place(kind, wfd, now.st_size) < 0)
+    {
+        r = -1;
+    }
     if (close(wfd) < 0 && r == 0) {
         why = "could not write";
         r = -1;
@@ -688,6 +750,7 @@ static int clean_file(const char *path)
     int fd, kind, r;
 
     notes = 0;
+    randomized = 0;
     why = 0;
     r = lstat(path, &st);
     if (r < 0) {
@@ -728,7 +791,7 @@ static int clean_file(const char *path)
             why ? why : "broken");
         return -1;
     }
-    if (!notes) {
+    if (!notes && !randomized) {
         if (!opt_quiet)
             printf("%s: nothing to remove\n", path);
     } else {
@@ -802,15 +865,18 @@ static int undo_file(const char *path)
 static void usage(void)
 {
     fprintf(stderr,
-        "usage: clean [-n] [-k] [-q] FILE...\n"
+        "usage: clean [-n] [-k] [-q] [-r] FILE...\n"
         "       clean -u FILE...\n"
         "Takes the metadata out of each file, in place: JPEG, PNG, GIF,\n"
         "WebP, HEIF/AVIF, PDF, MP4/MOV/M4A, MKV/WebM, MP3, FLAC, WAV,\n"
-        "AVI.\n"
+        "AVI.\n");
+    fprintf(stderr,
         "The original goes to ~/.system/state/clean first.\n"
         "  -n  only say what would go; change nothing\n"
         "  -k  keep the file's times (else: 2000-01-01 00:00 UTC)\n"
         "  -q  say nothing but errors\n"
+        "  -r  new random bytes, a new hash, even when nothing else\n"
+        "      goes (each copy you share then differs)\n"
         "  -u  undo: put the newest backup of each file back\n");
     exit(2);
 }
@@ -830,6 +896,7 @@ int main(int argc, char **argv)
             case 'n': opt_dry = 1; break;
             case 'k': opt_keep = 1; break;
             case 'q': opt_quiet = 1; break;
+            case 'r': opt_random = 1; break;
             case 'u': undo = 1; break;
             default: usage();
             }

@@ -8,7 +8,7 @@ CC = cc
 CFLAGS = -std=c89 -pedantic -Wno-long-long -Wall -Wextra -O2
 LDFLAGS = -static -s
 
-SRC = clean.c img.c media.c pdf.c inflate.c
+SRC = clean.c img.c media.c pdf.c inflate.c rand.c
 OBJ = $(SRC:.c=.o)
 
 all: clean-bin

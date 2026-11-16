@@ -7,8 +7,14 @@ struct buf {
     long cap;
 };
 
+enum {
+    k_unknown, k_jpeg, k_png, k_gif, k_webp, k_pdf,
+    k_mp4, k_mkv, k_mp3, k_flac, k_riff, k_heif
+};
+
 /* clean.c */
 extern int dry_run;
+extern int randomized;      /* rand.c gave this file new random bytes */
 void note(const char *what);
 void note2(const char *what, const char *detail);
 void buf_put(struct buf *b, const unsigned char *s, long n);
@@ -52,6 +58,16 @@ int clean_heif(int fd, long long size);
  * orientation, when not 0 */
 void exif_note(const unsigned char *p, long n, int *orient);
 int at_fill(int fd, long long off, long long n, int c);
+
+/* media.c: where the last top-level element of a Matroska file starts;
+ * -1 when the file doesn't end where its elements say */
+long long mkv_last(int fd, long long size);
+
+/* rand.c: random bytes where the format lets things vary, so the file
+ * gets a hash of its own; 1 when done (notes it), 0 when there is no
+ * room, -1 on error */
+int rand_mem(int kind, struct buf *b);
+int rand_place(int kind, int fd, long long size);
 
 /* inflate.c: zlib data in, at most max bytes out; -1 when broken or
  * bigger than max (a zip bomb stops there) */

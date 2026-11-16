@@ -281,6 +281,7 @@ int clean_png(const unsigned char *in, long n, struct buf *out)
     long i, len;
     const unsigned char *t;
     unsigned char ex[38];
+    struct buf d;
     char w[44];
     int k, keep, orient;
 
@@ -302,6 +303,29 @@ int clean_png(const unsigned char *in, long n, struct buf *out)
             if (i + 12 + len < n)
                 note("hidden data after the picture");
             break;
+        }
+        if (is_word(t, "IDAT")) {
+            /* the picture data as one chunk, however it was split */
+            memset(&d, 0, sizeof d);
+            while (i + 12 <= n && is_word(in + i + 4, "IDAT")) {
+                len = get32be(in + i);
+                if (len < 0 || len > n - i - 12) {
+                    buf_free(&d);
+                    why = "a broken PNG";
+                    return -1;
+                }
+                buf_put(&d, in + i + 8, len);
+                i += 12 + len;
+            }
+            put32be(ex, d.n);
+            memcpy(ex + 4, "IDAT", 4);
+            buf_put(out, ex, 8);
+            buf_put(out, d.p, d.n);
+            put32be(ex, (long)crc32_png(d.p, d.n,
+                crc32_png((const unsigned char *)"IDAT", 4, 0)));
+            buf_put(out, ex, 4);
+            buf_free(&d);
+            continue;
         }
         keep = !(t[0] & 0x20);  /* critical chunks: always */
         for (k = 0; png_keep[k] && !keep; k++) {

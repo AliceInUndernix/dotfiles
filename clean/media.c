@@ -914,3 +914,28 @@ int clean_heif(int fd, long long size)
     free(m);
     return r;
 }
+
+long long mkv_last(int fd, long long size)
+{
+    struct elem e;
+    long long off, last, data;
+
+    off = 0;
+    last = -1;
+    while (off < size) {
+        if (ebml_head(fd, off, size, &e) < 0)
+            return -1;
+        data = off + e.idlen + e.szlen;
+        if (e.size < 0) {
+            if (e.id != ID_SEGMENT)
+                return -1;
+            off = data;     /* its children go on to the end */
+            continue;
+        }
+        if (e.size > size - data)
+            return -1;
+        last = off;
+        off = data + e.size;
+    }
+    return last;
+}

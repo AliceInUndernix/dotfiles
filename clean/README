@@ -11,13 +11,16 @@ original is kept in ~/.system/state/clean first.
     clean -n FILE...       only say what would go; change nothing
     clean -k FILE...       keep the files' times
     clean -q FILE...       say nothing but errors
+    clean -r FILE...       new random bytes, a new hash, even when
+                           nothing else goes (before each share)
     clean -u FILE...       undo: put the newest backup back
 
     find ~/pictures -type f -exec clean -q {} +    a whole directory
 
 It says what it took out:
 
-    photo.jpg: removed EXIF (camera, date, GPS position), thumbnail
+    photo.jpg: removed EXIF (camera, date, GPS position), thumbnail;
+        new random bytes (a hash of its own)
     report.pdf: removed document information (Author, Creator,
         Producer, CreationDate), XMP, file ID, earlier versions and
         unused parts (12)
@@ -40,6 +43,8 @@ PNG        text (author, program, comments), date, EXIF, pixel size,
            program chunks, anything after the picture
 GIF        comments, XMP, program data (the loop setting stays)
 WebP       EXIF (rotation kept), XMP
+HEIF, AVIF EXIF (camera, GPS, dates) and XMP, blanked where they are
+           (the rotation is not in EXIF in these files)
 PDF        document information (author, title, program, dates), XMP
            everywhere, program data (PieceInfo: Illustrator keeps the
            whole original there), dates and authors of comments, the
@@ -64,12 +69,41 @@ what goes becomes padding of the same size, so nothing else moves.
 The file's times become 2000-01-01 00:00 UTC (-k keeps them).
 
 
+A hash of its own
+-----------------
+
+A file's hash (its SHA-256, say) can follow it: two clean copies of
+the same photo would have the same hash, so whoever sees both knows
+they are one file, and a hash noted once finds the file again. So each
+time clean changes a file it also changes what the format lets vary
+without changing the content, at random:
+
+JPEG       0 to 31 fill bytes (0xFF, which decoders skip) before each
+           marker
+PNG        the picture data split into four chunks at random places
+GIF        the picture data in sub-blocks of random sizes
+PDF        the four binary bytes on the second line
+MP4, MOV,  32 random bytes in a padding box at the end
+HEIF, AVIF
+Matroska   32 random bytes in a Void element at the end
+FLAC       32 random bytes in the padding block
+WAV, AVI   32 random bytes in a JUNK chunk at the end
+
+Nothing of it says "clean". clean -r does it again, so each copy you
+share gets its own hash. MP3 and WebP have no such place, so their
+hash changes only with what is taken out.
+
+Not the same thing: "perceptual" hashes (PhotoDNA and the like) look at
+the picture itself, and these bytes don't change it. Only changing the
+picture (cropping, resizing) changes those.
+
+
 What it leaves
 --------------
 
 - Encrypted PDFs, and signed ones (cleaning breaks the signature, and
   the signature itself names the signer).
-- Not yet: HEIF/AVIF (iPhone photos), TIFF and camera raw files, Ogg
+- Not yet: TIFF and camera raw files, Ogg
   (Vorbis, Opus), office documents and EPUB (zip), and PDFs packed in
   ways other than Flate.
 - What is in the picture or sound itself: faces, places, a voice,
@@ -103,6 +137,7 @@ By hand (the build makes clean-bin, since "make clean" removes it):
     make PREFIX=$HOME/.system install
 
 Files: clean.c (the command, backups), img.c (JPEG, PNG, GIF, WebP),
-media.c (video and audio), pdf.c (PDF), inflate.c (unpacks the
+media.c (video, audio, HEIF), pdf.c (PDF), rand.c (the random bytes),
+inflate.c (unpacks the
 compressed parts of PDFs, and stops at 64 MB, so a zip bomb can't fill
 the memory).
