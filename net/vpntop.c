@@ -1597,7 +1597,8 @@ static void draw_connection(int top, int left, int h, int w)
         pen_at(r, left + 2, w - 4);
         label("clock", 9);
         cl = sv("clock");
-        pen(same(cl, "ok") || !strncmp(cl, "set", 3) ? c_green : c_yellow,
+        pen(!strncmp(cl, "ok", 2) || !strncmp(cl, "set", 3) ?
+            c_green : c_yellow,
             cl[0] ? cl : "-");
         pen_end();
         r++;
