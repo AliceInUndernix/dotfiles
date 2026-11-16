@@ -811,9 +811,15 @@ start_tor() {
     chown tor "$RUN/tor.log" 2>/dev/null
     if rc-service tor restart >/dev/null 2>&1; then
         S_TOR=running
+    # only when the sandbox itself is why: the torrc fails tor's check
+    # with it and passes without it (a port in use passes both)
     elif grep -q '^Sandbox 1$' /etc/tor/torrc &&
-        sed -i 's/^Sandbox 1$/#Sandbox 1  # off: tor did not start with it/' \
-            /etc/tor/torrc && rc-service tor restart >/dev/null 2>&1
+        ! tor --verify-config -f /etc/tor/torrc >/dev/null 2>&1 &&
+        sed 's/^Sandbox 1$/#Sandbox 1  # off: tor did not start with it/' \
+            /etc/tor/torrc > "$RUN/torrc.new" &&
+        tor --verify-config -f "$RUN/torrc.new" >/dev/null 2>&1 &&
+        cat "$RUN/torrc.new" > /etc/tor/torrc &&
+        rc-service tor restart >/dev/null 2>&1
     then
         S_TOR=running
         ev "Tor did not start in its seccomp sandbox: Sandbox 1 is off" \
@@ -821,6 +827,7 @@ start_tor() {
     else
         S_TOR="did not start (see $RUN/tor.log)"
     fi
+    rm -f "$RUN/torrc.new"
     ev "Tor: $S_TOR"
 }
 

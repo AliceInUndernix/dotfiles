@@ -6,7 +6,8 @@
 # same port; the list is ~/.system/state/proxychains/ports ("name
 # port", one per line: delete a line to free its port).
 # Installed as /usr/local/bin/proxychains by install.sh net; the real
-# proxychains-ng is proxychains4, with /etc/proxychains.d/PORT.conf.
+# proxychains-ng is /usr/bin/proxychains4 or /usr/bin/proxychains, run
+# with /etc/proxychains.d/PORT.conf.
 #
 #   proxychains [-q] PROGRAM [ARGS]   PROGRAM on its own port
 #   proxychains -l                    the programs and their ports
@@ -20,7 +21,8 @@ say() { printf '%s\n' "$*"; }
 die() { printf 'proxychains: %s\n' "$*" >&2; exit 1; }
 
 real=
-for p in /usr/bin/proxychains4 /usr/local/bin/proxychains4; do
+# Gentoo's is /usr/bin/proxychains (this one is /usr/local/bin's)
+for p in /usr/bin/proxychains4 /usr/bin/proxychains; do
     if [ -x "$p" ]; then
         real=$p
         break
