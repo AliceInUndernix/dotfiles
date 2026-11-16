@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include "steno.h"
 
@@ -48,6 +49,9 @@ struct modkey {
 struct mods {
     struct modkey *keys;
     int nkeys, ckeys;
+    long mst[MODS_MAX];    /* the modifier strokes, and their keys: */
+    int mbits[MODS_MAX];   /* 1 control, 2 alt, 4 shift, 8 super */
+    int nmod;
     char out[COMBO_MAX + 64];
 };
 
@@ -655,9 +659,9 @@ static const char *const mod_strokes[] = {
     "KHR", "SH", "THRA", "KPW", "SKHR", "TKHRA", "STHRA", "STKHRA",
     "KPWHR", "SKPWHR"
 };
-/* bits: 1 control, 2 alt, 4 shift, 8 super */
+/* What dotterel-modifiers.py does, for steno -C to write as a .mods
+ * file. bits: 1 control, 2 alt, 4 shift, 8 super */
 static const int mod_bits[] = { 1, 4, 2, 8, 5, 3, 6, 7, 9, 12 };
-static long mod_st[10];
 
 static const char *const mod_sources[] = {
     "dotterel-punctuation.json", "dotterel-commands.json",
@@ -665,13 +669,13 @@ static const char *const mod_sources[] = {
     "dotterel-movement.modal"
 };
 
-static int mod_of(long st)
+static int mod_of(struct mods *x, long st)
 {
     int i;
 
-    for (i = 0; i < 10; i++)
-        if (mod_st[i] == st)
-            return mod_bits[i];
+    for (i = 0; i < x->nmod; i++)
+        if (x->mst[i] == st)
+            return x->mbits[i];
     return 0;
 }
 
@@ -821,60 +825,13 @@ static void mods_read_table(struct mods *x, struct table *t)
 
     for (e = 0; e < t->nent; e++) {
         k = t->keys + t->ent_key[e];
-        if (k[0] != 1 || mod_of(k[1]))
+        if (k[0] != 1 || mod_of(x, k[1]))
             continue;
         if (key_of(t->vals + t->ent_val[e], key))
             mods_add(x, k[1], key);
     }
 }
 
-static int load_mods(struct dict *d)
-{
-    struct mods *x;
-    struct dict tmp;
-    char dir[1024], path[1100];
-    char *p, *buf;
-    long size;
-    struct json j;
-    unsigned i;
-    int r;
-
-    for (i = 0; i < 10; i++)
-        mod_st[i] = stroke_parse(mod_strokes[i], strlen(mod_strokes[i]));
-    x = malloc(sizeof(*x));
-    if (!x)
-        return -1;
-    memset(x, 0, sizeof(*x));
-    d->x = x;
-    d->longest = 4;
-    scopy(dir, d->path, sizeof(dir));
-    p = strrchr(dir, '/');
-    if (p)
-        p[1] = 0;
-    else
-        dir[0] = 0;
-    for (i = 0; i < sizeof(mod_sources) / sizeof(mod_sources[0]); i++) {
-        sprintf(path, "%.1000s%s", dir, mod_sources[i]);
-        buf = read_file(path, &size);
-        if (!buf)
-            continue;
-        memset(&tmp, 0, sizeof(tmp));
-        j.s = buf;
-        j.i = 0;
-        j.n = size;
-        j.path = path;
-        if (strstr(path, ".modal"))
-            r = load_modal(&tmp, &j);
-        else
-            r = load_json(&tmp, &j);
-        /* insertion order is the file's order: keep the first one */
-        if (r == 0)
-            mods_read_table(x, tmp.m ? &tmp.m->entry : &tmp.t);
-        free(buf);
-        /* tmp's tables are small and kept: read once at start */
-    }
-    return 0;
-}
 
 static const char *mods_lookup(struct mods *x, const long *st, int n)
 {
@@ -885,9 +842,9 @@ static const char *mods_lookup(struct mods *x, const long *st, int n)
         "super" };
 
     for (i = 0; i < n - 1; i++)
-        if (!mod_of(st[i]))
+        if (!mod_of(x, st[i]))
             return 0;
-    if (mod_of(st[n - 1]))
+    if (mod_of(x, st[n - 1]))
         return "{#}";
     for (i = 0; i + 1 < n - 1; i++)
         if (st[i] == st[i + 1])
@@ -902,7 +859,7 @@ static const char *mods_lookup(struct mods *x, const long *st, int n)
         return 0;
     bits = 0;
     for (i = 0; i < n - 1; i++)
-        bits |= mod_of(st[i]);
+        bits |= mod_of(x, st[i]);
     scopy(k, key, sizeof(k));
     for (b = 3; b >= 0; b--)
         if (bits & (1 << b)) {
@@ -963,27 +920,269 @@ static void dict_free(struct dict *d)
     }
 }
 
-static int load_into(struct dict *d, const char *path)
+/* --- steno's own format ----------------------------------------------
+ *
+ * One entry a line, fields between tabs:
+ *
+ *   NAME.dict   TEXT <tab> OUTLINE [OUTLINE...]
+ *   NAME.mode   option <tab> NAME <tab> yes|no
+ *               entry|dict|exit <tab> TEXT <tab> OUTLINE [OUTLINE...]
+ *   NAME.mods   modifier <tab> control[+alt+shift+super] <tab> OUTLINE
+ *               keys <tab> FILE   (its one-key strokes get modifiers)
+ *
+ * Outlines are separated by spaces. In TEXT, \t is a tab, \n a newline,
+ * \r a carriage return and \\ a backslash. Empty lines are skipped. */
+
+static char *next_line(char **p)
+{
+    char *l, *e;
+
+    l = *p;
+    if (!l || !*l)
+        return 0;
+    e = strchr(l, '\n');
+    if (e) {
+        *e = 0;
+        *p = e + 1;
+    } else {
+        *p = l + strlen(l);
+    }
+    e = l + strlen(l);
+    if (e > l && e[-1] == '\r')
+        e[-1] = 0;
+    return l;
+}
+
+static int split_tabs(char *l, char **f, int max)
+{
+    int n;
+    char *t;
+
+    n = 0;
+    f[n] = l;
+    n++;
+    while (n < max) {
+        t = strchr(f[n - 1], '\t');
+        if (!t)
+            break;
+        *t = 0;
+        f[n] = t + 1;
+        n++;
+    }
+    return n;
+}
+
+static void unescape(const char *s, char *o, int size)
+{
+    int n;
+
+    n = 0;
+    while (*s && n < size - 1) {
+        if (s[0] == '\\' && s[1]) {
+            if (s[1] == 'n' || s[1] == 't' || s[1] == 'r' ||
+                s[1] == '\\')
+            {
+                o[n] = s[1] == 'n' ? '\n' : s[1] == 't' ? '\t' :
+                    s[1] == 'r' ? '\r' : '\\';
+                n++;
+                s += 2;
+                continue;
+            }
+        }
+        o[n] = *s;
+        n++;
+        s++;
+    }
+    o[n] = 0;
+}
+
+static void bad_line(const char *path, int ln, const char *what)
+{
+    char m[1300];
+
+    sprintf(m, "%.1000s:%d: %%s", path, ln);
+    say(m, what);
+}
+
+/* every outline of a line, for text */
+static void put_outlines(struct table *t, char *outlines, const char *text,
+    const char *path, int ln)
+{
+    long st[STROKE_MAX];
+    char *o, *e;
+    int n, end;
+
+    o = outlines;
+    for (;;) {
+        while (*o == ' ')
+            o++;
+        if (!*o)
+            break;
+        e = o;
+        while (*e && *e != ' ')
+            e++;
+        end = !*e;
+        *e = 0;
+        n = outline_parse(o, st, STROKE_MAX);
+        if (n < 0)
+            bad_line(path, ln, "not an outline");
+        else
+            put(t, st, n, text);
+        if (end)
+            break;
+        o = e + 1;
+    }
+}
+
+static int load_dict_file(struct dict *d, char *buf)
+{
+    char *p, *l, *f[3], text[TEXT_MAX];
+    int ln, n;
+
+    p = buf;
+    ln = 0;
+    while ((l = next_line(&p)) != 0) {
+        ln++;
+        if (!l[0])
+            continue;
+        n = split_tabs(l, f, 2);
+        if (n < 2) {
+            bad_line(d->path, ln, "no tab between text and outlines");
+            continue;
+        }
+        unescape(f[0], text, sizeof(text));
+        put_outlines(&d->t, f[1], text, d->path, ln);
+    }
+    d->longest = d->t.longest;
+    return 0;
+}
+
+static int load_mode_file(struct dict *d, char *buf)
+{
+    char *p, *l, *f[4], text[TEXT_MAX];
+    struct modal *m;
+    struct table *t;
+    int ln, n, *flag;
+
+    m = malloc(sizeof(*m));
+    if (!m)
+        return -1;
+    memset(m, 0, sizeof(*m));
+    m->exit_on_mismatch = 1;
+    m->ignore_folding = 1;
+    m->new_stroke = 1;
+    d->m = m;
+    p = buf;
+    ln = 0;
+    while ((l = next_line(&p)) != 0) {
+        ln++;
+        if (!l[0])
+            continue;
+        n = split_tabs(l, f, 3);
+        if (n == 3 && !strcmp(f[0], "option")) {
+            flag = !strcmp(f[1], "exclude_entry") ? &m->exclude_entry :
+                !strcmp(f[1], "exit_on_mismatch") ? &m->exit_on_mismatch :
+                !strcmp(f[1], "exit_on_match") ? &m->exit_on_match :
+                !strcmp(f[1], "ignore_folding") ? &m->ignore_folding : 0;
+            if (!flag)
+                bad_line(d->path, ln, "unknown option");
+            else
+                *flag = !strcmp(f[2], "yes");
+            continue;
+        }
+        t = n < 3 ? 0 : !strcmp(f[0], "entry") ? &m->entry :
+            !strcmp(f[0], "dict") ? &m->dict :
+            !strcmp(f[0], "exit") ? &m->exit : 0;
+        if (!t) {
+            bad_line(d->path, ln, "option, entry, dict or exit?");
+            continue;
+        }
+        unescape(f[1], text, sizeof(text));
+        put_outlines(t, f[2], text, d->path, ln);
+    }
+    d->longest = m->entry.longest;
+    if (m->dict.longest > d->longest)
+        d->longest = m->dict.longest;
+    if (m->exit.longest > d->longest)
+        d->longest = m->exit.longest;
+    return 0;
+}
+
+static int load_into(struct dict *d, const char *path);
+
+static int load_mods_file(struct dict *d, char *buf)
+{
+    static const char *const names[] = { "control", "alt", "shift",
+        "super" };
+    char *p, *l, *f[3], *k, *e, dir[1024], other[1100];
+    struct mods *x;
+    struct dict tmp;
+    int ln, n, b, bits, end, r;
+
+    x = malloc(sizeof(*x));
+    if (!x)
+        return -1;
+    memset(x, 0, sizeof(*x));
+    d->x = x;
+    d->longest = 4;
+    scopy(dir, d->path, sizeof(dir));
+    k = strrchr(dir, '/');
+    if (k)
+        k[1] = 0;
+    else
+        dir[0] = 0;
+    p = buf;
+    ln = 0;
+    while ((l = next_line(&p)) != 0) {
+        ln++;
+        if (!l[0])
+            continue;
+        n = split_tabs(l, f, 3);
+        if (n == 3 && !strcmp(f[0], "modifier") && x->nmod < MODS_MAX) {
+            bits = 0;
+            for (k = f[1]; *k; k = end ? e : e + 1) {
+                e = k;
+                while (*e && *e != '+')
+                    e++;
+                end = !*e;
+                *e = 0;
+                for (b = 0; b < 4; b++)
+                    if (!strcmp(k, names[b]))
+                        bits |= 1 << b;
+            }
+            x->mst[x->nmod] = stroke_parse(f[2], strlen(f[2]));
+            x->mbits[x->nmod] = bits;
+            if (!bits || x->mst[x->nmod] < 0) {
+                bad_line(d->path, ln, "modifier NAMES OUTLINE?");
+                continue;
+            }
+            x->nmod++;
+        } else if (n == 2 && !strcmp(f[0], "keys")) {
+            sprintf(other, "%.1000s%.90s", f[1][0] == '/' ? "" : dir, f[1]);
+            r = load_into(&tmp, other);
+            if (r < 0)
+                continue;
+            /* the file's order: the first key of a stroke stays */
+            if (tmp.kind == dk_json)
+                mods_read_table(x, &tmp.t);
+            else if (tmp.kind == dk_modal)
+                mods_read_table(x, &tmp.m->entry);
+            dict_free(&tmp);
+        } else {
+            bad_line(d->path, ln, "modifier or keys?");
+        }
+    }
+    return 0;
+}
+
+/* Plover's JSON (.json, .modal), for steno -C only */
+static int load_plover(struct dict *d, const char *path)
 {
     struct json j;
     char *buf;
     long size;
     int r;
 
-    memset(d, 0, sizeof(*d));
-    scopy(d->path, path, sizeof(d->path));
-    d->enabled = 1;
-    d->raw = ends_with(path, "/dotterel-raw.json") ||
-        !strcmp(path, "dotterel-raw.json");
-    file_stamp(path, &d->mtime, &d->size);
-    if (ends_with(path, ".py")) {
-        if (!ends_with(path, "dotterel-modifiers.py")) {
-            say("only dotterel-modifiers.py is known: %s", path);
-            return -1;
-        }
-        d->kind = dk_mods;
-        return load_mods(d);
-    }
     buf = read_file(path, &size);
     if (!buf) {
         say("can't read %s", path);
@@ -1001,8 +1200,275 @@ static int load_into(struct dict *d, const char *path)
         r = load_json(d, &j);
     }
     free(buf);
+    return r;
+}
+
+static int base_is(const char *path, const char *name)
+{
+    const char *b;
+
+    b = strrchr(path, '/');
+    b = b ? b + 1 : path;
+    return !strncmp(b, name, strlen(name));
+}
+
+static int load_into(struct dict *d, const char *path)
+{
+    char *buf;
+    long size;
+    int r;
+
+    memset(d, 0, sizeof(*d));
+    scopy(d->path, path, sizeof(d->path));
+    d->enabled = 1;
+    d->raw = base_is(path, "dotterel-raw.");
+    file_stamp(path, &d->mtime, &d->size);
+    if (ends_with(path, ".json") || ends_with(path, ".modal") ||
+        ends_with(path, ".py"))
+    {
+        say("%s is in Plover's format: steno -C DIR FILE converts it",
+            path);
+        return -1;
+    }
+    if (!ends_with(path, ".dict") && !ends_with(path, ".mode") &&
+        !ends_with(path, ".mods"))
+    {
+        say("not a .dict, .mode or .mods file: %s", path);
+        return -1;
+    }
+    buf = read_file(path, &size);
+    if (!buf) {
+        say("can't read %s", path);
+        return -1;
+    }
+    if (ends_with(path, ".mode")) {
+        d->kind = dk_modal;
+        r = load_mode_file(d, buf);
+    } else if (ends_with(path, ".mods")) {
+        d->kind = dk_mods;
+        r = load_mods_file(d, buf);
+    } else {
+        d->kind = dk_json;
+        r = load_dict_file(d, buf);
+    }
+    free(buf);
     if (r < 0) {
         dict_free(d);
+        return -1;
+    }
+    return 0;
+}
+
+/* --- steno -C: Plover's files in steno's format ----------------------- */
+
+static void write_text(FILE *f, const char *s)
+{
+    for (; *s; s++) {
+        if (*s == '\\')
+            fputs("\\\\", f);
+        else if (*s == '\t')
+            fputs("\\t", f);
+        else if (*s == '\n')
+            fputs("\\n", f);
+        else if (*s == '\r')
+            fputs("\\r", f);
+        else
+            fputc(*s, f);
+    }
+}
+
+static unsigned long text_hash(const char *s)
+{
+    unsigned long h;
+
+    h = 5381;
+    while (*s) {
+        h = h * 33 + (unsigned char)*s;
+        s++;
+    }
+    return h;
+}
+
+/* Each text once, with all its outlines, in the order the texts first
+ * come in the file. */
+static int write_table(FILE *f, struct table *t, const char *prefix)
+{
+    long *slot, *next, *last, e, g, nslot, i, *k;
+    unsigned long h;
+    char s[32];
+    int j;
+
+    nslot = 16;
+    while (nslot < t->nent * 2)
+        nslot *= 2;
+    slot = malloc(nslot * sizeof(long));
+    next = malloc((t->nent + 1) * sizeof(long));
+    last = malloc((t->nent + 1) * sizeof(long));
+    if (!slot || !next || !last) {
+        free(slot);
+        free(next);
+        free(last);
+        return -1;
+    }
+    for (i = 0; i < nslot; i++)
+        slot[i] = -1;
+    for (e = 0; e < t->nent; e++) {
+        next[e] = -1;
+        last[e] = -2;          /* not a group's first */
+        h = text_hash(t->vals + t->ent_val[e]) & (nslot - 1);
+        for (;;) {
+            g = slot[h];
+            if (g < 0 || !strcmp(t->vals + t->ent_val[g],
+                t->vals + t->ent_val[e]))
+            {
+                break;
+            }
+            h = (h + 1) & (nslot - 1);
+        }
+        if (g < 0) {
+            slot[h] = e;
+            last[e] = e;
+        } else {
+            next[last[g]] = e;
+            last[g] = e;
+        }
+    }
+    for (e = 0; e < t->nent; e++) {
+        if (last[e] == -2)
+            continue;
+        fputs(prefix, f);
+        write_text(f, t->vals + t->ent_val[e]);
+        fputc('\t', f);
+        for (g = e; g >= 0; g = next[g]) {
+            k = t->keys + t->ent_key[g];
+            if (g != e)
+                fputc(' ', f);
+            for (j = 0; j < k[0]; j++) {
+                stroke_text(k[1 + j], s);
+                if (j)
+                    fputc('/', f);
+                fputs(s, f);
+            }
+        }
+        fputc('\n', f);
+    }
+    free(slot);
+    free(next);
+    free(last);
+    return 0;
+}
+
+static void write_mods(FILE *f)
+{
+    static const char *const names[] = { "control", "alt", "shift",
+        "super" };
+    char src[128], *dot;
+    unsigned i;
+    int b, first;
+
+    for (i = 0; i < sizeof(mod_strokes) / sizeof(mod_strokes[0]); i++) {
+        fputs("modifier\t", f);
+        first = 1;
+        for (b = 0; b < 4; b++) {
+            if (mod_bits[i] & (1 << b)) {
+                if (!first)
+                    fputc('+', f);
+                fputs(names[b], f);
+                first = 0;
+            }
+        }
+        fprintf(f, "\t%s\n", mod_strokes[i]);
+    }
+    for (i = 0; i < sizeof(mod_sources) / sizeof(mod_sources[0]); i++) {
+        scopy(src, mod_sources[i], sizeof(src) - 8);
+        dot = strrchr(src, '.');
+        if (dot)
+            strcpy(dot, ends_with(src, ".modal") ? ".mode" : ".dict");
+        fprintf(f, "keys\t%s\n", src);
+    }
+}
+
+/* in (Plover's) -> outdir/name (steno's); 0 ok */
+int dict_convert(const char *in, const char *outdir, char *made, int size)
+{
+    struct dict d;
+    char base[256], tmp[1400], *dot;
+    const char *b;
+    FILE *f;
+    int r, closed;
+
+    b = strrchr(in, '/');
+    b = b ? b + 1 : in;
+    scopy(base, b, sizeof(base) - 8);
+    dot = strrchr(base, '.');
+    if (!dot) {
+        say("what is %s? (.json, .modal or dotterel-modifiers.py)", in);
+        return -1;
+    }
+    memset(&d, 0, sizeof(d));
+    scopy(d.path, in, sizeof(d.path));
+    if (!strcmp(dot, ".py")) {
+        if (strcmp(base, "dotterel-modifiers.py")) {
+            say("only dotterel-modifiers.py is known: %s", in);
+            return -1;
+        }
+        strcpy(dot, ".mods");
+    } else if (!strcmp(dot, ".modal")) {
+        strcpy(dot, ".mode");
+    } else if (!strcmp(dot, ".json")) {
+        strcpy(dot, ".dict");
+    } else {
+        say("what is %s? (.json, .modal or dotterel-modifiers.py)", in);
+        return -1;
+    }
+    if (strcmp(dot, ".mods")) {
+        r = load_plover(&d, in);
+        if (r < 0) {
+            dict_free(&d);
+            return -1;
+        }
+    }
+    scopy(made, outdir, size - 256);
+    scat(made, "/", size);
+    scat(made, base, size);
+    sprintf(tmp, "%.1300s.new", made);
+    f = fopen(tmp, "w");
+    if (!f) {
+        say("can't write %s", tmp);
+        dict_free(&d);
+        return -1;
+    }
+    r = 0;
+    if (!strcmp(dot, ".mods")) {
+        write_mods(f);
+    } else if (d.kind == dk_modal) {
+        fprintf(f, "option\texclude_entry\t%s\n",
+            d.m->exclude_entry ? "yes" : "no");
+        fprintf(f, "option\texit_on_mismatch\t%s\n",
+            d.m->exit_on_mismatch ? "yes" : "no");
+        fprintf(f, "option\texit_on_match\t%s\n",
+            d.m->exit_on_match ? "yes" : "no");
+        fprintf(f, "option\tignore_folding\t%s\n",
+            d.m->ignore_folding ? "yes" : "no");
+        r = write_table(f, &d.m->entry, "entry\t");
+        if (r == 0)
+            r = write_table(f, &d.m->dict, "dict\t");
+        if (r == 0)
+            r = write_table(f, &d.m->exit, "exit\t");
+    } else {
+        r = write_table(f, &d.t, "");
+    }
+    dict_free(&d);
+    closed = fclose(f);
+    if (closed != 0 || r < 0) {
+        say("can't write %s", tmp);
+        unlink(tmp);
+        return -1;
+    }
+    r = rename(tmp, made);
+    if (r < 0) {
+        say("can't write %s", made);
+        unlink(tmp);
         return -1;
     }
     return 0;
@@ -1362,7 +1828,7 @@ const char *dict_kind(int i)
         return "built in";
     if (dicts[i].kind == dk_modal)
         return "modal";
-    return dicts[i].raw ? "raw mode" : "json";
+    return dicts[i].raw ? "raw mode" : "dict";
 }
 
 long dict_size(int i)

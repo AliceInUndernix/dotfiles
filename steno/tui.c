@@ -222,7 +222,7 @@ static void draw_dicts(int y, int w, int h)
         n = scr_text(num, w - 2);
         scr_col(on ? C_GREEN : C_DIM);
         n += scr_text(on ? "on  " : "off ", w - 2 - n);
-        sprintf(s, "%7ld  %-21s", dict_size(i), user ? "json, -a adds here" :
+        sprintf(s, "%7ld  %-21s", dict_size(i), user ? "dict, -a adds here" :
             dict_kind(i));
         right = scr_width(s);
         if (w - 2 - n - right < 12)

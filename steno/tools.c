@@ -261,107 +261,117 @@ int tool_lookup(const char *s)
 
 /* --- steno -a, -A ---------------------------------------------------- */
 
-static void json_quote(const char *s, char *out, int size)
+static void escape_text(const char *s, char *o, int size)
 {
-    static const char hex[] = "0123456789abcdef";
     int n;
 
     n = 0;
-    out[n] = '"';
-    n++;
-    for (; *s && n < size - 8; s++) {
-        if (*s == '"' || *s == '\\') {
-            out[n] = '\\';
+    for (; *s && n < size - 3; s++) {
+        if (*s == '\\' || *s == '\t' || *s == '\n' || *s == '\r') {
+            o[n] = '\\';
             n++;
-            out[n] = *s;
-        } else if (*s == '\n') {
-            out[n] = '\\';
-            n++;
-            out[n] = 'n';
-        } else if (*s == '\t') {
-            out[n] = '\\';
-            n++;
-            out[n] = 't';
-        } else if ((unsigned char)*s < 32) {
-            out[n] = '\\';
-            out[n + 1] = 'u';
-            out[n + 2] = '0';
-            out[n + 3] = '0';
-            out[n + 4] = hex[(*s >> 4) & 15];
-            out[n + 5] = hex[*s & 15];
-            n += 5;
+            o[n] = *s == '\t' ? 't' : *s == '\n' ? 'n' :
+                *s == '\r' ? 'r' : '\\';
         } else {
-            out[n] = *s;
+            o[n] = *s;
         }
         n++;
     }
-    out[n] = '"';
-    out[n + 1] = 0;
+    o[n] = 0;
 }
 
-/* Put "outline": "text" in the file, the way Plover writes it: one
- * entry a line. An outline already there gets the new text. */
+/* line: "TEXT<tab>OUTLINES"; out gets the outlines without outline;
+ * 1 when it had it */
+static int drop_outline(const char *outlines, const char *outline,
+    char *out, int size)
+{
+    const char *o, *e;
+    int had, n;
+
+    out[0] = 0;
+    had = 0;
+    n = strlen(outline);
+    for (o = outlines; *o; o = e) {
+        while (*o == ' ')
+            o++;
+        if (!*o)
+            break;
+        e = o;
+        while (*e && *e != ' ')
+            e++;
+        if (e - o == n && !strncmp(o, outline, n)) {
+            had = 1;
+            continue;
+        }
+        if (out[0])
+            scat(out, " ", size);
+        if ((int)strlen(out) + (e - o) < size - 1)
+            strncat(out, o, e - o);
+    }
+    return had;
+}
+
+/* Put outline -> text in a .dict file: on the line of that text when
+ * there is one (else a new line at the end), and off any other line,
+ * since an outline writes one thing. A line left with no outline
+ * goes. */
 static int write_entry(const char *path, const char *outline,
     const char *text)
 {
-    char *f, *o, *p, *line, *end, *close_at, k[STROKE_MAX * 32 + 8];
-    char v[TEXT_MAX * 6 + 8], tmp[1100];
+    char *f, *o, *line, *next, *tab, esc[TEXT_MAX * 2 + 8];
+    char rest[TEXT_MAX * 4], tmp[1100];
     long size, need;
-    int fd, r, w;
+    int done, r, w, fd;
 
     f = read_file(path, &size);
     if (!f) {
-        f = malloc(8);
+        f = malloc(1);
         if (!f)
             return -1;
-        strcpy(f, "{\n}\n");
-        size = 4;
+        f[0] = 0;
+        size = 0;
     }
-    json_quote(outline, k, sizeof(k));
-    json_quote(text, v, sizeof(v));
-    need = size + strlen(k) + strlen(v) + 16;
+    escape_text(text, esc, sizeof(esc));
+    need = size + strlen(esc) + strlen(outline) + 16;
     o = malloc(need);
     if (!o) {
         free(f);
         return -1;
     }
-    /* the outline's line, if it is there */
-    line = 0;
-    for (p = f; *p; p = end) {
-        end = strchr(p, '\n');
-        end = end ? end + 1 : p + strlen(p);
-        while (*p == ' ' || *p == '\t')
-            p++;
-        if (!strncmp(p, k, strlen(k)) && p[strlen(k)] == ':') {
-            line = p;
-            break;
+    o[0] = 0;
+    done = 0;
+    for (line = f; line && *line; line = next) {
+        next = strchr(line, '\n');
+        if (next) {
+            *next = 0;
+            next++;
         }
+        tab = strrchr(line, '\t');
+        if (!tab) {
+            strcat(o, line);   /* not an entry: as it was */
+            strcat(o, "\n");
+            continue;
+        }
+        *tab = 0;
+        drop_outline(tab + 1, outline, rest, sizeof(rest) - 64);
+        if (!strcmp(line, esc) && !done) {
+            if (rest[0])
+                scat(rest, " ", sizeof(rest));
+            scat(rest, outline, sizeof(rest));
+            done = 1;
+        }
+        if (!rest[0])
+            continue;
+        strcat(o, line);
+        strcat(o, "\t");
+        strcat(o, rest);
+        strcat(o, "\n");
     }
-    if (line) {
-        p = end;
-        while (p > line && (p[-1] == '\n' || p[-1] == '\r'))
-            p--;
-        w = p > line && p[-1] == ',';
-        sprintf(o, "%.*s%s: %s%s%s", (int)(line - f), f, k, v,
-            w ? "," : "", p);
-    } else {
-        close_at = strrchr(f, '}');
-        if (!close_at) {
-            say("not a dictionary: %s", path);
-            free(f);
-            free(o);
-            return -1;
-        }
-        p = close_at;
-        while (p > f && (p[-1] == ' ' || p[-1] == '\t' || p[-1] == '\n' ||
-            p[-1] == '\r'))
-        {
-            p--;
-        }
-        if (p > f && p[-1] == '{')
-            sprintf(o, "%.*s\n%s: %s\n%s", (int)(p - f), f, k, v, close_at);
-        else
-            sprintf(o, "%.*s,\n%s: %s%s", (int)(p - f), f, k, v, p);
+    if (!done) {
+        strcat(o, esc);
+        strcat(o, "\t");
+        strcat(o, outline);
+        strcat(o, "\n");
     }
     free(f);
     /* a new file, then rename: never half a dictionary */
@@ -399,7 +409,7 @@ static const char *target(void)
         return user_dict;
     for (i = 0; i < dict_count(); i++) {
         p = dict_path(i);
-        if (strlen(p) > 5 && !strcmp(p + strlen(p) - 5, ".json"))
+        if (strlen(p) > 5 && !strcmp(p + strlen(p) - 5, ".dict"))
             return p;
     }
     return 0;

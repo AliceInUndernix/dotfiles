@@ -529,6 +529,44 @@ install_steno() {
 		say "clone   $PLOVER_REPO -> $src"
 		git clone --quiet --depth 1 "$PLOVER_REPO" "$src"
 	fi
+	steno_dictionaries
+}
+
+# steno reads its own plain format, not Plover's JSON. The dotterel
+# repo has it in steno/ (made by its steno/make.sh); steno uses that
+# when it matches the JSON. When it is missing or out of date, steno -C
+# makes it here from the JSON, and you hear about it.
+steno_dictionaries() {
+	steno=$SYSBIN/steno
+	plover=$src/plover-dotterel/plover_dotterel
+	tmp=$STENO_DIR/new
+	rm -rf "$tmp"
+	"$steno" -C "$tmp/dictionaries" "$plover"/dictionaries/*.json \
+		"$plover"/dictionaries/*.modal \
+		"$plover"/dictionaries/dotterel-modifiers.py >/dev/null ||
+		die "steno could not read Dotterel's dictionaries in $plover"
+	"$steno" -C "$tmp/data" "$plover/data/uk_to_us.json" >/dev/null ||
+		die "steno could not read $plover/data/uk_to_us.json"
+	for d in dictionaries data; do
+		rm -rf "${STENO_DIR:?}/$d"
+		if [ -d "$src/steno/$d" ] && diff -r "$tmp/$d" "$src/steno/$d" >/dev/null; then
+			ln -s "dotterel/steno/$d" "$STENO_DIR/$d"
+		else
+			mv "$tmp/$d" "$STENO_DIR/$d"
+			if [ -d "$src/steno/$d" ]; then
+				warn "dotterel's steno/$d is older than its JSON: run steno/make.sh there (made here for now)"
+			fi
+		fi
+		say "ok      $STENO_DIR/$d"
+	done
+	rm -rf "$tmp"
+	# strokes added before the plain format: user.json -> user.dict
+	if [ -f "$STENO_DIR/user.json" ] && [ ! -e "$STENO_DIR/user.dict" ]; then
+		"$steno" -C "$STENO_DIR" "$STENO_DIR/user.json" >/dev/null &&
+			mv "$STENO_DIR/user.json" "$STENO_DIR/user.json.old" &&
+			say "convert $STENO_DIR/user.json -> user.dict (the old one: user.json.old)"
+	fi
+	own "$STENO_DIR"
 }
 
 # WebArchiver: archives whole websites (see webarchiver/README). Built

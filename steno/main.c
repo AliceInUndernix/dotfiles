@@ -355,6 +355,135 @@ const char *dotterel_data(const char *name)
 }
 
 /* A JSON object of strings (uk_to_us.json) as "k\0v\0k\0v\0". */
+char *json_pairs(const char *path, long *count);
+
+/* UK<tab>US lines (uk_to_us.txt) as "k\0v\0k\0v\0" */
+char *pairs_read(const char *path, long *count)
+{
+    char *f, *o;
+    long size, i, n;
+    int field;
+
+    f = read_file(path, &size);
+    if (!f)
+        return 0;
+    o = malloc(size + 2);
+    if (!o) {
+        free(f);
+        return 0;
+    }
+    n = 0;
+    field = 0;
+    *count = 0;
+    for (i = 0; i < size; i++) {
+        if (f[i] == '\r')
+            continue;
+        if (f[i] == '\t' && field == 0) {
+            o[n] = 0;
+            n++;
+            field = 1;
+        } else if (f[i] == '\n') {
+            if (field == 1) {
+                o[n] = 0;
+                n++;
+                (*count)++;
+            } else {
+                /* a line without a tab: dropped */
+                while (n > 0 && o[n - 1] != 0)
+                    n--;
+            }
+            field = 0;
+        } else {
+            o[n] = f[i];
+            n++;
+        }
+    }
+    if (field == 1) {
+        o[n] = 0;
+        n++;
+        (*count)++;
+    }
+    free(f);
+    return o;
+}
+
+/* uk_to_us.json -> uk_to_us.txt, for steno -C */
+static int convert_pairs(const char *in, const char *outdir, char *made,
+    int size)
+{
+    char *p, *s_ptr, tmp[1400];
+    long n, i;
+    FILE *f;
+    int r;
+
+    p = json_pairs(in, &n);
+    if (!p) {
+        say("can't read %s", in);
+        return -1;
+    }
+    scopy(made, outdir, size - 32);
+    scat(made, "/uk_to_us.txt", size);
+    sprintf(tmp, "%.1300s.new", made);
+    f = fopen(tmp, "w");
+    if (!f) {
+        free(p);
+        say("can't write %s", tmp);
+        return -1;
+    }
+    s_ptr = p;
+    for (i = 0; i < n; i++) {
+        fputs(s_ptr, f);
+        fputc('\t', f);
+        s_ptr += strlen(s_ptr) + 1;
+        fputs(s_ptr, f);
+        fputc('\n', f);
+        s_ptr += strlen(s_ptr) + 1;
+    }
+    free(p);
+    r = fclose(f);
+    if (r == 0)
+        r = rename(tmp, made);
+    if (r != 0) {
+        unlink(tmp);
+        say("can't write %s", made);
+        return -1;
+    }
+    return 0;
+}
+
+/* steno -C DIR FILE...: Plover's files in steno's format, into DIR */
+static int convert_files(char **files, int n)
+{
+    char made[1400];
+    const char *b;
+    int i, r, bad;
+
+    bad = 0;
+    /* the directory, and those above it, as mkdir -p */
+    scopy(made, files[0], sizeof(made));
+    for (i = 1; made[i]; i++) {
+        if (made[i] == '/') {
+            made[i] = 0;
+            mkdir(made, 0755);
+            made[i] = '/';
+        }
+    }
+    mkdir(made, 0755);
+    for (i = 1; i < n; i++) {
+        b = strrchr(files[i], '/');
+        b = b ? b + 1 : files[i];
+        if (!strcmp(b, "uk_to_us.json"))
+            r = convert_pairs(files[i], files[0], made, sizeof(made));
+        else
+            r = dict_convert(files[i], files[0], made, sizeof(made));
+        if (r < 0)
+            bad = 1;
+        else
+            printf("%s -> %s\n", files[i], made);
+    }
+    return bad;
+}
+
 char *json_pairs(const char *path, long *count)
 {
     char *f, *o;
@@ -436,9 +565,8 @@ static int make_empty_dict(const char *path)
     fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0644);
     if (fd < 0)
         return errno == EEXIST ? 0 : -1;
-    r = write(fd, "{\n}\n", 4);
-    close(fd);
-    return r == 4 ? 0 : -1;
+    r = close(fd);             /* an empty .dict: no entries */
+    return r;
 }
 
 /* "NAME" or "NAME off", from a dict or user line or from the status
@@ -974,6 +1102,8 @@ static void usage(int code)
         "       steno -l WORD|OUTLINE              look it up\n"
         "       steno -a OUTLINE TRANSLATION       add a stroke\n"
         "       steno -A                           add strokes, asking\n"
+        "       steno -C DIR FILE...               Plover's files in\n"
+        "                                          steno's format\n"
         "       steno -t                           strokes from stdin,\n"
         "                                          print what is typed\n"
         "  -c  settings file (~/.config/steno/config)\n"
@@ -1044,6 +1174,8 @@ int main(int argc, char **argv)
         } else if (!strcmp(argv[i], "-TS") || !strcmp(argv[i], "-ST")) {
             show_tape = 1;
             show_sugg = 1;
+        } else if (!strcmp(argv[i], "-C") && i + 2 < argc) {
+            return convert_files(argv + i + 1, argc - i - 1);
         } else if (!strcmp(argv[i], "-A")) {
             tool = 'A';
         } else if (!strcmp(argv[i], "-l") && i + 1 < argc) {

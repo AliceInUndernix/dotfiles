@@ -39,6 +39,7 @@ const char *dict_kind(int i);
 long dict_size(int i);
 int dict_move(int i, int dir);              /* -1: can't */
 void dict_remove(int i);
+int dict_convert(const char *in, const char *outdir, char *made, int size);
 int dict_explain(const long *st, int n, char *out, int size);
 
 /* --- translator -------------------------------------------------- */

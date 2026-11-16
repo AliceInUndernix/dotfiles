@@ -5,28 +5,29 @@
 # answers, and again whenever it is unplugged.
 port auto
 
-# Dotterel's dictionaries, from steno's own clone of the dotterel
-# repo (./install.sh steno updates it), apart from Plover's.
-dictionaries ~/.system/share/steno/dotterel/plover-dotterel/plover_dotterel/dictionaries
+# Dotterel's dictionaries in steno's plain format: the steno/ part of
+# steno's own clone of the dotterel repo (./install.sh steno updates
+# it and links them here), apart from Plover's.
+dictionaries ~/.system/share/steno/dictionaries
 
 # The first dictionary wins, as at the top of Plover's list. user is
 # where steno -a and -A add strokes; it is made empty the first time.
 # Point it at a file in the dotterel repo to add to the theory instead.
-user ~/.system/share/steno/user.json
-dict dotterel-base.json
-dict dotterel-proper-nouns.json
-dict dotterel-affixes.json
-dict dotterel-punctuation.json
-dict dotterel-commands.json
-dict dotterel-fingerspelling.json
-dict dotterel-numbers.json
-dict dotterel-raw.json
-dict dotterel-movement.modal
-dict dotterel-modifiers.py
+user ~/.system/share/steno/user.dict
+dict dotterel-base.dict
+dict dotterel-proper-nouns.dict
+dict dotterel-affixes.dict
+dict dotterel-punctuation.dict
+dict dotterel-commands.dict
+dict dotterel-fingerspelling.dict
+dict dotterel-numbers.dict
+dict dotterel-raw.dict
+dict dotterel-movement.mode
+dict dotterel-modifiers.mods
 
-# uk_to_us.json and the rest of Dotterel's data (default: ../data
-# next to the dictionaries)
-#data ~/.system/share/steno/dotterel/plover-dotterel/plover_dotterel/data
+# uk_to_us.txt, Dotterel's UK/US list (default: ../data next to the
+# dictionaries)
+#data ~/.system/share/steno/data
 
 undo 100
 start_capitalized no

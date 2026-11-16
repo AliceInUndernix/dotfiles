@@ -429,11 +429,15 @@ static void translated(struct action *a)
 {
     struct action *p;
 
-    p = realloc(cur->act, (cur->nact + 1) * sizeof(*p));
+    /* grown by hand: realloc isn't among the allowed parts of libc */
+    p = malloc((cur->nact + 1) * sizeof(*p));
     if (!p) {
         say("out of memory", 0);
         die(1);
     }
+    if (cur->nact)
+        memcpy(p, cur->act, cur->nact * sizeof(*p));
+    free(cur->act);
     cur->act = p;
     cur->act[cur->nact] = *a;
     cur->nact++;
@@ -577,7 +581,7 @@ static char *ukus;               /* "uk\0us\0uk\0us\0..." */
 static long nukus;
 static int ukus_read;
 
-char *json_pairs(const char *path, long *count);
+char *pairs_read(const char *path, long *count);
 
 static const char *ukus_find(const char *w, int by_us)
 {
@@ -641,9 +645,9 @@ static void uk_us_switch(const char *w, char *out, int size)
 
     if (!ukus_read) {
         ukus_read = 1;
-        ukus = json_pairs(dotterel_data("uk_to_us.json"), &nukus);
+        ukus = pairs_read(dotterel_data("uk_to_us.txt"), &nukus);
         if (!ukus)
-            say("no UK/US list (%s)", dotterel_data("uk_to_us.json"));
+            say("no UK/US list (%s)", dotterel_data("uk_to_us.txt"));
     }
     if (!w[0] || !ukus) {
         scopy(out, w, size);
