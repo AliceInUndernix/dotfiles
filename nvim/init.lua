@@ -36,6 +36,17 @@
 -- them again. A file that changed is compiled again by itself.
 vim.loader.enable()
 
+-- Runtime plugins that are not used here are not loaded (about 4 ms at
+-- every start): netrw (the file browser; Space Space opens files and
+-- gx opens links without it), remote plugins, the tutor, and reading
+-- inside zip and tar files. To get one back, delete its line.
+vim.g.loaded_netrw = 1
+vim.g.loaded_netrwPlugin = 1
+vim.g.loaded_remote_plugins = 1
+vim.g.loaded_tutor_mode_plugin = 1
+vim.g.loaded_zipPlugin = 1
+vim.g.loaded_tarPlugin = 1
+
 vim.g.mapleader = " "          -- Space is the leader key
 
 ---------------------------------------------------------------------------
@@ -440,12 +451,22 @@ plugin("Josiah-tan/plover-vim-tutor")
 -- Ctrl+s / Ctrl+v open in a split. Space / searches inside files: it
 -- uses ripgrep (rg) if installed, otherwise only works in a git directory.
 if plugin("nvim-mini/mini.pick") then
-  local pick = require("mini.pick")
-  pick.setup()
-  map("n", "<leader><leader>", pick.builtin.files, { desc = "Open file" })
-  map("n", "<leader>/", pick.builtin.grep_live, { desc = "Search text in files" })
-  map("n", "<leader>b", pick.builtin.buffers, { desc = "Pick open buffer" })
-  map("n", "<leader>h", pick.builtin.help, { desc = "Search help" })
+  -- set up at the first use, not at every start
+  local pick_ready = false
+  local function pick(name)
+    return function()
+      local mp = require("mini.pick")
+      if not pick_ready then
+        mp.setup()
+        pick_ready = true
+      end
+      mp.builtin[name]()
+    end
+  end
+  map("n", "<leader><leader>", pick("files"), { desc = "Open file" })
+  map("n", "<leader>/", pick("grep_live"), { desc = "Search text in files" })
+  map("n", "<leader>b", pick("buffers"), { desc = "Pick open buffer" })
+  map("n", "<leader>h", pick("help"), { desc = "Search help" })
 end
 
 -- Surround (mini.surround): add, delete or replace quotes and brackets.
@@ -453,13 +474,25 @@ end
 --   sr"'    replace " with '             sa$)  add ( ) to end of line
 -- (Plain s, "delete letter and type", is still cl.)
 if plugin("nvim-mini/mini.surround") then
-  require("mini.surround").setup()
+  -- set up right after the first screen is drawn, not before it
+  vim.api.nvim_create_autocmd("UIEnter", {
+    once = true,
+    callback = vim.schedule_wrap(function()
+      require("mini.surround").setup()
+    end),
+  })
 end
 
 -- which-key: press Space (or g, z, ", Ctrl+w ...) and wait a moment; a
 -- small box lists what can follow, with the descriptions given here.
+-- Also set up after the first screen.
 if plugin("folke/which-key.nvim") then
-  require("which-key").setup()
+  vim.api.nvim_create_autocmd("UIEnter", {
+    once = true,
+    callback = vim.schedule_wrap(function()
+      require("which-key").setup()
+    end),
+  })
 end
 
 -- Without zen-mode and pencil there is no prose mode, so stop here.
