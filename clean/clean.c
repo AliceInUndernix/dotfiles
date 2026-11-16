@@ -27,7 +27,8 @@ int dry_run;
 int randomized;
 const char *why;
 
-static int opt_dry, opt_keep, opt_quiet, opt_random, opt_nobackup;
+static int opt_dry, opt_keep, opt_quiet, opt_nobackup;
+static int opt_random = 1;     /* -s turns it off */
 static char note_text[MAX_NOTES][NOTE_SIZE];
 static int note_count[MAX_NOTES];
 static int notes;
@@ -127,13 +128,15 @@ static void print_notes(const char *path, const char *verb)
     printf("%s:", path);
     if (notes)
         printf(" %s ", verb);
+    else
+        printf(" nothing to remove");
     for (i = 0; i < notes; i++) {
         printf("%s%s", i ? ", " : "", note_text[i]);
         if (note_count[i] > 1)
             printf(" x%d", note_count[i]);
     }
     if (randomized)
-        printf("%s new random bytes (a hash of its own)", notes ? ";" : "");
+        printf("; new random bytes (a hash of its own)");
     printf("\n");
 }
 
@@ -720,7 +723,7 @@ static int clean_in_memory(const char *path, const char *abs, int fd,
     }
     if (!changed)
         notes = 0;
-    if (r == 0 && (changed || opt_random) && !opt_dry)
+    if (r == 0 && opt_random && !opt_dry)
         rand_mem(kind, &out);
     if (r == 0 && (notes || randomized) && !opt_dry) {
         if (!opt_nobackup)
@@ -780,7 +783,7 @@ static int clean_in_place(const char *path, const char *abs, int fd,
     r = 0;
     if (found)
         r = run_in_place(wfd, st->st_size, kind);
-    if (r == 0) {
+    if (r == 0 && opt_random) {
         rc = fstat(wfd, &now);
         if (rc == 0) {
             rc = rand_place(kind, wfd, now.st_size);
@@ -933,7 +936,7 @@ static int undo_file(const char *path)
 static void usage(void)
 {
     fprintf(stderr,
-        "usage: clean [-n] [-k] [-q] [-r] [-b] FILE...\n"
+        "usage: clean [-n] [-k] [-q] [-s] [-b] FILE...\n"
         "       clean -u FILE...\n"
         "Takes the metadata out of each file, in place.\n"
         "Pictures: JPEG, PNG, GIF, WebP, HEIF/AVIF, TIFF, camera raw,\n"
@@ -946,8 +949,8 @@ static void usage(void)
         "  -n  only say what would go; change nothing\n"
         "  -k  keep the file's times (else: 2000-01-01 00:00 UTC)\n"
         "  -q  say nothing but errors\n"
-        "  -r  new random bytes, a new hash, even when nothing else\n"
-        "      goes (each copy you share then differs)\n"
+        "  -s  same hash: no random bytes (else each run gives the\n"
+        "      file new ones, so each copy you share differs)\n"
         "  -b  no backup (then -u can't undo it)\n"
         "  -u  undo: put the newest backup of each file back\n");
     exit(2);
@@ -968,7 +971,8 @@ int main(int argc, char **argv)
             case 'n': opt_dry = 1; break;
             case 'k': opt_keep = 1; break;
             case 'q': opt_quiet = 1; break;
-            case 'r': opt_random = 1; break;
+            case 'r': opt_random = 1; break;   /* the default */
+            case 's': opt_random = 0; break;
             case 'b': opt_nobackup = 1; break;
             case 'u': undo = 1; break;
             default: usage();

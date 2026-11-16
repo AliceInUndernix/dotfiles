@@ -11,8 +11,8 @@ original is kept in ~/.system/state/clean first.
     clean -n FILE...       only say what would go; change nothing
     clean -k FILE...       keep the files' times
     clean -q FILE...       say nothing but errors
-    clean -r FILE...       new random bytes, a new hash, even when
-                           nothing else goes (before each share)
+    clean -s FILE...       same hash: no random bytes (see "A hash
+                           of its own"); only what goes changes it
     clean -b FILE...       no backup (then -u can't undo it)
     clean -u FILE...       undo: put the newest backup back
 
@@ -155,8 +155,11 @@ DOCX, ODT, 32 random spaces, tabs and line ends after the document
 EPUB...    information (or the book's description); in a plain zip,
            a comment of them
 
-Nothing of it says "clean". clean -r does it again, so each copy you
-share gets its own hash. The picture and the sound stay exactly the
+Nothing of it says "clean". It happens on every run, even when nothing
+else goes ("nothing to remove; new random bytes"), so each copy you
+share gets its own hash; clean -s leaves it out. Running clean over a
+whole directory again rewrites every file (and backs each one up),
+so use -s there, or -b. The picture and the sound stay exactly the
 same: this was checked by decoding each format before and after.
 
 Not the same thing: "perceptual" hashes (PhotoDNA and the like) look at
