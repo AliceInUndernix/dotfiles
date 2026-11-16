@@ -168,7 +168,7 @@ static void draw_status(int y, int w)
     scr_border(y + 6, 0, w, 0, 0, keys, 5);
 }
 
-/* home as ~, and when it is too long, its end: ..steno/user.json */
+/* home as ~, and when it is too long, its end: ..steno/user.dict */
 static void short_name(const char *name, int w, char *out)
 {
     const char *home;

@@ -563,26 +563,181 @@ static void show_conflicts(const char *norm, const char *text)
         printf("%s is written now %s\n", text, out);
 }
 
+/* --- typographic quotes, as Dotterel saves what you add ----------------
+ *
+ * Prose never gets a straight ' or ": in a translation with a letter
+ * or a digit, ' becomes the apostrophe U+2019 and " opens (U+201C)
+ * after nothing, a space or an opening bracket and closes (U+201D)
+ * after anything else, also inside text braces ({^'s}, {~|'^}em). Left
+ * alone: no letter or digit (a bare symbol, for code), {commands} and
+ * fingerspelling ({#apostrophe}, {&'}), and =metas. As Dotterel's
+ * words.curly. */
+
+#define Q_APOS "\342\200\231"
+#define Q_OPEN "\342\200\234"
+#define Q_CLOSE "\342\200\235"
+
+/* a letter or digit: ASCII ones, and any non-ASCII but the general
+ * punctuation block (E2 80 xx: quotes, dashes, the ellipsis) */
+static int is_word_char(const char *s)
+{
+    unsigned char c;
+
+    c = (unsigned char)s[0];
+    if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+        (c >= '0' && c <= '9'))
+    {
+        return 1;
+    }
+    if (c < 0xc0)
+        return 0;
+    return !(c == 0xe2 && (unsigned char)s[1] == 0x80);
+}
+
+/* the inside of {...} that Plover writes out as text: its text part
+ * (between an optional ~| and ^ and a final ^), or 0 */
+static int text_brace(const char *in, int n, int *a, int *b)
+{
+    int i, e;
+
+    i = 0;
+    if (n >= 2 && in[0] == '~' && in[1] == '|')
+        i = 2;
+    if (i < n && in[i] == '^')
+        i++;
+    e = n;
+    if (e > i && in[e - 1] == '^')
+        e--;
+    for (*a = i; i < e; i++)
+        if (strchr("#:&*{}=<>|", in[i]))
+            return 0;
+    *b = e;
+    return 1;
+}
+
+/* is it after an opening: nothing, a space, ( [ { < / - or an opening
+ * quote or a dash */
+static int opens(const char *before)
+{
+    if (!before[0])
+        return 1;
+    if (!before[1])
+        return strchr(" \t\n([{</-", before[0]) != 0;
+    return !strcmp(before, "\342\200\230") || !strcmp(before, Q_OPEN) ||
+        !strcmp(before, "\342\200\224") || !strcmp(before, "\342\200\223");
+}
+
+/* text[a..b) with its quotes made typographic, onto out */
+static void curly_part(const char *text, int a, int b, char *before,
+    char *out, int size)
+{
+    int i, k, n;
+    char c[8];
+
+    for (i = a; i < b; i += k) {
+        k = 1;
+        if (text[i] == '\'') {
+            scopy(c, Q_APOS, sizeof(c));
+        } else if (text[i] == '"') {
+            scopy(c, opens(before) ? Q_OPEN : Q_CLOSE, sizeof(c));
+        } else {
+            while ((unsigned char)text[i + k] >= 0x80 &&
+                (unsigned char)text[i + k] < 0xc0 && i + k < b && k < 4)
+            {
+                k++;           /* the rest of a UTF-8 character */
+            }
+            memcpy(c, text + i, k);
+            c[k] = 0;
+        }
+        scopy(before, c, 8);
+        n = strlen(out);
+        if (n + (int)strlen(c) < size)
+            strcpy(out + n, c);
+    }
+}
+
+static void put_raw(char *out, int size, const char *s, int k)
+{
+    int n;
+
+    n = strlen(out);
+    if (n + k < size) {
+        memcpy(out + n, s, k);
+        out[n + k] = 0;
+    }
+}
+
+void typographic(const char *text, char *out, int size)
+{
+    const char *p, *e;
+    char before[8];
+    int words, a, b, n, i;
+
+    scopy(out, text, size);
+    if (text[0] == '=' || (!strchr(text, '\'') && !strchr(text, '"')))
+        return;
+    /* a letter or digit in the text, or in a text brace? */
+    words = 0;
+    for (p = text; *p && !words; p++) {
+        if (*p == '{') {
+            e = strchr(p, '}');
+            if (!e)
+                break;
+            if (text_brace(p + 1, (int)(e - p - 1), &a, &b))
+                for (i = a; i < b && !words; i++)
+                    words = is_word_char(p + 1 + i);
+            p = e;
+        } else {
+            words = is_word_char(p);
+        }
+    }
+    if (!words)
+        return;
+    out[0] = 0;
+    before[0] = 0;
+    for (p = text; *p; p = e) {
+        e = *p == '{' ? strchr(p, '}') : 0;
+        if (e) {
+            /* a brace: as it is, but the text of a text brace */
+            e++;
+            n = (int)(e - p);
+            if (text_brace(p + 1, n - 2, &a, &b) && b > a) {
+                put_raw(out, size, p, a + 1);
+                curly_part(p, a + 1, b + 1, before, out, size);
+                put_raw(out, size, p + b + 1, n - b - 1);
+            } else {
+                put_raw(out, size, p, n);
+            }
+        } else {
+            e = strchr(p + 1, '{');
+            if (!e)
+                e = p + strlen(p);
+            curly_part(p, 0, (int)(e - p), before, out, size);
+        }
+    }
+}
+
 int tool_add(const char *outline, const char *text)
 {
     int res;
-    char norm[STROKE_MAX * 32];
+    char norm[STROKE_MAX * 32], typo[TEXT_MAX];
     const char *t;
 
     t = target();
     if (!t) {
-        say("no .json dictionary to write to", 0);
+        say("no .dict dictionary to write to", 0);
         return 1;
     }
     if (!lookup_outline(outline, norm, sizeof(norm))) {
         say("not an outline: %s", outline);
         return 1;
     }
-    show_conflicts(norm, text);
-    res = write_entry(t, norm, text);
+    typographic(text, typo, sizeof(typo));
+    show_conflicts(norm, typo);
+    res = write_entry(t, norm, typo);
     if (res < 0)
         return 1;
-    printf("%s: %s -> %s\n", t, norm, text);
+    printf("%s: %s -> %s\n", t, norm, typo);
     return 0;
 }
 
@@ -605,11 +760,12 @@ int tool_add_loop(void)
 {
     int res;
     char o[1024], norm[STROKE_MAX * 32], text[TEXT_MAX], a[16];
+    char typo[TEXT_MAX];
     const char *t;
 
     t = target();
     if (!t) {
-        say("no .json dictionary to write to", 0);
+        say("no .dict dictionary to write to", 0);
         return 1;
     }
     printf("adding to %s (empty outline: done)\n", t);
@@ -623,9 +779,13 @@ int tool_add_loop(void)
             continue;
         }
         show_conflicts(norm, 0);
-        res = ask_line("translation: ", text, sizeof(text));
+        res = ask_line("translation: ", typo, sizeof(typo));
         if (res <= 0)
             continue;
+        /* straight quotes saved typographic, as in Dotterel */
+        typographic(typo, text, sizeof(text));
+        if (strcmp(typo, text))
+            printf("  saved as %s\n", text);
         show_conflicts(0, text);
         res = ask_line("add it? [y/N] ", a, sizeof(a));
         if (res < 0)

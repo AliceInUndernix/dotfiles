@@ -124,7 +124,10 @@ OPTIONS
               is written so (high + draw + lick: hydraulic). STROKE?
               is a stroke that writes nothing alone
     -a O T    add outline O -> T to the user dictionary; says first
-              what O gives now and how T is written already
+              what O gives now and how T is written already. As in
+              Dotterel, straight quotes in T are saved typographic
+              (' as U+2019, " as U+201C or U+201D), but in a bare
+              symbol, {#key}, {&...} or =...
     -A        the same, asking for one outline and translation after
               another (empty outline: done). To stroke the outline,
               turn on raw mode (RA*U) and back off for the text.

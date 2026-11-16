@@ -901,7 +901,7 @@ void run_command(const char *cmd)
     if (!strcmp(name, "dotterel_raw")) {
         i = dict_raw_toggle();
         if (i < 0)
-            say("raw mode needs dotterel-raw.json in the list", 0);
+            say("raw mode needs dotterel-raw in the list", 0);
         else if (verbose)
             say(i ? "raw mode on" : "raw mode off", 0);
         return;

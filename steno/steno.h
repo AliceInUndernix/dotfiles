@@ -117,6 +117,7 @@ int view_main(int tape, int sugg, const char *cfg);   /* view.c */
 void open_viewer(const char *flag);     /* -T, -S, -TS in a terminal */
 const char *feed_path(const char *name);
 int tool_lookup(const char *s);
+void typographic(const char *text, char *out, int size);
 int tool_add(const char *outline, const char *text);
 int tool_add_loop(void);
 
