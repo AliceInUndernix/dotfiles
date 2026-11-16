@@ -51,7 +51,8 @@ struct box {
     long seq[KEEP_LINES];      /* a number for each, never reused */
     long by[KEEP_LINES];       /* cleared by that line (0: shown) */
     char dead[KEEP_LINES];     /* undone by a * after it */
-    char undo[KEEP_LINES];     /* a * line */
+    char undo[KEEP_LINES];     /* a * line; in the suggestions, the
+                                  word being fingerspelled */
 };
 
 static struct box boxes[2];    /* 0 tape, 1 suggestions */
@@ -178,6 +179,7 @@ static void tape_spelled(struct box *b, const char *word, int n)
             continue;
         if (last < 0) {
             last = j;
+            b->by[j] = 0;      /* shown again when a letter is undone */
             t = strchr(b->lines[j], '\t');
             t = t ? strchr(t + 1, '\t') : 0;
             if (t) {
@@ -253,6 +255,23 @@ static void got_suggest(char *line)
     char cell[CELL_MAX], *w, *o, *next;
     struct box *b;
     int i, k;
+    int spell;
+
+    /* = ...: the fingerspelled word so far, in place of the last one
+     * (undo[] marks it in this box) */
+    b = &boxes[1];
+    spell = line[0] == '=' && (!line[1] || line[1] == '\t');
+    for (i = 0; i < b->nlines; i++) {
+        if (b->undo[i] && spell) {
+            drop_line(b, i);
+            break;
+        }
+        b->undo[i] = 0;
+    }
+    for (; i < b->nlines; i++)
+        b->undo[i] = 0;
+    if (spell)
+        line += line[1] ? 2 : 1;
 
     for (w = line; w && *w; w = next) {
         o = strchr(w, '\t');
@@ -279,6 +298,7 @@ static void got_suggest(char *line)
         if (!fullscreen && i == b->nlines)
             printf("%s%s  %s\n", boxes[0].shown ? "= " : "", w, o);
         keep(b, cell);
+        b->undo[b->nlines - 1] = spell;
     }
 }
 
