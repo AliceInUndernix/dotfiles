@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
@@ -38,13 +39,31 @@ static char cmd_line[CMD_MAX][LINE_MAX_LEN];
 static int ncmds;
 static int reset_pending;
 static volatile int stop_now;
+static char cfg_path[1024];
 
 int atoi_small(const char *s);
+
+void die(int code)
+{
+    tui_stop();
+    exit(code);
+}
+
 
 /* --- small helpers ------------------------------------------------ */
 
 void say(const char *fmt, const char *a)
 {
+    char m[2400];
+
+    if (tui_on) {
+        /* the status screen has the messages */
+        sprintf(m, "%.200s", fmt);
+        if (a)
+            sprintf(m, fmt, a);
+        tui_log(m);
+        return;
+    }
     fprintf(stderr, "%s: ", prog);
     fprintf(stderr, fmt, a ? a : "");
     fputc('\n', stderr);
@@ -422,13 +441,156 @@ static int make_empty_dict(const char *path)
     return r == 4 ? 0 : -1;
 }
 
+/* "NAME" or "NAME off", from a dict or user line or from the status
+ * screen: read it, and keep how it was named for config_save. A user
+ * dictionary is made empty when it isn't there yet. */
+int add_dict_line(const char *val, int user)
+{
+    char name[1024], p[2048];
+    int n, off, r, i;
+
+    scopy(name, val, sizeof(name));
+    n = strlen(name);
+    off = 0;
+    if (n > 4 && !strcmp(name + n - 4, " off")) {
+        off = 1;
+        n -= 4;
+        while (n > 0 && (name[n - 1] == ' ' || name[n - 1] == '\t'))
+            n--;
+        name[n] = 0;
+    }
+    if (!name[0])
+        return -1;
+    if (name[0] == '/' || name[0] == '~' || !dict_dir[0])
+        scopy(p, config_path(name), sizeof(p));
+    else
+        sprintf(p, "%.1000s/%.1000s", dict_dir, name);
+    for (i = 0; i < dict_count(); i++) {
+        if (!strcmp(dict_path(i), p)) {
+            say("already in the list: %s", p);
+            return -1;
+        }
+    }
+    if (user) {
+        r = make_empty_dict(p);
+        if (r < 0) {
+            say("can't make %s", p);
+            return -1;
+        }
+        scopy(user_dict, p, sizeof(user_dict));
+    }
+    r = dict_add(p);
+    if (r < 0)
+        return -1;
+    dict_set_origin(dict_count() - 1, name, user);
+    if (off)
+        dict_set_enabled(dict_count() - 1, 0);
+    return 0;
+}
+
+/* Write the dictionary list back into the settings file, as it is
+ * now: the dict and user lines are replaced by the list, where the
+ * first of them was; everything else stays. A link (the repo's file)
+ * stays a link: the file it points to is the one written. */
+int config_save(void)
+{
+    char *f, *o, *line, *next, *k, target[2048], tmp[2100], *slash;
+    long size, cap;
+    int i, fd, r, w, done, user, is_dict;
+    struct stat sb;
+    const char *name;
+
+    f = read_file(cfg_path, &size);
+    if (!f) {
+        say("can't read %s", cfg_path);
+        return -1;
+    }
+    cap = size + (long)dict_count() * 1100 + 16;
+    o = malloc(cap);
+    if (!o) {
+        free(f);
+        return -1;
+    }
+    o[0] = 0;
+    done = 0;
+    for (line = f; line && *line; line = next) {
+        next = strchr(line, '\n');
+        if (next) {
+            *next = 0;
+            next++;
+        }
+        k = line;
+        while (*k == ' ' || *k == '\t')
+            k++;
+        is_dict = (!strncmp(k, "dict", 4) || !strncmp(k, "user", 4)) &&
+            (k[4] == ' ' || k[4] == '\t');
+        if (is_dict && !done) {
+            for (i = 0; i < dict_count(); i++) {
+                name = dict_name(i, &user);
+                strcat(o, user ? "user " : "dict ");
+                strcat(o, name);
+                if (!dict_enabled(i))
+                    strcat(o, " off");
+                strcat(o, "\n");
+            }
+            done = 1;
+        }
+        if (is_dict)
+            continue;
+        strcat(o, line);
+        strcat(o, "\n");
+    }
+    free(f);
+    scopy(target, cfg_path, sizeof(target));
+    r = lstat(cfg_path, &sb);
+    if (r == 0 && S_ISLNK(sb.st_mode)) {
+        r = readlink(cfg_path, tmp, sizeof(tmp) - 1);
+        if (r > 0) {
+            tmp[r] = 0;
+            if (tmp[0] == '/') {
+                scopy(target, tmp, sizeof(target));
+            } else {
+                scopy(target, cfg_path, sizeof(target));
+                slash = strrchr(target, '/');
+                if (slash)
+                    slash[1] = 0;
+                else
+                    target[0] = 0;
+                scat(target, tmp, sizeof(target));
+            }
+        }
+    }
+    sprintf(tmp, "%.2000s.new", target);
+    fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) {
+        say("can't write %s", tmp);
+        free(o);
+        return -1;
+    }
+    size = strlen(o);
+    r = write(fd, o, size);
+    free(o);
+    w = close(fd);
+    if (r != size || w < 0) {
+        unlink(tmp);
+        say("can't write %s", tmp);
+        return -1;
+    }
+    r = rename(tmp, target);
+    if (r < 0) {
+        unlink(tmp);
+        say("can't replace %s", target);
+        return -1;
+    }
+    return 0;
+}
+
 static int read_config(const char *path, int must)
 {
     int res;
     char *f, *line, *next, *key, *val, *e;
-    char p[2048];
     long size;
-    int ln, bad, n, r;
+    int ln, bad, n;
 
     f = read_file(path, &size);
     if (!f) {
@@ -471,28 +633,10 @@ static int read_config(const char *path, int must)
             scopy(dict_dir, config_path(val), sizeof(dict_dir));
         } else if (!strcmp(key, "data")) {
             scopy(data_dir, config_path(val), sizeof(data_dir));
-        } else if (!strcmp(key, "dict")) {
-            if (val[0] == '/' || val[0] == '~' || !dict_dir[0])
-                scopy(p, config_path(val), sizeof(p));
-            else
-                sprintf(p, "%.1000s/%.1000s", dict_dir, val);
-            res = dict_add(p);
+        } else if (!strcmp(key, "dict") || !strcmp(key, "user")) {
+            res = add_dict_line(val, key[0] == 'u');
             if (res < 0)
                 bad = 1;
-            n++;
-        } else if (!strcmp(key, "user")) {
-            /* a dictionary like "dict", and where steno -a writes;
-             * made empty when it isn't there yet */
-            if (val[0] == '/' || val[0] == '~' || !dict_dir[0])
-                scopy(p, config_path(val), sizeof(p));
-            else
-                sprintf(p, "%.1000s/%.1000s", dict_dir, val);
-            r = make_empty_dict(p);
-            if (r == 0)
-                r = dict_add(p);
-            if (r < 0)
-                bad = 1;
-            scopy(user_dict, p, sizeof(user_dict));
             n++;
         } else if (!strcmp(key, "undo")) {
             undo_levels = atoi_small(val);
@@ -547,6 +691,16 @@ static void run_shell(const char *line)
         setsid();
         execl("/bin/sh", "sh", "-c", line, (char *)0);
         _exit(127);
+    }
+}
+
+/* o on the status screen: as PLOVER:TOGGLE */
+void output_toggle(void)
+{
+    run_command("toggle");
+    if (reset_pending) {
+        reset_pending = 0;
+        translate_reset();
     }
 }
 
@@ -686,6 +840,17 @@ static int open_port(const char *path)
 static int last_open_error;
 static int wait_once;          /* after losing it: a second first */
 
+/* for the status screen: 1 and the port while the keyboard is there;
+ * else 0, and what is wrong in why */
+int keyboard_state(const char **port, const char **why)
+{
+    *port = serial_fd >= 0 ? serial_name :
+        strcmp(port_opt, "auto") ? port_opt : "/dev/ttyACM0-9";
+    *why = last_open_error == EACCES ?
+        "no permission (group dialout?)" : "not plugged in";
+    return serial_fd >= 0;
+}
+
 static void connect_keyboard(void)
 {
     char p[32];
@@ -738,7 +903,7 @@ static void stroked(long st)
         return;
     if (verbose) {
         stroke_text(st, s);
-        fprintf(stderr, "%s: stroke %s\n", prog, s);
+        say("stroke %s", s);
     }
     /* a dictionary changed (steno -a, or by hand): read it again, but
      * look at most once a second */
@@ -750,8 +915,10 @@ static void stroked(long st)
     top = history_count() ? history_at(history_count() - 1) : 0;
     translate(st);
     dict_stroked();
-    if (!out_mode)
+    if (!out_mode) {
         tape_stroke(st, top);
+        tui_stroke(st, top);
+    }
     if (reset_pending) {
         reset_pending = 0;
         translate_reset();
@@ -786,6 +953,12 @@ static void read_keyboard(void)
 
 /* --- main ------------------------------------------------------------ */
 
+static void on_resize(int sig)
+{
+    (void)sig;
+    tui_dirty = 1;
+}
+
 static void on_signal(int sig)
 {
     (void)sig;
@@ -795,7 +968,7 @@ static void on_signal(int sig)
 static void usage(int code)
 {
     fprintf(code ? stderr : stdout,
-        "usage: steno [-v] [-c CONFIG] [-p PORT]   read the keyboard, type\n"
+        "usage: steno [-qv] [-c CONFIG] [-p PORT]  read the keyboard, type\n"
         "       steno -T | -S | -TS                paper tape, suggestions,\n"
         "                                          or both\n"
         "       steno -l WORD|OUTLINE              look it up\n"
@@ -806,7 +979,8 @@ static void usage(int code)
         "  -c  settings file (~/.config/steno/config)\n"
         "  -p  serial port of the keyboard (auto: /dev/ttyACM0 to 9)\n"
         "  -t  test: one stroke or outline a line, as KAT or KAT/-S\n"
-        "  -v  say each stroke on stderr\n");
+        "  -q  no status screen in a terminal\n"
+        "  -v  say each stroke\n");
     exit(code);
 }
 
@@ -842,8 +1016,8 @@ static int test_loop(void)
 int main(int argc, char **argv)
 {
     const char *cfg, *arg1, *arg2;
-    struct pollfd pf[2];
-    int i, n, test, r, tool, show_tape, show_sugg;
+    struct pollfd pf[3];
+    int i, n, test, r, tool, show_tape, show_sugg, quiet, kb, keys;
     struct sigaction sa;
 
     cfg = 0;
@@ -851,6 +1025,7 @@ int main(int argc, char **argv)
     tool = 0;
     show_tape = 0;
     show_sugg = 0;
+    quiet = 0;
     arg1 = 0;
     arg2 = 0;
     for (i = 1; i < argc; i++) {
@@ -880,6 +1055,8 @@ int main(int argc, char **argv)
             arg1 = argv[i + 1];
             arg2 = argv[i + 2];
             i += 2;
+        } else if (!strcmp(argv[i], "-q")) {
+            quiet = 1;
         } else if (!strcmp(argv[i], "-v")) {
             verbose = 1;
         } else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
@@ -891,7 +1068,9 @@ int main(int argc, char **argv)
     if (show_tape || show_sugg)
         return view_main(show_tape, show_sugg);
     out_mode = test;
-    r = read_config(cfg ? cfg : config_path("~/.config/steno/config"), 1);
+    scopy(cfg_path, cfg ? cfg : config_path("~/.config/steno/config"),
+        sizeof(cfg_path));
+    r = read_config(cfg_path, 1);
     if (r < 0)
         return 1;
     if (verbose)
@@ -919,16 +1098,32 @@ int main(int argc, char **argv)
     r = out_open();
     if (r < 0)
         return 1;
+    if (!quiet) {
+        sa.sa_handler = on_resize;
+        sigaction(SIGWINCH, &sa, 0);
+        tui_start();
+    }
     while (!stop_now) {
         if (serial_fd < 0 && !wait_once)
             connect_keyboard();
         wait_once = 0;
+        if (tui_dirty)
+            tui_draw();
         n = 0;
         pf[n].fd = out_fd();
         pf[n].events = POLLIN;
         n++;
+        kb = -1;
         if (serial_fd >= 0) {
+            kb = n;
             pf[n].fd = serial_fd;
+            pf[n].events = POLLIN;
+            n++;
+        }
+        keys = -1;
+        if (tui_on) {
+            keys = n;
+            pf[n].fd = 0;
             pf[n].events = POLLIN;
             n++;
         }
@@ -940,10 +1135,16 @@ int main(int argc, char **argv)
             continue;
         if (pf[0].revents)
             out_event();
-        if (n > 1 && pf[1].revents & POLLIN)
+        if (kb >= 0 && pf[kb].revents & POLLIN)
             read_keyboard();
-        else if (n > 1 && pf[1].revents & (POLLHUP | POLLERR | POLLNVAL))
+        else if (kb >= 0 && pf[kb].revents & (POLLHUP | POLLERR | POLLNVAL))
             drop_keyboard();
+        if (keys >= 0 && pf[keys].revents) {
+            r = tui_key();
+            if (r < 0)
+                break;
+        }
     }
+    tui_stop();
     return 0;
 }

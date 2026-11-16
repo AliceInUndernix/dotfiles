@@ -3,7 +3,7 @@ steno - Plover's typing engine in C, for the Moonlander
 
 SYNOPSIS
 
-    steno [-v] [-c CONFIG] [-p PORT]   read the keyboard, type into X
+    steno [-qv] [-c CONFIG] [-p PORT]  read the keyboard, type into X
     steno -T                           paper tape
     steno -S                           suggestions
     steno -TS                          both, side by side
@@ -46,8 +46,52 @@ purpose: they stay in Plover.
 
 Run only one of Plover and steno: both would read the same keyboard.
 
-    steno &          start it (in X)
-    steno -v         say each stroke on stderr
+    steno            in a terminal: types, and shows the status screen
+    steno &          in the background: types, and says nothing but
+                     problems, on stderr
+    steno -v         also say each stroke
+
+STATUS SCREEN
+
+Started in the foreground of a terminal, steno shows what it is doing
+in a small screen, in the look of btop:
+
+    +-+steno+-------------------------------------------------------+
+    | keyboard    connected  /dev/ttyACM0                           |
+    | X           connected  :0                                     |
+    | doing       typing                                            |
+    | last        KAT  cat                                          |
+    | since start 212 strokes, 10 dictionaries, 130831 entries      |
+    +--+q quit+-+o output+------------------------------------------+
+    +-+dictionaries+------------------------------------------------+
+    |> 1 on  ~/.system/share/steno/user.json    3  json, -a adds .. |
+    |  2 on  dotterel-base.json            113816  json             |
+    |  3 off dotterel-affixes.json            602  json             |
+    |  ...                                                          |
+    +--+j/k choose+-+J/K move+-+space on/off+-+a add+-+d remove+----+
+    +-+messages+----------------------------------------------------+
+    | keyboard on /dev/ttyACM0                                      |
+    +---------------------------------------------------------------+
+
+"doing" is typing, output off, raw mode, movement mode (Dotterel's
+.modal dictionary) or nothing (no keyboard). The messages are what
+steno would say on stderr.
+
+    j k, Up Down   choose a dictionary (g, G: the first, the last)
+    J K            move it up or down: the higher one wins
+    space          turn it on or off (in raw mode: for when it ends)
+    a              add one: a name in the dictionaries directory, or
+                   a path; it goes last (Enter adds, Esc stops)
+    d              take it out of the list (y to be sure); the file
+                   stays
+    r              read again the dictionary files that changed
+    o              output on or off, as PLOVER:TOGGLE
+    q, Ctrl+C      quit steno
+
+Every change to the list is written to the settings file at once (its
+dict and user lines, in the new order, where the first of them was;
+the rest of the file stays). ~/.config/steno/config is a link into
+this repo, so the change shows in git diff; the link stays a link.
 
 OPTIONS
 
@@ -66,7 +110,8 @@ OPTIONS
               turn on raw mode (RA*U) and back off for the text.
     -t        test mode: one stroke or outline a line on stdin; prints
               B n (backspaces), S text, K combo
-    -v        verbose
+    -q        no status screen, even in a terminal
+    -v        verbose: say each stroke
     -h        help
 
 SETTINGS
@@ -76,9 +121,9 @@ One a line, # for comments (see config, which install.sh links to
 
     port auto|PATH           the keyboard
     dictionaries DIR         where dict names are looked for
-    user FILE                a dictionary, and where -a and -A write;
+    user FILE [off]          a dictionary, and where -a and -A write;
                              made empty when it isn't there
-    dict NAME                a dictionary (.json, .modal, or
+    dict NAME [off]          a dictionary (.json, .modal, or
                              dotterel-modifiers.py); the first wins
     data DIR                 Dotterel's data (uk_to_us.json); default
                              DIR/../data of dictionaries
@@ -154,6 +199,8 @@ FILES
     x11.c        the X protocol: XTEST, the keymap, spare keys
     tools.c      the tape and suggestion feeds, -l, -a, -A
     view.c       -T, -S, -TS: the boxes
+    tui.c        the status screen
+    screen.c     drawing boxes in the terminal, for both
     mkwords.c    builds words.c from words.txt at build time
     words.txt    Plover's American English word list (for orthography)
     test/        make test: a small corpus checked against Plover

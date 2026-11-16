@@ -29,6 +29,16 @@ const char *dict_path(int i);
 const char *dict_peek(const long *st, int n);
 int dict_outlines(const char *text, char *out, int size, int max);
 long dict_entries(void);
+void dict_set_origin(int i, const char *name, int user);
+const char *dict_name(int i, int *user);
+int dict_enabled(int i);
+void dict_set_enabled(int i, int on);
+int dict_raw_on(void);
+int dict_modal_active(void);
+const char *dict_kind(int i);
+long dict_size(int i);
+int dict_move(int i, int dir);              /* -1: can't */
+void dict_remove(int i);
 int dict_explain(const long *st, int n, char *out, int size);
 
 /* --- translator -------------------------------------------------- */
@@ -101,15 +111,68 @@ int atoi_small(const char *s);         /* -1: not a number */
 
 extern char user_dict[1024];
 void tape_stroke(long st, struct trans *top);
+void stroke_result(long st, struct trans *top, char *out, int size);
 int view_main(int tape, int sugg);     /* view.c */
 const char *feed_path(const char *name);
 int tool_lookup(const char *s);
 int tool_add(const char *outline, const char *text);
 int tool_add_loop(void);
 
+/* --- the status screen (tui.c) and its engine side (main.c) ---- */
+
+extern int tui_on;
+extern volatile int tui_dirty;
+int tui_start(void);
+void tui_stop(void);
+void tui_draw(void);
+int tui_key(void);                          /* -1: quit */
+void tui_log(const char *m);
+void tui_stroke(long st, struct trans *top);
+int keyboard_state(const char **port, const char **why);
+int add_dict_line(const char *val, int user);
+int config_save(void);
+void output_toggle(void);
+
+/* --- the terminal screen (screen.c) --------------------------- */
+
+/* Habamax (README.md, "Colours: Habamax everywhere") */
+#define C_TEXT "\033[38;2;199;199;199m"
+#define C_TITLE "\033[1;38;2;238;238;238m"
+#define C_LABEL "\033[38;2;158;158;158m"
+#define C_DIM "\033[38;2;118;118;118m"
+#define C_BOX "\033[38;2;88;88;88m"
+#define C_BLUE "\033[38;2;95;135;175m"
+#define C_TEAL "\033[38;2;135;175;175m"
+#define C_GREEN "\033[38;2;135;175;135m"
+#define C_BROWN "\033[38;2;175;135;95m"
+#define C_RED "\033[38;2;175;95;95m"
+#define C_SELECT "\033[48;2;88;88;88m"
+#define C_PLAIN "\033[0m"
+#define DEC_ON "\033(0"
+#define DEC_OFF "\033(B"
+
+extern int scr_colour;
+void scr_write(const char *s, int n);
+void scr_put(const char *s);
+void scr_put_n(const char *s, int n);
+void scr_col(const char *c);
+void scr_move(int y, int x);
+void scr_fill(int c, int n);
+int scr_text(const char *s, int w);       /* characters written */
+int scr_width(const char *s);
+void scr_border(int y, int x, int w, int top, const char *title,
+    const char *const *keys, int nkeys);
+void scr_side(int y, int x, int w);
+void scr_size(int *rows, int *cols);
+void scr_begin(void);
+void scr_end(void);
+void scr_open(void);
+void scr_close(void);
+
 /* --- utilities --------------------------------------------------- */
 
 extern int verbose;
+void die(int code);            /* exit, giving the terminal back */
 void say(const char *fmt, const char *a);
 void scopy(char *dst, const char *src, int size);    /* zero fills */
 void scat(char *dst, const char *src, int size);

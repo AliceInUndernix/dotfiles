@@ -897,12 +897,12 @@ void out_event(void)
     while (xfd >= 0 && poll(&pf, 1, 0) > 0) {
         if (pf.revents & (POLLHUP | POLLERR)) {
             say("lost the X connection", 0);
-            exit(1);
+            die(1);
         }
         r = x_read(p, 32);
         if (r < 0) {
             say("lost the X connection", 0);
-            exit(1);
+            die(1);
         }
         x_packet(p);
     }

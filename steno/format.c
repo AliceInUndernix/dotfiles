@@ -69,7 +69,7 @@ static void need_buf(long n)
     p = malloc(c);
     if (!p) {
         say("out of memory", 0);
-        exit(1);
+        die(1);
     }
     if (buf) {
         memcpy(p, buf, blen);
@@ -92,7 +92,7 @@ static void need_scr(long n)
     p = malloc(c);
     if (!p) {
         say("out of memory", 0);
-        exit(1);
+        die(1);
     }
     if (scr) {
         memcpy(p, scr, slen);
@@ -375,7 +375,7 @@ static void apply(struct trans *t, struct action *a)
         p = malloc(t->nsaved + n + 1);
         if (!p) {
             say("out of memory", 0);
-            exit(1);
+            die(1);
         }
         memcpy(p, buf + at, n);
         if (t->saved)
@@ -432,7 +432,7 @@ static void translated(struct action *a)
     p = realloc(cur->act, (cur->nact + 1) * sizeof(*p));
     if (!p) {
         say("out of memory", 0);
-        exit(1);
+        die(1);
     }
     cur->act = p;
     cur->act[cur->nact] = *a;
@@ -1398,7 +1398,7 @@ void format_flush(struct trans **undo, int nundo, struct trans **doo,
     old = malloc((nold + 1) * sizeof(*old));
     if (!old) {
         say("out of memory", 0);
-        exit(1);
+        die(1);
     }
     k = 0;
     for (i = 0; i < nundo; i++)

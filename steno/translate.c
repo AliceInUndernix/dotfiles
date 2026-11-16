@@ -45,7 +45,7 @@ static void *need(void *p, int *cap, int n, int size)
     q = malloc((long)c * size);
     if (!q) {
         say("out of memory", 0);
-        exit(1);
+        die(1);
     }
     if (p) {
         memcpy(q, p, (long)*cap * size);
@@ -61,12 +61,12 @@ struct trans *trans_new(const long *st, int nst, const char *english)
 
     if (nlive == LIVE_MAX) {
         say("too many translations at once", 0);
-        exit(1);
+        die(1);
     }
     t = malloc(sizeof(*t));
     if (!t) {
         say("out of memory", 0);
-        exit(1);
+        die(1);
     }
     memset(t, 0, sizeof(*t));
     if (nst > STROKE_MAX)
@@ -94,7 +94,7 @@ static void set_replaced(struct trans *t, struct trans **r, int n)
     t->replaced = malloc((n ? n : 1) * sizeof(*r));
     if (!t->replaced) {
         say("out of memory", 0);
-        exit(1);
+        die(1);
     }
     memcpy(t->replaced, r, n * sizeof(*r));
     t->nreplaced = n;
@@ -673,7 +673,7 @@ static void flush(struct trans *extra)
     list = malloc((ndo + 1) * sizeof(*list));
     if (!list) {
         say("out of memory", 0);
-        exit(1);
+        die(1);
     }
     memcpy(list, hist + nhist - ndo, ndo * sizeof(*list));
     n = ndo;

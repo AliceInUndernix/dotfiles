@@ -173,29 +173,42 @@ static void suggestions(int fresh)
     feed_write(&sugg_fd, out);
 }
 
+/* What a stroke did: the text of the translation it made, its
+ * strokes when they mean nothing, or * when it undid one. top is the
+ * newest translation before it. */
+void stroke_result(long st, struct trans *top, char *out, int size)
+{
+    char s[STROKE_MAX * 32];
+    struct trans *t;
+    int n;
+
+    out[0] = 0;
+    n = history_count();
+    t = n ? history_at(n - 1) : 0;
+    if (t && t != top && t->nst && t->st[t->nst - 1] == st) {
+        if (t->has_english) {
+            put_escaped(out, size, t->english);
+        } else {
+            outline_text(t->st, t->nst, s, sizeof(s));
+            put_escaped(out, size, s);
+        }
+    } else {
+        scopy(out, "*", size);    /* undone */
+    }
+}
+
 /* after each stroke; top is the newest translation before it */
 void tape_stroke(long st, struct trans *top)
 {
-    char line[TAPE_LINE + 64], s[STROKE_MAX * 32];
-    struct trans *t;
+    char line[TAPE_LINE + 64];
     int n, was, open_now;
 
     open_now = feed_open(&tape_fd, "tape");
     if (open_now) {
         stroke_text(st, line);
         scat(line, "\t", sizeof(line));
-        n = history_count();
-        t = n ? history_at(n - 1) : 0;
-        if (t && t != top && t->nst && t->st[t->nst - 1] == st) {
-            if (t->has_english) {
-                put_escaped(line, TAPE_LINE, t->english);
-            } else {
-                outline_text(t->st, t->nst, s, sizeof(s));
-                put_escaped(line, TAPE_LINE, s);
-            }
-        } else {
-            scat(line, "*", sizeof(line));    /* undone */
-        }
+        n = strlen(line);
+        stroke_result(st, top, line + n, TAPE_LINE - n);
         scat(line, "\n", sizeof(line));
         feed_write(&tape_fd, line);
     }

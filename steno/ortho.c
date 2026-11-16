@@ -459,7 +459,7 @@ static void compile_rules(void)
     progs = malloc(NUM_RULES * sizeof(*progs));
     if (!progs) {
         say("out of memory", 0);
-        exit(1);
+        die(1);
     }
     for (i = 0; i < NUM_RULES; i++) {
         res = compile(&progs[i], rules[i][0]);
@@ -487,7 +487,7 @@ static void index_words(void)
     word_at = malloc((n + 1) * sizeof(long));
     if (!word_at) {
         say("out of memory", 0);
-        exit(1);
+        die(1);
     }
     nwords = 0;
     word_at[0] = 0;

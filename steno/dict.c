@@ -61,6 +61,8 @@ struct dict {
     struct modal *m;
     struct mods *x;
     long mtime, size;      /* to see when the file changes */
+    char name[1024];       /* as the settings file names it */
+    int user;              /* a "user" line, not "dict" */
 };
 
 static struct dict dicts[DICT_MAX];
@@ -172,7 +174,7 @@ static void *grow(void *p, long *cap, long need, long size)
     q = malloc(c * size);
     if (!q) {
         say("out of memory", 0);
-        exit(1);
+        die(1);
     }
     if (p) {
         memcpy(q, p, *cap * size);
@@ -217,7 +219,7 @@ static void rehash(struct table *t)
     t->slot = malloc(n * sizeof(long));
     if (!t->slot) {
         say("out of memory", 0);
-        exit(1);
+        die(1);
     }
     memset(t->slot, 0, n * sizeof(long));
     t->nslot = n;
@@ -1017,6 +1019,11 @@ int dict_add(const char *path)
     res = load_into(&dicts[ndicts], path);
     if (res < 0)
         return -1;
+    if (raw_on) {
+        /* in raw mode: on when it ends */
+        raw_saved[ndicts] = 1;
+        dicts[ndicts].enabled = dicts[ndicts].raw;
+    }
     ndicts++;
     return 0;
 }
@@ -1295,4 +1302,107 @@ long dict_entries(void)
                 dicts[i].m->exit.nent;
     }
     return n;
+}
+
+/* --- for the status screen (tui.c) ----------------------------------- */
+
+/* what the settings file calls it, and whether it is the user one */
+void dict_set_origin(int i, const char *name, int user)
+{
+    if (i < 0 || i >= ndicts)
+        return;
+    scopy(dicts[i].name, name, sizeof(dicts[i].name));
+    dicts[i].user = user;
+}
+
+const char *dict_name(int i, int *user)
+{
+    *user = dicts[i].user;
+    return dicts[i].name[0] ? dicts[i].name : dicts[i].path;
+}
+
+/* on or off as you set it; in raw mode, as it will be after it */
+int dict_enabled(int i)
+{
+    return raw_on ? raw_saved[i] : dicts[i].enabled;
+}
+
+void dict_set_enabled(int i, int on)
+{
+    if (i < 0 || i >= ndicts)
+        return;
+    if (raw_on)
+        raw_saved[i] = on;     /* raw mode keeps it as it is till it ends */
+    else
+        dicts[i].enabled = on;
+}
+
+int dict_raw_on(void)
+{
+    return raw_on;
+}
+
+/* 1 while a .modal dictionary is in its mode (Dotterel's movement) */
+int dict_modal_active(void)
+{
+    int i;
+
+    for (i = 0; i < ndicts; i++)
+        if (dicts[i].kind == dk_modal && dicts[i].enabled &&
+            dicts[i].m->activated)
+        {
+            return 1;
+        }
+    return 0;
+}
+
+const char *dict_kind(int i)
+{
+    if (dicts[i].kind == dk_mods)
+        return "built in";
+    if (dicts[i].kind == dk_modal)
+        return "modal";
+    return dicts[i].raw ? "raw mode" : "json";
+}
+
+long dict_size(int i)
+{
+    if (dicts[i].kind == dk_json)
+        return dicts[i].t.nent;
+    if (dicts[i].kind == dk_modal)
+        return dicts[i].m->entry.nent + dicts[i].m->dict.nent +
+            dicts[i].m->exit.nent;
+    return dicts[i].x ? dicts[i].x->nkeys : 0;
+}
+
+/* one place up (dir -1) or down (1) in the priority: 0, or -1 when
+ * it can't go further */
+int dict_move(int i, int dir)
+{
+    struct dict t;
+    int j, k;
+
+    j = i + dir;
+    if (i < 0 || i >= ndicts || j < 0 || j >= ndicts)
+        return -1;
+    t = dicts[i];
+    dicts[i] = dicts[j];
+    dicts[j] = t;
+    k = raw_saved[i];
+    raw_saved[i] = raw_saved[j];
+    raw_saved[j] = k;
+    return 0;
+}
+
+void dict_remove(int i)
+{
+    if (i < 0 || i >= ndicts)
+        return;
+    dict_free(&dicts[i]);
+    for (; i + 1 < ndicts; i++) {
+        dicts[i] = dicts[i + 1];
+        raw_saved[i] = raw_saved[i + 1];
+    }
+    ndicts--;
+    memset(&dicts[ndicts], 0, sizeof(dicts[0]));
 }
