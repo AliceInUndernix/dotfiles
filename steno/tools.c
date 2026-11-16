@@ -1,22 +1,23 @@
-/* The terminal tools around the engine: the paper tape and
- * suggestions (steno -T), adding a stroke (steno -a, -A) and looking
- * one up (steno -l).
+/* The terminal tools around the engine: the feeds for the paper tape
+ * and suggestions (view.c shows them), adding a stroke (steno -a, -A)
+ * and looking one up (steno -l).
  *
- * The engine writes one line a stroke to a FIFO, and only while
- * steno -T has it open, so nothing is kept anywhere:
+ * The engine writes to two FIFOs in $XDG_STATE_HOME/steno, each only
+ * while a viewer has it open, so nothing is kept anywhere:
  *
- *   STROKE <tab> TRANSLATION [<tab> WORDS <tab> OUTLINES]...
+ *   tape      one line a stroke: STROKE <tab> TRANSLATION
+ *   suggest   one line when the last words change and have outlines:
+ *             WORDS <tab> OUTLINES [<tab> WORDS <tab> OUTLINES]...
  *
- * with tabs, newlines and backslashes in the text written as \t, \n
- * and \\. */
+ * Tabs, newlines and backslashes in the text are written as \t, \n
+ * and \\. Without a suggestions viewer, no suggestions are looked for.
+ */
 #include <errno.h>
 #include <fcntl.h>
-#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <termios.h>
 #include <unistd.h>
 
 #include "steno.h"
@@ -27,21 +28,21 @@
 
 char user_dict[1024];          /* where -a writes ("user" setting) */
 
-static int tape_fd = -1;
+static int tape_fd = -1, sugg_fd = -1;
 
-/* $XDG_STATE_HOME/steno/tape, or ~/.local/state/steno/tape; the
+/* $XDG_STATE_HOME/steno/NAME, or ~/.local/state/steno/NAME; the
  * directories are made (0700) when missing */
-static const char *tape_path(void)
+const char *feed_path(const char *name)
 {
-    static char p[1024];
+    static char p[1100];
     const char *x;
     char *s;
 
     x = getenv("XDG_STATE_HOME");
     if (x && x[0] == '/')
-        scopy(p, x, sizeof(p) - 16);
+        scopy(p, x, 1000);
     else
-        scopy(p, config_path("~/.local/state"), sizeof(p) - 16);
+        scopy(p, config_path("~/.local/state"), 1000);
     scat(p, "/steno", sizeof(p));
     for (s = p + 1; *s; s++) {
         if (*s == '/') {
@@ -51,8 +52,32 @@ static const char *tape_path(void)
         }
     }
     mkdir(p, 0700);
-    scat(p, "/tape", sizeof(p));
+    scat(p, "/", sizeof(p));
+    scat(p, name, sizeof(p));
     return p;
+}
+
+/* 1: a viewer has it open */
+static int feed_open(int *fd, const char *name)
+{
+    if (*fd >= 0)
+        return 1;
+    *fd = open(feed_path(name), O_WRONLY | O_NONBLOCK);
+    if (*fd < 0)
+        return 0;
+    fcntl(*fd, F_SETFD, FD_CLOEXEC);
+    return 1;
+}
+
+static void feed_write(int *fd, const char *s)
+{
+    int r;
+
+    r = write(*fd, s, strlen(s));
+    if (r < 0 && errno != EAGAIN) {
+        close(*fd);            /* the viewer went away */
+        *fd = -1;
+    }
 }
 
 static void put_escaped(char *out, int size, const char *s)
@@ -65,7 +90,7 @@ static void put_escaped(char *out, int size, const char *s)
             out[n] = '\\';
             n++;
             out[n] = *s == '\t' ? 't' : *s == '\n' ? 'n' : '\\';
-        } else if ((unsigned char)*s < 32) {
+        } else if ((unsigned char)*s < 32 || *s == 127) {
             out[n] = '?';
         } else {
             out[n] = *s;
@@ -107,38 +132,45 @@ static void trim(char *s)
         memmove(s, s + a, n - a + 1);
 }
 
-/* the last few words and how else they can be written */
-static void suggestions(char *line, int size)
+/* The last few words, longest first, and how else they are written.
+ * Sent only when they change; a new viewer gets the current ones. */
+static void suggestions(int fresh)
 {
-    static char last_key[TEXT_MAX * 2], last_out[TAPE_LINE];
-    char key[TEXT_MAX * 2], w[TEXT_MAX], seen[TEXT_MAX];
+    int res;
+    static char last_key[TEXT_MAX];
+    char key[TEXT_MAX], w[TEXT_MAX], seen[TEXT_MAX];
     char o[TEXT_MAX], out[TAPE_LINE];
     int i;
 
-    key[0] = 0;
-    if (!last_words(SUGGEST_WORDS, key, TEXT_MAX))
+    res = last_words(SUGGEST_WORDS, key, sizeof(key));
+    if (!res)
         return;
-    if (strcmp(key, last_key)) {
-        scopy(last_key, key, sizeof(last_key));
-        out[0] = 0;
-        seen[0] = 0;
-        for (i = SUGGEST_WORDS; i >= 1; i--) {
-            if (!last_words(i, w, sizeof(w)))
-                continue;
-            trim(w);
-            if (!w[0] || !strcmp(w, seen))
-                continue;
-            scopy(seen, w, sizeof(seen));
-            if (!dict_outlines(w, o, sizeof(o), SUGGEST_MAX))
-                continue;
+    if (!fresh && !strcmp(key, last_key))
+        return;
+    scopy(last_key, key, sizeof(last_key));
+    out[0] = 0;
+    seen[0] = 0;
+    for (i = SUGGEST_WORDS; i >= 1; i--) {
+        res = last_words(i, w, sizeof(w));
+        if (!res)
+            continue;
+        trim(w);
+        if (!w[0] || !strcmp(w, seen))
+            continue;
+        scopy(seen, w, sizeof(seen));
+        res = dict_outlines(w, o, sizeof(o), SUGGEST_MAX);
+        if (!res)
+            continue;
+        if (out[0])
             scat(out, "\t", sizeof(out));
-            put_escaped(out, sizeof(out) - TEXT_MAX, w);
-            scat(out, "\t", sizeof(out));
-            scat(out, o, sizeof(out));
-        }
-        scopy(last_out, out, sizeof(last_out));
+        put_escaped(out, sizeof(out) - TEXT_MAX, w);
+        scat(out, "\t", sizeof(out));
+        scat(out, o, sizeof(out) - 2);
     }
-    scat(line, last_out, size);
+    if (!out[0])
+        return;
+    scat(out, "\n", sizeof(out));
+    feed_write(&sugg_fd, out);
 }
 
 /* after each stroke; top is the newest translation before it */
@@ -146,180 +178,33 @@ void tape_stroke(long st, struct trans *top)
 {
     char line[TAPE_LINE + 64], s[STROKE_MAX * 32];
     struct trans *t;
-    int n, r;
+    int n, was, open_now;
 
-    if (tape_fd < 0) {
-        tape_fd = open(tape_path(), O_WRONLY | O_NONBLOCK);
-        if (tape_fd < 0)
-            return;            /* no steno -T: nothing to do */
-        fcntl(tape_fd, F_SETFD, FD_CLOEXEC);
-    }
-    stroke_text(st, line);
-    scat(line, "\t", sizeof(line));
-    n = history_count();
-    t = n ? history_at(n - 1) : 0;
-    if (t && t != top && t->nst && t->st[t->nst - 1] == st) {
-        if (t->has_english) {
-            put_escaped(line, TAPE_LINE, t->english);
-        } else {
-            outline_text(t->st, t->nst, s, sizeof(s));
-            put_escaped(line, TAPE_LINE, s);
-        }
-    } else {
-        scat(line, "*", sizeof(line));
-    }
-    if (output_on)
-        suggestions(line, TAPE_LINE);
-    scat(line, "\n", sizeof(line));
-    r = write(tape_fd, line, strlen(line));
-    if (r < 0 && errno != EAGAIN) {
-        close(tape_fd);        /* steno -T went away */
-        tape_fd = -1;
-    }
-}
-
-/* --- steno -T ------------------------------------------------------ */
-
-/* Habamax, as 24-bit colours */
-#define C_TEXT "\033[38;2;199;199;199m"
-#define C_TITLE "\033[1;38;2;238;238;238m"
-#define C_LABEL "\033[38;2;158;158;158m"
-#define C_DIM "\033[38;2;118;118;118m"
-#define C_BLUE "\033[38;2;95;135;175m"
-#define C_TEAL "\033[38;2;135;175;175m"
-#define C_RESET "\033[0m"
-
-static int colour;
-
-static const char *col(const char *c)
-{
-    return colour ? c : "";
-}
-
-static const char tape_keys[] = "#STKPWHRAO*EUFRPBLGTSDZ";
-
-static void show_stroke(const char *s)
-{
-    char p[NUM_KEYS + 1];
-    long st;
-    int i;
-
-    st = stroke_parse(s, strlen(s));
-    if (st < 0) {
-        printf("%s%-23s", col(C_TEXT), s);
-        return;
-    }
-    for (i = 0; i < NUM_KEYS; i++)
-        p[i] = st & (1L << i) ? tape_keys[i] : ' ';
-    p[NUM_KEYS] = 0;
-    printf("%s%s", col(C_TEXT), p);
-}
-
-static void show_line(char *line)
-{
-    static char last_sugg[TAPE_LINE];
-    char *f[2 + 2 * SUGGEST_WORDS], *p;
-    int n, i;
-
-    n = 0;
-    p = line;
-    f[n] = p;
-    n++;
-    while (n < 2 + 2 * SUGGEST_WORDS && (p = strchr(p, '\t')) != 0) {
-        *p = 0;
-        p++;
-        f[n] = p;
-        n++;
-    }
-    show_stroke(f[0]);
-    printf("  %s%s%s\n", col(C_TEAL), n > 1 ? f[1] : "", col(C_RESET));
-    if (n < 4)
-        return;
-    /* the suggestions only when they change */
-    p = f[2];
-    if (!strcmp(p, last_sugg))
-        return;
-    scopy(last_sugg, p, sizeof(last_sugg));
-    for (i = 2; i + 1 < n; i += 2)
-        printf("%*s%s%s  %s%s%s\n", NUM_KEYS + 2, "", col(C_LABEL), f[i],
-            col(C_BLUE), f[i + 1], col(C_RESET));
-}
-
-int tape_view(void)
-{
-    const char *path;
-    struct pollfd pf[2];
-    struct termios old, raw;
-    char buf[TAPE_LINE * 2], *nl;
-    int fd, len, n, r, tty;
-    unsigned char c;
-
-    path = tape_path();
-    if (mkfifo(path, 0600) < 0 && errno != EEXIST) {
-        say("can't make %s", path);
-        return 1;
-    }
-    /* read and write: the FIFO stays open when the engine restarts */
-    fd = open(path, O_RDWR | O_NONBLOCK);
-    if (fd < 0) {
-        say("can't open %s", path);
-        return 1;
-    }
-    colour = isatty(1) && (!getenv("NO_COLOR") || !getenv("NO_COLOR")[0]);
-    tty = isatty(0) && tcgetattr(0, &old) == 0;
-    if (tty) {
-        raw = old;
-        raw.c_lflag &= ~(ICANON | ECHO);
-        raw.c_cc[VMIN] = 1;
-        raw.c_cc[VTIME] = 0;
-        tcsetattr(0, TCSANOW, &raw);
-    }
-    printf("%s%-23s  %s%s  %sq%s quit  %sc%s clear%s\n", col(C_TITLE),
-        tape_keys, "translation", col(C_DIM), col(C_BLUE), col(C_DIM),
-        col(C_BLUE), col(C_DIM), col(C_RESET));
-    fflush(stdout);
-    len = 0;
-    for (;;) {
-        pf[0].fd = fd;
-        pf[0].events = POLLIN;
-        pf[1].fd = 0;
-        pf[1].events = POLLIN;
-        r = poll(pf, tty ? 2 : 1, -1);
-        if (r < 0 && errno == EINTR)
-            continue;
-        if (r < 0)
-            break;
-        if (tty && pf[1].revents) {
-            c = 0;
-            n = read(0, &c, 1);
-            if (n <= 0 || c == 'q' || c == 4)
-                break;
-            if (c == 'c' || c == 12) {
-                printf("\033[H\033[2J");
-                fflush(stdout);
+    open_now = feed_open(&tape_fd, "tape");
+    if (open_now) {
+        stroke_text(st, line);
+        scat(line, "\t", sizeof(line));
+        n = history_count();
+        t = n ? history_at(n - 1) : 0;
+        if (t && t != top && t->nst && t->st[t->nst - 1] == st) {
+            if (t->has_english) {
+                put_escaped(line, TAPE_LINE, t->english);
+            } else {
+                outline_text(t->st, t->nst, s, sizeof(s));
+                put_escaped(line, TAPE_LINE, s);
             }
+        } else {
+            scat(line, "*", sizeof(line));    /* undone */
         }
-        if (!(pf[0].revents & POLLIN))
-            continue;
-        n = read(fd, buf + len, sizeof(buf) - 1 - len);
-        if (n <= 0)
-            continue;
-        len += n;
-        buf[len] = 0;
-        while ((nl = strchr(buf, '\n')) != 0) {
-            *nl = 0;
-            show_line(buf);
-            n = (int)(nl + 1 - buf);
-            memmove(buf, nl + 1, len - n + 1);
-            len -= n;
-        }
-        if (len == (int)sizeof(buf) - 1)
-            len = 0;           /* no newline in a full buffer: drop */
-        fflush(stdout);
+        scat(line, "\n", sizeof(line));
+        feed_write(&tape_fd, line);
     }
-    if (tty)
-        tcsetattr(0, TCSANOW, &old);
-    return 0;
+    was = sugg_fd >= 0;
+    if (!output_on)
+        return;
+    open_now = feed_open(&sugg_fd, "suggest");
+    if (open_now)
+        suggestions(!was);
 }
 
 /* --- steno -l -------------------------------------------------------- */
@@ -338,18 +223,21 @@ static int lookup_outline(const char *s, char *norm, int size)
 
 int tool_lookup(const char *s)
 {
+    int res;
     char out[TEXT_MAX * 8], norm[STROKE_MAX * 32];
     long st[STROKE_MAX];
-    int n, found;
+    int n, found, got;
 
     found = 0;
     n = outline_parse(s, st, STROKE_MAX);
-    if (n > 0 && dict_explain(st, n, out, sizeof(out))) {
+    got = n > 0 ? dict_explain(st, n, out, sizeof(out)) : 0;
+    if (got) {
         outline_text(st, n, norm, sizeof(norm));
         printf("%s gives\n%s", norm, out);
         found = 1;
     }
-    if (dict_outlines(s, out, sizeof(out), 50)) {
+    res = dict_outlines(s, out, sizeof(out), 50);
+    if (res) {
         printf("%s is written %s\n", s, out);
         found = 1;
     }
@@ -508,17 +396,20 @@ static void show_conflicts(const char *norm, const char *text)
 {
     char out[TEXT_MAX * 8];
     long st[STROKE_MAX];
-    int n;
+    int n, got;
 
     n = norm ? outline_parse(norm, st, STROKE_MAX) : 0;
-    if (n > 0 && dict_explain(st, n, out, sizeof(out)))
+    got = n > 0 ? dict_explain(st, n, out, sizeof(out)) : 0;
+    if (got)
         printf("%s gives now\n%s", norm, out);
-    if (text && dict_outlines(text, out, sizeof(out), 20))
+    got = text ? dict_outlines(text, out, sizeof(out), 20) : 0;
+    if (got)
         printf("%s is written now %s\n", text, out);
 }
 
 int tool_add(const char *outline, const char *text)
 {
+    int res;
     char norm[STROKE_MAX * 32];
     const char *t;
 
@@ -532,7 +423,8 @@ int tool_add(const char *outline, const char *text)
         return 1;
     }
     show_conflicts(norm, text);
-    if (write_entry(t, norm, text) < 0)
+    res = write_entry(t, norm, text);
+    if (res < 0)
         return 1;
     printf("%s: %s -> %s\n", t, norm, text);
     return 0;
@@ -555,6 +447,7 @@ static int ask_line(const char *prompt, char *s, int size)
 
 int tool_add_loop(void)
 {
+    int res;
     char o[1024], norm[STROKE_MAX * 32], text[TEXT_MAX], a[16];
     const char *t;
 
@@ -565,7 +458,8 @@ int tool_add_loop(void)
     }
     printf("adding to %s (empty outline: done)\n", t);
     for (;;) {
-        if (ask_line("outline: ", o, sizeof(o)) <= 0)
+        res = ask_line("outline: ", o, sizeof(o));
+        if (res <= 0)
             break;
         trim(o);
         if (!lookup_outline(o, norm, sizeof(norm))) {
@@ -573,14 +467,17 @@ int tool_add_loop(void)
             continue;
         }
         show_conflicts(norm, 0);
-        if (ask_line("translation: ", text, sizeof(text)) <= 0)
+        res = ask_line("translation: ", text, sizeof(text));
+        if (res <= 0)
             continue;
         show_conflicts(0, text);
-        if (ask_line("add it? [y/N] ", a, sizeof(a)) < 0)
+        res = ask_line("add it? [y/N] ", a, sizeof(a));
+        if (res < 0)
             break;
         if (a[0] != 'y' && a[0] != 'Y')
             continue;
-        if (write_entry(t, norm, text) == 0)
+        res = write_entry(t, norm, text);
+        if (res == 0)
             printf("  added %s -> %s\n", norm, text);
     }
     return 0;

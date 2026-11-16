@@ -101,7 +101,8 @@ int atoi_small(const char *s);         /* -1: not a number */
 
 extern char user_dict[1024];
 void tape_stroke(long st, struct trans *top);
-int tape_view(void);
+int view_main(int tape, int sugg);     /* view.c */
+const char *feed_path(const char *name);
 int tool_lookup(const char *s);
 int tool_add(const char *outline, const char *text);
 int tool_add_loop(void);

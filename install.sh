@@ -4,7 +4,8 @@
 # (run those with su -c, never sudo or doas):
 #   --deps   system packages          slock   must be root's to lock
 #   ksh      making ksh the login shell, and root's copies of the files
-#   plover   adding you to the serial port's group (dialout), once
+#   plover, steno   adding you to the serial port's group (dialout),
+#            once
 #   net      Riseup VPN, Tor and the kill switch (Gentoo with OpenRC;
 #            net/README)
 #   icecat, chromium   the browsers (emerge)
@@ -491,17 +492,43 @@ install_clean() { build_suckless clean; }
 install_seal() { build_suckless seal; }
 
 # steno: our own steno engine, in the way of Plover, in C (see
-# steno/README). Built like the suckless tools. It reads the
-# dictionaries of Plover's Dotterel clone (part plover, which also puts
-# you in the serial port's group) and keeps the strokes you add in
-# ~/.system/share/steno/user.json. Plover stays: run one at a time.
+# steno/README). Built like the suckless tools. It has its own clone of
+# the dotterel repo for the dictionaries, apart from Plover's:
+#   ~/.system/share/steno/dotterel   updated (git pull) every run
+#   ~/.system/share/steno/user.json  the strokes you add (steno -a)
+# Reading the keyboard needs your user in the serial port's group, as
+# for Plover; a root run adds you. Plover stays: run one at a time.
+STENO_DIR=$DATA/steno
+
 install_steno() {
+	port_group=$(stat -c %G /dev/ttyACM0 2>/dev/null || :)
+	case $port_group in ""|root) port_group=dialout ;; esac
+	in_group=no
+	id -nG "$USER_NAME" | tr ' ' '\n' | grep -qx "$port_group" && in_group=yes
+	if [ "$AS_ROOT" = yes ]; then
+		if [ "$in_group" = no ] && getent group "$port_group" >/dev/null; then
+			usermod -aG "$port_group" "$USER_NAME"
+			say "group   $USER_NAME in $port_group (the Moonlander's serial port; log in again)"
+		fi
+		su -s /bin/sh "$USER_NAME" -c "INSTALL_LOG='$INSTALL_LOG' '$DOTFILES/install.sh' steno"
+		return
+	fi
+	[ "$in_group" = yes ] ||
+		warn "steno can't read the Moonlander until you are in group $port_group: su -c '$DOTFILES/install.sh steno', then log in again"
 	build_suckless steno
 	userdir "$CONFIG/steno"
 	link "$DOTFILES/steno/config" "$CONFIG/steno/config"
-	userdir "$DATA/steno"
-	[ -d "$PLOVER_DIR/dotterel/plover-dotterel/plover_dotterel/dictionaries" ] ||
-		warn "steno reads Dotterel's dictionaries from Plover's clone: ./install.sh plover"
+	userdir "$STENO_DIR"
+	command -v git >/dev/null 2>&1 || die "git not found (try ./install.sh --deps)"
+	src=$STENO_DIR/dotterel
+	if [ -d "$src/.git" ]; then
+		git -C "$src" pull --quiet --ff-only ||
+			warn "could not update $src; steno uses the dictionaries that are there"
+		say "ok      $src ($(git -C "$src" log -1 --format=%h))"
+	else
+		say "clone   $PLOVER_REPO -> $src"
+		git clone --quiet --depth 1 "$PLOVER_REPO" "$src"
+	fi
 }
 
 # WebArchiver: archives whole websites (see webarchiver/README). Built
@@ -1033,7 +1060,12 @@ ck_part() {
 	tmux|flameshot|mpv|sioyek|wiremix|btop)
 		ck_links "$1"
 		ck_cmd "$1" ;;
-	dwm|st|webarchiver|clean|seal|steno) ck_built "$1" ;;
+	dwm|st|webarchiver|clean|seal) ck_built "$1" ;;
+	steno)
+		ck_built steno
+		ck_links steno
+		if [ -d "$STENO_DIR/dotterel" ]; then ck_git "$STENO_DIR/dotterel" "steno's Dotterel"
+		else ck_bad "steno has no dictionaries: ./install.sh steno"; fi ;;
 	dmenu)
 		ck_built dmenu
 		ck_links dmenu ;;
@@ -1352,7 +1384,7 @@ if [ "$AS_ROOT" = no ]; then
 		esac
 	done
 elif [ "$want_deps" = no ] && [ -n "$named" ]; then
-	case " $named " in *" slock "*|*" ksh "*|*" plover "*|*" net "*|*" icecat "*|*" chromium "*) ;; *)
+	case " $named " in *" slock "*|*" ksh "*|*" plover "*|*" steno "*|*" net "*|*" icecat "*|*" chromium "*) ;; *)
 		say "note    these parts don't need root; next time just run ./install.sh$named" ;;
 	esac
 fi

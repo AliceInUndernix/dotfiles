@@ -439,28 +439,35 @@ static void warn_key(const char *path, const char *key)
 /* An object of strings, after its "{". */
 static int json_table(struct json *j, struct table *t)
 {
+    int res;
     char key[TEXT_MAX * 2];
     long st[STROKE_MAX];
     int n;
 
-    if (json_char(j, '}'))
+    res = json_char(j, '}');
+    if (res)
         return 0;
     for (;;) {
-        if (json_string(j) < 0)
+        res = json_string(j);
+        if (res < 0)
             return -1;
         scopy(key, j->str, sizeof(key));
-        if (!json_char(j, ':'))
+        res = json_char(j, ':');
+        if (!res)
             return json_err(j, "':' was expected");
-        if (json_string(j) < 0)
+        res = json_string(j);
+        if (res < 0)
             return -1;
         n = outline_parse(key, st, STROKE_MAX);
         if (n < 0)
             warn_key(j->path, key);
         else
             put(t, st, n, j->str);
-        if (json_char(j, ','))
+        res = json_char(j, ',');
+        if (res)
             continue;
-        if (json_char(j, '}'))
+        res = json_char(j, '}');
+        if (res)
             return 0;
         return json_err(j, "',' or '}' was expected");
     }
@@ -484,9 +491,13 @@ static int json_bool(struct json *j, int *v)
 
 static int load_json(struct dict *d, struct json *j)
 {
-    if (!json_char(j, '{'))
+    int res;
+
+    res = json_char(j, '{');
+    if (!res)
         return json_err(j, "'{' was expected");
-    if (json_table(j, &d->t) < 0)
+    res = json_table(j, &d->t);
+    if (res < 0)
         return -1;
     d->longest = d->t.longest;
     return 0;
@@ -494,6 +505,7 @@ static int load_json(struct dict *d, struct json *j)
 
 static int load_modal(struct dict *d, struct json *j)
 {
+    int res;
     struct modal *m;
     char name[64];
     int *flag;
@@ -506,15 +518,19 @@ static int load_modal(struct dict *d, struct json *j)
     m->ignore_folding = 1;
     m->new_stroke = 1;
     d->m = m;
-    if (!json_char(j, '{'))
+    res = json_char(j, '{');
+    if (!res)
         return json_err(j, "'{' was expected");
-    if (json_char(j, '}'))
+    res = json_char(j, '}');
+    if (res)
         return 0;
     for (;;) {
-        if (json_string(j) < 0)
+        res = json_string(j);
+        if (res < 0)
             return -1;
         scopy(name, j->str, sizeof(name));
-        if (!json_char(j, ':'))
+        res = json_char(j, ':');
+        if (!res)
             return json_err(j, "':' was expected");
         flag = 0;
         if (!strcmp(name, "exclude_entry"))
@@ -526,24 +542,27 @@ static int load_modal(struct dict *d, struct json *j)
         else if (!strcmp(name, "ignore_folding"))
             flag = &m->ignore_folding;
         if (flag) {
-            if (json_bool(j, flag) < 0)
+            res = json_bool(j, flag);
+            if (res < 0)
                 return -1;
         } else if (!strcmp(name, "entry") || !strcmp(name, "dict") ||
             !strcmp(name, "exit"))
         {
-            if (!json_char(j, '{'))
+            res = json_char(j, '{');
+            if (!res)
                 return json_err(j, "only tables in the file itself");
-            if (json_table(j, name[0] == 'e' && name[1] == 'n' ?
-                &m->entry : name[0] == 'd' ? &m->dict : &m->exit) < 0)
-            {
+            res = json_table(j, name[0] == 'e' && name[1] == 'n' ?
+                &m->entry : name[0] == 'd' ? &m->dict : &m->exit);
+            if (res < 0)
                 return -1;
-            }
         } else {
             return json_err(j, "unknown setting");
         }
-        if (json_char(j, ','))
+        res = json_char(j, ',');
+        if (res)
             continue;
-        if (json_char(j, '}'))
+        res = json_char(j, '}');
+        if (res)
             break;
         return json_err(j, "',' or '}' was expected");
     }
@@ -989,11 +1008,14 @@ static int load_into(struct dict *d, const char *path)
 
 int dict_add(const char *path)
 {
+    int res;
+
     if (ndicts == DICT_MAX) {
         say("too many dictionaries", 0);
         return -1;
     }
-    if (load_into(&dicts[ndicts], path) < 0)
+    res = load_into(&dicts[ndicts], path);
+    if (res < 0)
         return -1;
     ndicts++;
     return 0;
@@ -1003,6 +1025,7 @@ int dict_add(const char *path)
  * steno -a, or by hand). A file that can't be read keeps the old one. */
 void dict_reload(void)
 {
+    int res;
     static struct dict tmp;
     long mtime, size;
     int i, enabled;
@@ -1013,7 +1036,8 @@ void dict_reload(void)
         file_stamp(dicts[i].path, &mtime, &size);
         if (mtime == dicts[i].mtime && size == dicts[i].size)
             continue;
-        if (load_into(&tmp, dicts[i].path) < 0) {
+        res = load_into(&tmp, dicts[i].path);
+        if (res < 0) {
             dicts[i].mtime = mtime;
             dicts[i].size = size;
             continue;

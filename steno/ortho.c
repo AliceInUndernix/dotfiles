@@ -317,6 +317,7 @@ static int compile(struct prog *g, const char *pat)
 static int run(struct prog *g, int pc, const char *s, int n, int sp,
     int *caps, int end)
 {
+    int res;
     struct inst *in;
     int old, k, ok, c2[CAPS];
 
@@ -362,7 +363,8 @@ static int run(struct prog *g, int pc, const char *s, int n, int sp,
             pc = in->x;
             break;
         case op_split:
-            if (run(g, in->x, s, n, sp, caps, end))
+            res = run(g, in->x, s, n, sp, caps, end);
+            if (res)
                 return 1;
             pc = in->y;
             break;
@@ -373,7 +375,8 @@ static int run(struct prog *g, int pc, const char *s, int n, int sp,
             }
             old = caps[in->n];
             caps[in->n] = sp;
-            if (run(g, pc + 1, s, n, sp, caps, end))
+            res = run(g, pc + 1, s, n, sp, caps, end);
+            if (res)
                 return 1;
             caps[in->n] = old;
             return 0;
@@ -401,11 +404,13 @@ static int run(struct prog *g, int pc, const char *s, int n, int sp,
 static int prog_match(struct prog *g, const char *s, char *out, int size,
     const char *repl)
 {
+    int res;
     int caps[CAPS], i, n, k, len;
 
     for (i = 0; i < CAPS; i++)
         caps[i] = -1;
-    if (!run(g, 0, s, strlen(s), 0, caps, -1))
+    res = run(g, 0, s, strlen(s), 0, caps, -1);
+    if (!res)
         return 0;
     if (!repl)
         return 1;
@@ -435,9 +440,11 @@ static int prog_match(struct prog *g, const char *s, char *out, int size,
 int rx_match(const char *pat, const char *s, char *out, int size,
     const char *repl)
 {
+    int res;
     static struct prog g;
 
-    if (compile(&g, pat) < 0)
+    res = compile(&g, pat);
+    if (res < 0)
         return -1;
     return prog_match(&g, s, out, size, repl);
 }
@@ -446,6 +453,7 @@ static struct prog *progs;
 
 static void compile_rules(void)
 {
+    int res;
     int i;
 
     progs = malloc(NUM_RULES * sizeof(*progs));
@@ -453,9 +461,11 @@ static void compile_rules(void)
         say("out of memory", 0);
         exit(1);
     }
-    for (i = 0; i < NUM_RULES; i++)
-        if (compile(&progs[i], rules[i][0]) < 0)
+    for (i = 0; i < NUM_RULES; i++) {
+        res = compile(&progs[i], rules[i][0]);
+        if (res < 0)
             say("bad spelling rule: %s", rules[i][0]);
+    }
 }
 
 /* --- the word list (Plover's american_english_words.txt) ------------ */
@@ -548,17 +558,17 @@ static void from_rules(const char *word, const char *suffix, int check,
     struct cands *c)
 {
     char s[WORD_MAX * 3], o[WORD_MAX];
-    int i;
+    int i, res;
 
     if (!progs)
         compile_rules();
     sprintf(s, "%.*s ^ %.*s", WORD_MAX - 1, word, WORD_MAX - 1, suffix);
     for (i = 0; i < NUM_RULES && c->n < CAND_MAX; i++) {
-        if (progs[i].bad || !prog_match(&progs[i], s, o, sizeof(o),
-            rules[i][1]))
-        {
+        if (progs[i].bad)
             continue;
-        }
+        res = prog_match(&progs[i], s, o, sizeof(o), rules[i][1]);
+        if (!res)
+            continue;
         if (check && words_rank(o) < 0)
             continue;
         scopy(c->w[c->n], o, WORD_MAX);

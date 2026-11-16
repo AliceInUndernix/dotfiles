@@ -637,6 +637,8 @@ static int ukus_lookup(const char *w, int by_us, char *out, int size)
 
 static void uk_us_switch(const char *w, char *out, int size)
 {
+    int res;
+
     if (!ukus_read) {
         ukus_read = 1;
         ukus = json_pairs(dotterel_data("uk_to_us.json"), &nukus);
@@ -647,9 +649,11 @@ static void uk_us_switch(const char *w, char *out, int size)
         scopy(out, w, size);
         return;
     }
-    if (ukus_lookup(w, 1, out, size) && strcmp(out, w))
+    res = ukus_lookup(w, 1, out, size);
+    if (res && strcmp(out, w))
         return;
-    if (ukus_lookup(w, 0, out, size))
+    res = ukus_lookup(w, 0, out, size);
+    if (res)
         return;
     scopy(out, w, size);
 }
@@ -829,11 +833,13 @@ static void meta_mode(struct action *a, const char *cmd)
 
 static void meta_retro_case(struct action *a, int c)
 {
+    int res;
     char w[TEXT_MAX];
 
     copy_state(a);
     a->prev_attach = 1;
-    if (last_words(1, w, sizeof(w))) {
+    res = last_words(1, w, sizeof(w));
+    if (res) {
         scopy(a->prev_replace, w, TEXT_MAX);
         apply_case(w, c);
         set_text(a, w);
@@ -844,11 +850,13 @@ static void meta_retro_case(struct action *a, int c)
 
 static void meta_retro_us(struct action *a)
 {
+    int res;
     char w[TEXT_MAX], o[TEXT_MAX];
 
     copy_state(a);
     a->prev_attach = 1;
-    if (last_words(1, w, sizeof(w))) {
+    res = last_words(1, w, sizeof(w));
+    if (res) {
         scopy(a->prev_replace, w, TEXT_MAX);
         uk_us_switch(w, o, sizeof(o));
         set_text(a, o);
@@ -949,7 +957,7 @@ static void meta_stitch(struct action *a, const char *cmd)
 static void meta_stitch_last_word(struct action *a, const char *cmd)
 {
     char num[32], delim[TEXT_MAX], w[TEXT_MAX], t[TEXT_MAX];
-    int has, n, i;
+    int has, n, i, got;
 
     split2(cmd, num, sizeof(num), delim, sizeof(delim), &has);
     if (!has)
@@ -960,7 +968,8 @@ static void meta_stitch_last_word(struct action *a, const char *cmd)
     if (!num[0])
         n = 1;
     copy_state(a);
-    if (n > 0 && last_words(n, w, sizeof(w))) {
+    got = n > 0 ? last_words(n, w, sizeof(w)) : 0;
+    if (got) {
         stitch_word(w, delim, t, sizeof(t));
         set_text(a, t);
         scopy(a->prev_replace, w, TEXT_MAX);
@@ -1036,6 +1045,7 @@ static int named_meta(struct action *a, const char *name, const char *arg)
 
 static void meta_to_action(struct action *a, const char *m)
 {
+    int res;
     char name[64];
     const char *p;
     int n, i;
@@ -1050,7 +1060,8 @@ static void meta_to_action(struct action *a, const char *m)
         p += i;
         if (*p == ':')
             p++;
-        if (named_meta(a, name, p))
+        res = named_meta(a, name, p);
+        if (res)
             return;
         say("unknown meta: %s", name);
         new_state(a);

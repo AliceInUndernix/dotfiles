@@ -3,7 +3,8 @@
  * and typing through X. See README.
  *
  *   steno [-v] [-c CONFIG] [-p PORT]    run: read the keyboard, type
- *   steno -T | -l X | -a O T | -A       the tools (tools.c)
+ *   steno -T | -S | -TS                 tape, suggestions (view.c)
+ *   steno -l X | -a O T | -A            the tools (tools.c)
  *   steno -t [-c CONFIG]                strokes from stdin, print what
  *                                       would be typed (for tests)
  *   steno -h                            help
@@ -423,10 +424,11 @@ static int make_empty_dict(const char *path)
 
 static int read_config(const char *path, int must)
 {
+    int res;
     char *f, *line, *next, *key, *val, *e;
     char p[2048];
     long size;
-    int ln, bad, n;
+    int ln, bad, n, r;
 
     f = read_file(path, &size);
     if (!f) {
@@ -474,7 +476,8 @@ static int read_config(const char *path, int must)
                 scopy(p, config_path(val), sizeof(p));
             else
                 sprintf(p, "%.1000s/%.1000s", dict_dir, val);
-            if (dict_add(p) < 0)
+            res = dict_add(p);
+            if (res < 0)
                 bad = 1;
             n++;
         } else if (!strcmp(key, "user")) {
@@ -484,7 +487,10 @@ static int read_config(const char *path, int must)
                 scopy(p, config_path(val), sizeof(p));
             else
                 sprintf(p, "%.1000s/%.1000s", dict_dir, val);
-            if (make_empty_dict(p) < 0 || dict_add(p) < 0)
+            r = make_empty_dict(p);
+            if (r == 0)
+                r = dict_add(p);
+            if (r < 0)
                 bad = 1;
             scopy(user_dict, p, sizeof(user_dict));
             n++;
@@ -655,13 +661,14 @@ static int npacket;
 
 static int open_port(const char *path)
 {
-    int fd;
+    int fd, r;
     struct termios t;
 
     fd = open(path, O_RDONLY | O_NOCTTY | O_NONBLOCK);
     if (fd < 0)
         return -1;
-    if (tcgetattr(fd, &t) == 0) {
+    r = tcgetattr(fd, &t);
+    if (r == 0) {
         t.c_iflag = 0;
         t.c_oflag = 0;
         t.c_lflag = 0;
@@ -789,7 +796,8 @@ static void usage(int code)
 {
     fprintf(code ? stderr : stdout,
         "usage: steno [-v] [-c CONFIG] [-p PORT]   read the keyboard, type\n"
-        "       steno -T                           paper tape, suggestions\n"
+        "       steno -T | -S | -TS                paper tape, suggestions,\n"
+        "                                          or both\n"
         "       steno -l WORD|OUTLINE              look it up\n"
         "       steno -a OUTLINE TRANSLATION       add a stroke\n"
         "       steno -A                           add strokes, asking\n"
@@ -835,12 +843,14 @@ int main(int argc, char **argv)
 {
     const char *cfg, *arg1, *arg2;
     struct pollfd pf[2];
-    int i, n, test, r, tool;
+    int i, n, test, r, tool, show_tape, show_sugg;
     struct sigaction sa;
 
     cfg = 0;
     test = 0;
     tool = 0;
+    show_tape = 0;
+    show_sugg = 0;
     arg1 = 0;
     arg2 = 0;
     for (i = 1; i < argc; i++) {
@@ -852,8 +862,15 @@ int main(int argc, char **argv)
             scopy(port_opt, argv[i], sizeof(port_opt));
         } else if (!strcmp(argv[i], "-t")) {
             test = 1;
-        } else if (!strcmp(argv[i], "-T") || !strcmp(argv[i], "-A")) {
-            tool = argv[i][1];
+        } else if (!strcmp(argv[i], "-T")) {
+            show_tape = 1;
+        } else if (!strcmp(argv[i], "-S")) {
+            show_sugg = 1;
+        } else if (!strcmp(argv[i], "-TS") || !strcmp(argv[i], "-ST")) {
+            show_tape = 1;
+            show_sugg = 1;
+        } else if (!strcmp(argv[i], "-A")) {
+            tool = 'A';
         } else if (!strcmp(argv[i], "-l") && i + 1 < argc) {
             tool = 'l';
             i++;
@@ -871,8 +888,8 @@ int main(int argc, char **argv)
             usage(1);
         }
     }
-    if (tool == 'T')
-        return tape_view();
+    if (show_tape || show_sugg)
+        return view_main(show_tape, show_sugg);
     out_mode = test;
     r = read_config(cfg ? cfg : config_path("~/.config/steno/config"), 1);
     if (r < 0)
@@ -899,7 +916,8 @@ int main(int argc, char **argv)
     sa.sa_handler = SIG_IGN;
     sigaction(SIGCHLD, &sa, 0);
     sigaction(SIGPIPE, &sa, 0);
-    if (out_open() < 0)
+    r = out_open();
+    if (r < 0)
         return 1;
     while (!stop_now) {
         if (serial_fd < 0 && !wait_once)

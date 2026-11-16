@@ -4,7 +4,9 @@ steno - Plover's typing engine in C, for the Moonlander
 SYNOPSIS
 
     steno [-v] [-c CONFIG] [-p PORT]   read the keyboard, type into X
-    steno -T                           paper tape and suggestions
+    steno -T                           paper tape
+    steno -S                           suggestions
+    steno -TS                          both, side by side
     steno -l WORD|OUTLINE              look it up
     steno -a OUTLINE TRANSLATION       add a stroke
     steno -A                           add strokes, asking for each
@@ -34,6 +36,11 @@ What Plover's plugins did for Dotterel is built in:
     plover-stitching, plover-last-translation ({*+}, {*!} ...)
     Dotterel's raw mode (RA*U) and UK/US switch (#SU)
 
+The dictionaries are its own: ./install.sh steno clones the dotterel
+repo into ~/.system/share/steno/dotterel and updates it every run.
+steno never reads Plover's files, and the two don't depend on each
+other.
+
 Dotterel's other tools (Builder, Practice, Stats ...) are not, on
 purpose: they stay in Plover.
 
@@ -47,7 +54,9 @@ OPTIONS
     -c FILE   settings (default ~/.config/steno/config)
     -p PORT   the serial port; auto (default) tries /dev/ttyACM0 to
               ttyACM9, every second until the keyboard is there
-    -T        show the paper tape, with suggestions; q quits, c clears
+    -T        show the paper tape
+    -S        show the suggestions
+    -TS       show both (also -ST, or -T -S)
     -l X      what outline X gives in each dictionary, and how text X
               is written (shortest first)
     -a O T    add outline O -> T to the user dictionary; says first
@@ -87,21 +96,38 @@ contents.
 
 PAPER TAPE AND SUGGESTIONS
 
-steno -T shows each stroke in the paper tape's columns, what it wrote,
-and, below, the shorter ways of writing the last words when there are
-some:
+Each is its own box, drawn as btop draws them: steno -T is the tape,
+steno -S the suggestions, steno -TS both, side by side (one above the
+other in a terminal under 60 columns). So they can go in one window
+or in two, wherever there is room.
 
-    #STKPWHRAO*EUFRPBLGTSDZ  translation  q quit  c clear
-             O     PB        on
-                             on  -PB  AUPB  OPB
-      T   H                  this
-                             on this  THOPB
+    +-+tape+--------------------------++-+suggestions+----------------+
+    |         O     PB        on      ||on                            |
+    |  T   H                  this    ||  -PB  AUPB  OPB              |
+    |                                 ||on this                       |
+    |                                 ||  THOPB                       |
+    +---------------------------------++--+quit+-+clear+-+tape+-+sugg..+
 
-The engine sends it one line a stroke through a FIFO,
-$XDG_STATE_HOME/steno/tape (mode 0600, in a 0700 directory), and only
-while steno -T has it open. Nothing is written to disk, and without
-steno -T nothing is sent at all. Whatever you type passes through it,
-so it is yours only; don't run steno -T where others see the screen.
+The tape: each stroke in the steno order's columns and what it wrote
+(* for a stroke that undid one). The suggestions: the last words, and
+under them every outline that writes them, shortest first; the newest
+at the bottom in both.
+
+    q    quit (Ctrl+C, Ctrl+D too)
+    t    show or hide the tape
+    s    show or hide the suggestions
+    c    clear both
+    any other key draws it again
+
+At least one box stays. Into a pipe, it writes the lines instead
+(suggestions start with "= " when the tape is there too).
+
+The engine sends them through two FIFOs, $XDG_STATE_HOME/steno/tape
+and suggest (mode 0600, in a 0700 directory), each only while a viewer
+has it open; with the suggestions hidden or not shown anywhere, it
+doesn't look for them. One viewer of each at a time. Nothing is
+written to disk. Whatever you type passes through them, so they are
+yours only; don't show them where others see the screen.
 
 PRIVACY
 
@@ -126,7 +152,8 @@ FILES
     format.c     Plover's formatter: spacing, case, metas
     ortho.c      orthography: a small regex engine and Plover's rules
     x11.c        the X protocol: XTEST, the keymap, spare keys
-    tools.c      -T, -l, -a, -A
+    tools.c      the tape and suggestion feeds, -l, -a, -A
+    view.c       -T, -S, -TS: the boxes
     mkwords.c    builds words.c from words.txt at build time
     words.txt    Plover's American English word list (for orthography)
     test/        make test: a small corpus checked against Plover

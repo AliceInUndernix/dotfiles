@@ -86,7 +86,7 @@ Clone and run it as yourself. Only a few things need root, and for those
 the script stops and tells you the `su -c` command (it never uses sudo
 or doas): `--deps` (system packages), `slock` (must be root's to lock
 the screen), making ksh the login shell (part `ksh`), adding you to the
-keyboard's serial port group once (part `plover`), and `net`, `icecat`
+keyboard's serial port group once (part `plover` or `steno`), and `net`, `icecat`
 and `chromium`, which go into the system. Run as root, it sets up the
 configs for the user who owns the repo directory, and
 everything it puts in that home belongs to that user, not to root.
@@ -142,6 +142,10 @@ What the script does:
   directory too. Each run updates both.
   To read the keyboard you must be in group `dialout`:
   `su -c './install.sh plover'` adds you once (then log in again).
+- **steno**: our own engine (`steno/README`) has its own clone of the
+  dotterel repo, `~/.system/share/steno/dotterel`, for the dictionaries,
+  apart from Plover's; each run updates it. It needs group `dialout`
+  too (`su -c './install.sh steno'` adds you).
 
 On Gentoo the build needs `x11-libs/libX11`, `libXft`, `libXinerama`,
 `libXrandr`, `libXext`, `media-libs/fontconfig` and `freetype`; `--deps`

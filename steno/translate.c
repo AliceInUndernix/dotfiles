@@ -532,6 +532,7 @@ static void macro_repeat_translation(const char *arg)
  * there */
 static void macro_repeat_text(long st, int what, const char *arg)
 {
+    int res;
     char text[TEXT_MAX];
     int n;
     struct trans *t;
@@ -540,10 +541,12 @@ static void macro_repeat_text(long st, int what, const char *arg)
         return;
     n = count_arg(arg);
     if (what == 'w') {
-        if (!last_words(n, text, sizeof(text)))
+        res = last_words(n, text, sizeof(text));
+        if (!res)
             return;
     } else if (what == 'f') {
-        if (!last_fragments(n, text, sizeof(text)))
+        res = last_fragments(n, text, sizeof(text));
+        if (!res)
             return;
     } else {
         last_chars(n, text, sizeof(text));
@@ -627,6 +630,7 @@ static int run_macro(const char *m, long st)
 
 static void translate_stroke(long st)
 {
+    int res;
     int max_len;
     const char *m;
     struct trans *t;
@@ -640,7 +644,8 @@ static void translate_stroke(long st)
         scopy(raw, m, sizeof(raw));
         m = raw;
     }
-    if (run_macro(m, st))
+    res = run_macro(m, st);
+    if (res)
         return;
     t = find_longest_match(2, max_len, st, 0);
     if (!t && m)

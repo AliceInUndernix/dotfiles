@@ -5,9 +5,9 @@
 # answers, and again whenever it is unplugged.
 port auto
 
-# Dotterel's dictionaries, from Plover's clone of the dotterel repo
-# (./install.sh plover), so both read the same files.
-dictionaries ~/.system/plover/dotterel/plover-dotterel/plover_dotterel/dictionaries
+# Dotterel's dictionaries, from steno's own clone of the dotterel
+# repo (./install.sh steno updates it), apart from Plover's.
+dictionaries ~/.system/share/steno/dotterel/plover-dotterel/plover_dotterel/dictionaries
 
 # The first dictionary wins, as at the top of Plover's list. user is
 # where steno -a and -A add strokes; it is made empty the first time.
@@ -26,7 +26,7 @@ dict dotterel-modifiers.py
 
 # uk_to_us.json and the rest of Dotterel's data (default: ../data
 # next to the dictionaries)
-#data ~/.system/plover/dotterel/plover-dotterel/plover_dotterel/data
+#data ~/.system/share/steno/dotterel/plover-dotterel/plover_dotterel/data
 
 undo 100
 start_capitalized no

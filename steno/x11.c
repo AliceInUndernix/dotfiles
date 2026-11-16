@@ -72,9 +72,13 @@ static int x_write_all(const unsigned char *p, int n)
 
 static void x_flush(void)
 {
-    if (wlen && xfd >= 0)
-        if (x_write_all(wbuf, wlen) < 0)
+    int res;
+
+    if (wlen && xfd >= 0) {
+        res = x_write_all(wbuf, wlen);
+        if (res < 0)
             say("lost the X connection", 0);
+    }
     wlen = 0;
 }
 
@@ -139,17 +143,22 @@ static void x_packet(unsigned char *p)
 static int x_reply(unsigned s, unsigned char *head, unsigned char **extra)
 {
     long len;
+    int r;
 
     x_flush();
     for (;;) {
-        if (x_read(head, 32) < 0)
+        r = x_read(head, 32);
+        if (r < 0)
             return -1;
         if (head[0] == 1) {
             len = get32(head + 4) * 4;
             *extra = 0;
             if (len) {
                 *extra = malloc(len);
-                if (!*extra || x_read(*extra, len) < 0)
+                if (!*extra)
+                    return -1;
+                r = x_read(*extra, len);
+                if (r < 0)
                     return -1;
             }
             if ((get16(head + 2) & 0xffff) == (s & 0xffff))
@@ -173,10 +182,12 @@ static void request(int op, int data, int len)
 
 static void sync_x(void)
 {
+    int res;
     unsigned char h[32], *e;
 
     request(43, 0, 1);         /* GetInputFocus */
-    if (x_reply(seq, h, &e) == 0)
+    res = x_reply(seq, h, &e);
+    if (res == 0)
         free(e);
 }
 
@@ -255,9 +266,10 @@ done:
 
 static int x_connect(void)
 {
+    int res;
     struct sockaddr_un sa;
     unsigned char cookie[16], h[8], *setup;
-    int n, have_cookie, i;
+    int n, have_cookie, i, r;
     long len;
 
     n = display_number();
@@ -271,7 +283,8 @@ static int x_connect(void)
     memset(&sa, 0, sizeof(sa));
     sa.sun_family = AF_UNIX;
     sprintf(sa.sun_path, "/tmp/.X11-unix/X%d", n);
-    if (connect(xfd, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
+    res = connect(xfd, (struct sockaddr *)&sa, sizeof(sa));
+    if (res < 0) {
         say("can't connect to the X server at %s", sa.sun_path);
         close(xfd);
         xfd = -1;
@@ -293,11 +306,15 @@ static int x_connect(void)
             put8(cookie[i]);
     }
     x_flush();
-    if (x_read(h, 8) < 0)
+    r = x_read(h, 8);
+    if (r < 0)
         return -1;
     len = get16(h + 6) * 4;
     setup = malloc(len + 1);
-    if (!setup || x_read(setup, len) < 0)
+    if (!setup)
+        return -1;
+    r = x_read(setup, len);
+    if (r < 0)
         return -1;
     if (h[0] != 1) {
         say("the X server said no (Xauthority?)", 0);
@@ -313,6 +330,7 @@ static int x_connect(void)
 
 static int query_extension(const char *name)
 {
+    int res;
     int n, i;
     unsigned char h[32], *e;
 
@@ -324,7 +342,8 @@ static int query_extension(const char *name)
         put8(name[i]);
     for (; i % 4; i++)
         put8(0);
-    if (x_reply(seq, h, &e) < 0)
+    res = x_reply(seq, h, &e);
+    if (res < 0)
         return -1;
     free(e);
     if (!h[8])
@@ -379,6 +398,7 @@ static struct mapping *find_map(long sym)
 
 static int read_keymap(void)
 {
+    int res;
     unsigned char h[32], *e, *m;
     int count, per, k, i, j, len, custom, mods;
     long sym;
@@ -390,7 +410,8 @@ static int read_keymap(void)
     put8(min_kc);
     put8(count);
     put16(0);
-    if (x_reply(seq, h, &e) < 0)
+    res = x_reply(seq, h, &e);
+    if (res < 0)
         return -1;
     per = h[1];
     for (k = 0; k < count; k++) {
@@ -427,7 +448,8 @@ static int read_keymap(void)
     }
     free(e);
     request(119, 0, 1);            /* GetModifierMapping */
-    if (x_reply(seq, h, &e) < 0)
+    res = x_reply(seq, h, &e);
+    if (res < 0)
         return -1;
     per = h[1];
     for (i = 0; i < 8; i++) {
@@ -590,13 +612,14 @@ static void print_esc(const char *s, int n)
 
 void out_backspaces(int n)
 {
-    int i;
+    int i, on;
 
     if (out_mode) {
         printf("B %d\n", n);
         return;
     }
-    if (!ready() || !bs_code)
+    on = ready();
+    if (!on || !bs_code)
         return;
     for (i = 0; i < n; i++)
         press(bs_code, bs_mods);
@@ -605,6 +628,7 @@ void out_backspaces(int n)
 
 void out_string(const char *s, int n)
 {
+    int res;
     int i, k, cur, last;
     long c, sym;
     struct mapping *m;
@@ -615,7 +639,8 @@ void out_string(const char *s, int n)
         putchar('\n');
         return;
     }
-    if (!ready())
+    res = ready();
+    if (!res)
         return;
     cur = 0;
     i = 0;
@@ -748,6 +773,7 @@ static long key_sym(const char *name)
 /* Plover's key combo language: "Control_L(Shift_L(Left))", "a b". */
 void out_combo(const char *combo)
 {
+    int res;
     int down[32], ndown, ev[256], evtype[256], nev, i, j, k, rel, code;
     char name[64];
     long sym;
@@ -757,7 +783,8 @@ void out_combo(const char *combo)
         printf("K %s\n", combo);
         return;
     }
-    if (!ready())
+    res = ready();
+    if (!res)
         return;
     ndown = 0;
     nev = 0;
@@ -838,9 +865,12 @@ bad:
 
 int out_open(void)
 {
+    int res;
+
     if (out_mode)
         return 0;
-    if (x_connect() < 0)
+    res = x_connect();
+    if (res < 0)
         return -1;
     xtest_op = query_extension("XTEST");
     if (xtest_op < 0) {
@@ -860,6 +890,7 @@ void out_event(void)
 {
     unsigned char p[32];
     struct pollfd pf;
+    int r;
 
     pf.fd = xfd;
     pf.events = POLLIN;
@@ -868,7 +899,8 @@ void out_event(void)
             say("lost the X connection", 0);
             exit(1);
         }
-        if (x_read(p, 32) < 0) {
+        r = x_read(p, 32);
+        if (r < 0) {
             say("lost the X connection", 0);
             exit(1);
         }
