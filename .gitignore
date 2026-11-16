@@ -9,3 +9,6 @@ slock/slock
 # vpn password helper build output
 net/vpnauth
 net/vpntop
+# clean build output
+clean/*.o
+clean/clean-bin

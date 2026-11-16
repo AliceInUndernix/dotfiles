@@ -1,0 +1,108 @@
+clean - takes metadata out of files
+===================================
+
+Pictures, PDFs, video and audio carry more than you see: the camera
+and its serial number, where a photo was taken, who wrote a document
+and with which program, dates, earlier versions, comments. clean takes
+it out, in place: the file is replaced by its clean version, and the
+original is kept in ~/.system/state/clean first.
+
+    clean FILE...          clean each file
+    clean -n FILE...       only say what would go; change nothing
+    clean -k FILE...       keep the files' times
+    clean -q FILE...       say nothing but errors
+    clean -u FILE...       undo: put the newest backup back
+
+    find ~/pictures -type f -exec clean -q {} +    a whole directory
+
+It says what it took out:
+
+    photo.jpg: removed EXIF (camera, date, GPS position), thumbnail
+    report.pdf: removed document information (Author, Creator,
+        Producer, CreationDate), XMP, file ID, earlier versions and
+        unused parts (12)
+
+A file it doesn't know, or one that is broken, is left as it was and
+named on stderr (exit status 1), never passed off as clean. Running it
+again on a clean file says "nothing to remove".
+
+
+What goes
+---------
+
+JPEG       EXIF (camera, serial number, GPS, dates, program, maker
+           notes), its thumbnail (it can show the photo before it was
+           cropped), XMP, IPTC/Photoshop, comments, program data, more
+           pictures (MPF) and anything after the picture. The rotation
+           stays (a tiny EXIF with only that), so photos don't turn
+           sideways. The colour profile stays, so colours don't change.
+PNG        text (author, program, comments), date, EXIF, pixel size,
+           program chunks, anything after the picture
+GIF        comments, XMP, program data (the loop setting stays)
+WebP       EXIF (rotation kept), XMP
+PDF        document information (author, title, program, dates), XMP
+           everywhere, program data (PieceInfo: Illustrator keeps the
+           whole original there), dates and authors of comments, the
+           file ID, and every earlier version that edits left inside
+           the file. A new PDF is written from the parts still used;
+           pages, fonts and pictures are copied byte for byte.
+MP4, MOV,  user data and tags (GPS position, camera, date, program),
+M4A        XMP, the creation dates of the file and each track, the
+           encoder's name
+MKV, WebM  tags, title, date, muxing and writing program, attachments
+           (cover pictures, and fonts for subtitles)
+MP3        ID3v2 and ID3v1 tags (titles, pictures, comments, program)
+FLAC       tags, pictures, program data
+WAV, AVI   INFO tags, ID3, recorder data (bext), XMP
+video      the settings text x264, x265 and FFmpeg put into the
+           first picture (its bytes become spaces)
+
+Pictures are not decoded and encoded again: they stay exactly the
+same. Video and audio can be big, so they are changed where they are:
+what goes becomes padding of the same size, so nothing else moves.
+
+The file's times become 2000-01-01 00:00 UTC (-k keeps them).
+
+
+What it leaves
+--------------
+
+- Encrypted PDFs, and signed ones (cleaning breaks the signature, and
+  the signature itself names the signer).
+- Not yet: HEIF/AVIF (iPhone photos), TIFF and camera raw files, Ogg
+  (Vorbis, Opus), office documents and EPUB (zip), and PDFs packed in
+  ways other than Flate.
+- What is in the picture or sound itself: faces, places, a voice,
+  what a screenshot shows. A screenshot of the whole screen shows
+  dwm's bar, with your time.
+- Track names and languages in videos, chapters.
+
+
+The backups
+-----------
+
+Each original goes to ~/.system/state/clean (only yours, mode 700),
+named by the time (UTC); the file "list" there says which file each
+one was. The backups still hold all the metadata: delete them when you
+no longer need an undo:
+
+    rm -r ~/.system/state/clean
+
+
+Build and install
+-----------------
+
+Plain C (C89), only libc, static. install.sh builds it into
+~/.system/bin (no root needed):
+
+    ~/dotfiles/install.sh clean
+
+By hand (the build makes clean-bin, since "make clean" removes it):
+
+    make
+    make PREFIX=$HOME/.system install
+
+Files: clean.c (the command, backups), img.c (JPEG, PNG, GIF, WebP),
+media.c (video and audio), pdf.c (PDF), inflate.c (unpacks the
+compressed parts of PDFs, and stops at 64 MB, so a zip bomb can't fill
+the memory).
