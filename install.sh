@@ -653,8 +653,21 @@ install_net() {
 		warn "net is only for Gentoo with OpenRC: skipped"
 		return
 	fi
-	emerge $EMERGE_OPTS --noreplace net-vpn/openvpn net-vpn/tor \
-		net-firewall/nftables net-misc/proxychains
+	# tor with seccomp, for "Sandbox 1" in torrc (zz-dotfiles: the last
+	# package.use file wins); --changed-use builds it again when the
+	# installed tor lacks it
+	pu=/etc/portage/package.use
+	if [ -d "$pu" ] || [ ! -e "$pu" ]; then
+		mkdir -p "$pu"
+		pu=$pu/zz-dotfiles
+	fi
+	if ! grep -qs '^net-vpn/tor[[:space:]].*seccomp' "$pu"; then
+		echo "net-vpn/tor seccomp" >> "$pu"
+		chmod 644 "$pu"
+		say "use     net-vpn/tor seccomp -> $pu (Tor in its sandbox)"
+	fi
+	emerge $EMERGE_OPTS --noreplace --changed-use net-vpn/openvpn \
+		net-vpn/tor net-firewall/nftables net-misc/proxychains
 	net=$DOTFILES/net
 	install -d -m 755 /usr/local/bin /etc/vpn
 	# The system's files as they were before net first changed them, for
@@ -751,8 +764,8 @@ install_net() {
 		tor --verify-config -f "$net/.torrc2" >/dev/null 2>&1
 	then
 		mv "$net/.torrc2" "$net/.torrc"
-		warn "this tor has no seccomp sandbox: Sandbox 1 left out"
-		warn "(for it: USE=seccomp on net-vpn/tor, emerge -qv net-vpn/tor)"
+		warn "tor did not build with seccomp: Sandbox 1 left out for now"
+		warn "(emerge -qv --changed-use net-vpn/tor, then install.sh net)"
 	fi
 	rm -f "$net/.torrc2"
 	install -d -m 755 /etc/tor

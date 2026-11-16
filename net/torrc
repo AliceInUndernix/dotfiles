@@ -141,8 +141,8 @@ ClientOnly 1
 # only as a separate Python add-on, so not here)
 VanguardsLiteEnabled 1
 # Tor runs in a seccomp sandbox: a hole in Tor reaches far less of the
-# system. install.sh net takes this line out when this tor was built
-# without seccomp (it would not start).
+# system. install.sh net builds tor with USE=seccomp for it (and takes
+# this line out only if that build failed: tor would not start).
 Sandbox 1
 # padding on the link to the guard, against traffic analysis there
 ConnectionPadding 1

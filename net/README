@@ -124,8 +124,8 @@ another:
 
 Tor's settings (net/torrc): only a client, vanguards-lite (a fixed
 set of second relays for onion circuits, against guard discovery),
-padding to the guard, and Tor in its own seccomp sandbox (left out
-when tor was built without it, or doesn't start with it). Bridges are
+padding to the guard, and Tor in its own seccomp sandbox (install.sh
+net builds tor with USE=seccomp for it). Bridges are
 ready in torrc but off: they need a transport program (lyrebird).
 
 When the VPN can't be reached at all, "vpn refresh" offers to open the
