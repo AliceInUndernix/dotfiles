@@ -9,8 +9,9 @@
  * hydraulic of all three), and brings it back when that is undone.
  * The suggestions keep each words once: typed again, they move to the
  * bottom. Both scroll (j k, arrows, Ctrl+U Ctrl+D, g G, the mouse
- * wheel), Tab choosing which; m turns the mouse off and on. u: a *
- * shows as a line and dims the stroke it undid, or both go. l or /
+ * wheel), Tab choosing which. u: undone strokes and their * are gone
+ * (the start), or a * shows as a line and dims the stroke it undid.
+ * l or /
  * looks a word or outline up (steno -l), in a box that is there only
  * while it is used.
  *
@@ -57,8 +58,7 @@ struct box {
 
 static struct box boxes[2];    /* 0 tape, 1 suggestions */
 static int fullscreen, focus;
-static int mouse = 1;          /* the wheel scrolls (m) */
-static int hide_undone;        /* u: undone strokes and * not shown */
+static int hide_undone = 1;    /* u: undone strokes and * not shown */
 static int box_x[2], box_w[2], box_y[2], box_h[2];   /* where drawn */
 static long next_seq = 1;
 static volatile int resized, stop_view;
@@ -464,7 +464,7 @@ static void draw_sugg(int y, int x, int w, int h)
 /* the keys under the boxes: under one box all of them; with both, the
  * tape's under the tape and the rest under the suggestions */
 static const char *const keys_all[] = {
-    "quit", "clear", "tape", "undo", "suggestions", "l lookup", "mouse"
+    "quit", "clear", "tape", "undo", "suggestions", "l lookup"
 };
 
 static void draw_box(int which, int y, int x, int w, int h)
@@ -498,10 +498,10 @@ static void draw_box(int which, int y, int x, int w, int h)
     scr_border(y, x, w, 1, title, 0, 0);
     scr_title_dim = 0;
     keys = keys_all;
-    nkeys = 7;
+    nkeys = 6;
     if (boxes[!which].shown) {
         keys = which ? keys_all + 4 : keys_all;
-        nkeys = which ? 3 : 4;
+        nkeys = which ? 2 : 4;
     }
     scr_border(y + h - 1, x, w, 0, 0, keys, nkeys);
 }
@@ -789,9 +789,6 @@ static int view_keys(const unsigned char *k, int n)
             boxes[1].nlines = 0;
             boxes[0].scroll = 0;
             boxes[1].scroll = 0;
-        } else if (c == 'm') {
-            mouse = !mouse;
-            scr_mouse(mouse);
         } else if (c == 'u') {
             hide_undone = !hide_undone;
         } else if (c == 't') {
@@ -863,7 +860,7 @@ int view_main(int tape, int sugg, const char *cfg)
     if (fullscreen) {
         /* the other screen, no cursor; given back at the end */
         scr_open();
-        scr_mouse(mouse);
+        scr_mouse(1);
         draw();
     }
     while (!stop_view) {

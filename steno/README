@@ -210,12 +210,14 @@ written:
     TK  RA U    draw    ->    TK  RA U
                               HR EU B G   hydraulic
 
-An undone stroke and its * are dim (or gone, with u), and what it
-had cleared comes back. Fingerspelling the same way, as you
-spell: the newest letter's line shows the word so far (s, so, som,
-some ...) and the letters before it are cleared. The suggestions: the words you typed, and under each every
-outline that writes them, shortest first (a word being fingerspelled
-as it grows, each step in place of the one before); each words once (typed
+An undone stroke and its * leave the tape (or stay, dim, with u),
+and what it had cleared comes back. Fingerspelling the same way, as
+you spell: the newest letter's line shows the word so far (s, so,
+som, some ...) and the letters before it are cleared.
+
+The suggestions: the words you typed, and under each every outline
+that writes them, shortest first (a word being fingerspelled as it
+grows, each step in place of the one before); each words once (typed
 again, they move to the bottom). The newest is at the bottom in both.
 
     q, Ctrl+C          quit
@@ -227,9 +229,9 @@ again, they move to the bottom). The newest is at the bottom in both.
     PageDown PageUp
     G g, End Home      the newest (follow again), the oldest
     mouse wheel        scrolls the box under it, 3 lines
-    m                  the mouse on or off (on: Shift selects text)
-    u                  an undone stroke and its * dim (as Plover), or
-                       both gone from the tape
+                       (Shift and the mouse still select text)
+    u                  undone strokes and their * gone from the tape
+                       (the start), or there and dim, as in Plover
     Tab                with both: which one scrolls (its title is lit)
     l, /               look up a word or outline: type it, Enter; the
                        box shows each outline and why (steno -l); Esc
