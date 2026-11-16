@@ -46,6 +46,12 @@ int clean_mkv(int fd, long long size);
 int clean_mp3(int fd, long long size);
 int clean_flac(int fd, long long size);
 int clean_riff(int fd, long long size);
+int clean_heif(int fd, long long size);
+
+/* img.c: notes what EXIF (from its TIFF header) holds; orient: its
+ * orientation, when not 0 */
+void exif_note(const unsigned char *p, long n, int *orient);
+int at_fill(int fd, long long off, long long n, int c);
 
 /* inflate.c: zlib data in, at most max bytes out; -1 when broken or
  * bigger than max (a zip bomb stops there) */

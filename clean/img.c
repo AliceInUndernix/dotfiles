@@ -93,7 +93,7 @@ static void look_ifd(struct tiff *t, long off, char *d, int *orient,
 }
 
 /* exif_note: notes what an EXIF block (from its TIFF header) holds */
-static void exif_note(const unsigned char *p, long n, int *orient)
+void exif_note(const unsigned char *p, long n, int *orient)
 {
     struct tiff t;
     char d[104];

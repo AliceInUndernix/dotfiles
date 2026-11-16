@@ -249,19 +249,25 @@ int at_write(int fd, long long off, const unsigned char *p, long n)
     return 0;
 }
 
-int at_zero(int fd, long long off, long long n)
+int at_fill(int fd, long long off, long long n, int c)
 {
-    static unsigned char zero[65536];
+    static unsigned char b[65536];
     long k;
 
+    memset(b, c, sizeof b);
     while (n > 0) {
-        k = n > (long long)sizeof zero ? (long)sizeof zero : (long)n;
-        if (at_write(fd, off, zero, k) < 0)
+        k = n > (long long)sizeof b ? (long)sizeof b : (long)n;
+        if (at_write(fd, off, b, k) < 0)
             return -1;
         off += k;
         n -= k;
     }
     return 0;
+}
+
+int at_zero(int fd, long long off, long long n)
+{
+    return at_fill(fd, off, n, 0);
 }
 
 static int write_all(int fd, const unsigned char *p, long n)
@@ -509,7 +515,7 @@ static int replace(const char *path, const unsigned char *p, long n,
 
 enum {
     k_unknown, k_jpeg, k_png, k_gif, k_webp, k_pdf,
-    k_mp4, k_mkv, k_mp3, k_flac, k_riff
+    k_mp4, k_mkv, k_mp3, k_flac, k_riff, k_heif
 };
 
 static long id3_size(const unsigned char *h)
@@ -569,10 +575,9 @@ static int kind_of(int fd, long long size)
         if (is_word(h + 8, "heic") || is_word(h + 8, "heix") ||
             is_word(h + 8, "mif1") || is_word(h + 8, "msf1") ||
             is_word(h + 8, "avif") || is_word(h + 8, "avis") ||
-            is_word(h + 8, "hevc"))
+            is_word(h + 8, "hevc") || is_word(h + 8, "avci"))
         {
-            why = "HEIF and AVIF pictures are not supported yet";
-            return k_unknown;
+            return k_heif;
         }
         return k_mp4;
     }
@@ -639,6 +644,7 @@ static int run_in_place(int fd, long long size, int kind)
     case k_mkv: return clean_mkv(fd, size);
     case k_mp3: return clean_mp3(fd, size);
     case k_flac: return clean_flac(fd, size);
+    case k_heif: return clean_heif(fd, size);
     default: return clean_riff(fd, size);
     }
 }
@@ -710,7 +716,7 @@ static int clean_file(const char *path)
     if (kind == k_unknown)
         r = -1;
     else if (kind == k_mp4 || kind == k_mkv || kind == k_mp3 ||
-        kind == k_flac || kind == k_riff)
+        kind == k_flac || kind == k_riff || kind == k_heif)
     {
         r = clean_in_place(path, abs, fd, &st, kind);
     } else {
@@ -799,7 +805,8 @@ static void usage(void)
         "usage: clean [-n] [-k] [-q] FILE...\n"
         "       clean -u FILE...\n"
         "Takes the metadata out of each file, in place: JPEG, PNG, GIF,\n"
-        "WebP, PDF, MP4/MOV/M4A, MKV/WebM, MP3, FLAC, WAV, AVI.\n"
+        "WebP, HEIF/AVIF, PDF, MP4/MOV/M4A, MKV/WebM, MP3, FLAC, WAV,\n"
+        "AVI.\n"
         "The original goes to ~/.system/state/clean first.\n"
         "  -n  only say what would go; change nothing\n"
         "  -k  keep the file's times (else: 2000-01-01 00:00 UTC)\n"

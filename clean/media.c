@@ -3,6 +3,7 @@
  * padding of the same size (MP4 "free", Matroska "Void", FLAC padding,
  * RIFF "JUNK") or zeros, and nothing else moves. */
 #define _XOPEN_SOURCE 500
+#include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -683,4 +684,233 @@ int clean_riff(int fd, long long size)
         off += 8 + len + (len & 1);
     }
     return encoder_text(fd, size);
+}
+
+/* ------------------------------------------------------------ HEIF */
+
+/* HEIF and AVIF pictures (iPhone photos): EXIF and XMP are items, like
+ * the picture itself; the "meta" box says where each item's bytes are
+ * (iloc). Those bytes become zeros (EXIF) or spaces (XMP); the picture's
+ * rotation is not in EXIF here (irot), so nothing turns. */
+
+#define MAX_ITEMS 32
+
+struct item {
+    long id;
+    int xmp;
+};
+
+static long long uval(const unsigned char *p, int n)
+{
+    long long v;
+    int i;
+
+    v = 0;
+    for (i = 0; i < n; i++)
+        v = v << 8 | p[i];
+    return v;
+}
+
+/* heif_items: the EXIF and XMP items in iinf (at p, n bytes) */
+static int heif_items(const unsigned char *p, long n, struct item *it)
+{
+    long pos, size, e;
+    int count, v;
+    const unsigned char *t;
+
+    count = 0;
+    if (n < 6)
+        return 0;
+    pos = p[0] == 0 ? 6 : 8;    /* version, flags, entry count */
+    while (pos + 8 <= n) {
+        size = get32be(p + pos);
+        if (size < 8 || size > n - pos)
+            break;
+        if (is_word(p + pos + 4, "infe") && size >= 20) {
+            v = p[pos + 8];
+            e = pos + 12;
+            if (v == 2 || v == 3) {
+                it[count].id = (long)uval(p + e, v == 2 ? 2 : 4);
+                e += (v == 2 ? 2 : 4) + 2;
+                t = p + e;
+                it[count].xmp = -1;
+                if (e + 4 <= pos + size && is_word(t, "Exif")) {
+                    it[count].xmp = 0;
+                } else if (e + 4 <= pos + size && is_word(t, "mime")) {
+                    e += 4;
+                    while (e < pos + size && p[e])
+                        e++;    /* the item's name */
+                    e++;
+                    if (pos + size - e >= 19 &&
+                        !memcmp(p + e, "application/rdf+xml", 19))
+                    {
+                        it[count].xmp = 1;
+                    }
+                }
+                if (it[count].xmp >= 0 && count < MAX_ITEMS - 1)
+                    count++;
+            }
+        }
+        pos += size;
+    }
+    return count;
+}
+
+/* an EXIF item with nothing in it: where the TIFF header starts (0),
+ * the header, and an empty list of tags; strict readers want one */
+static const unsigned char empty_exif[18] = {
+    0, 0, 0, 0, 'M', 'M', 0, 0x2a, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0
+};
+
+/* heif_blank: blanks the bytes of one item, as iloc (at p) says */
+static int heif_blank(int fd, long long fsize, const unsigned char *p,
+    long n, struct item *it, long long idat)
+{
+    static unsigned char b[65536];
+    int v, osz, lsz, bsz, isz, method;
+    long pos, count, i, ext, k, j;
+    long long id, base, eoff, elen, off;
+    int first;
+
+    if (n < 8)
+        return 0;
+    v = p[0];
+    osz = p[4] >> 4;
+    lsz = p[4] & 15;
+    bsz = p[5] >> 4;
+    isz = v >= 1 ? p[5] & 15 : 0;
+    pos = 6;
+    count = (long)uval(p + pos, v < 2 ? 2 : 4);
+    pos += v < 2 ? 2 : 4;
+    for (i = 0; i < count && pos < n; i++) {
+        if (pos + 4 + 2 + 2 + bsz + 2 > n)
+            return 0;
+        id = uval(p + pos, v < 2 ? 2 : 4);
+        pos += v < 2 ? 2 : 4;
+        method = 0;
+        if (v >= 1) {
+            method = p[pos + 1] & 15;
+            pos += 2;
+        }
+        pos += 2;   /* data reference */
+        base = uval(p + pos, bsz);
+        pos += bsz;
+        ext = (long)uval(p + pos, 2);
+        pos += 2;
+        first = 1;
+        for (k = 0; k < ext; k++) {
+            if (pos + isz + osz + lsz > n)
+                return 0;
+            pos += isz;
+            eoff = uval(p + pos, osz);
+            pos += osz;
+            elen = uval(p + pos, lsz);
+            pos += lsz;
+            if (id != it->id || method == 2 || elen <= 0)
+                continue;
+            off = base + eoff + (method == 1 ? idat : 0);
+            if (off < 0 || off + elen > fsize) {
+                why = "a broken HEIF picture";
+                return -1;
+            }
+            if (it->xmp) {
+                if (!has_text(fd, off, elen, "<"))
+                    continue;
+                note("XMP");
+                if (at_fill(fd, off, elen, ' ') < 0)
+                    return -1;
+                continue;
+            }
+            j = elen > (long long)sizeof b ? (long)sizeof b : (long)elen;
+            if (at_read(fd, off, b, j) < 0)
+                return -1;
+            if (first && elen >= 18 && !memcmp(b, empty_exif, 18) &&
+                !any_set(fd, off + 18, elen - 18))
+            {
+                first = 0;
+                continue;   /* clean already */
+            }
+            if (!first && !any_set(fd, off, elen))
+                continue;
+            if (first && j >= 4 && 4 + get32be(b) < j)
+                exif_note(b + 4 + get32be(b), j - 4 - get32be(b), 0);
+            else
+                note("EXIF");
+            if (at_zero(fd, off, elen) < 0)
+                return -1;
+            if (first && elen >= 18 &&
+                at_write(fd, off, empty_exif, 18) < 0)
+            {
+                return -1;
+            }
+            first = 0;
+        }
+    }
+    return 0;
+}
+
+int clean_heif(int fd, long long size)
+{
+    unsigned char h[16];
+    unsigned char *m;
+    struct item it[MAX_ITEMS];
+    long long off, bsize, idat;
+    long msize, pos, cs, iloc, iloc_n, n, i;
+    int r;
+
+    off = 0;
+    m = 0;
+    while (off + 8 <= size) {
+        if (at_read(fd, off, h, 8) < 0)
+            break;
+        bsize = (long long)get32be(h) & 0xffffffffLL;
+        if (bsize == 0)
+            bsize = size - off;
+        if (bsize < 8 || bsize > size - off)
+            break;
+        if (is_word(h + 4, "meta")) {
+            if (bsize > 16L * 1024 * 1024) {
+                why = "a HEIF picture with too big a meta box";
+                return -1;
+            }
+            msize = (long)bsize;
+            m = malloc(msize);
+            if (!m || at_read(fd, off, m, msize) < 0) {
+                free(m);
+                why = "can't read it";
+                return -1;
+            }
+            break;
+        }
+        off += bsize;
+    }
+    if (!m) {
+        why = "a HEIF picture without its meta box";
+        return -1;
+    }
+    /* iinf: which items are EXIF or XMP; iloc: where; idat: inside */
+    n = 0;
+    iloc = -1;
+    iloc_n = 0;
+    idat = 0;
+    pos = 12;
+    while (pos + 8 <= msize) {
+        cs = get32be(m + pos);
+        if (cs < 8 || cs > msize - pos)
+            break;
+        if (is_word(m + pos + 4, "iinf"))
+            n = heif_items(m + pos + 8, cs - 8, it);
+        else if (is_word(m + pos + 4, "iloc")) {
+            iloc = pos + 8;
+            iloc_n = cs - 8;
+        } else if (is_word(m + pos + 4, "idat")) {
+            idat = off + pos + 8;
+        }
+        pos += cs;
+    }
+    r = 0;
+    for (i = 0; i < n && iloc >= 0 && r == 0; i++)
+        r = heif_blank(fd, size, m + iloc, iloc_n, &it[i], idat);
+    free(m);
+    return r;
 }
