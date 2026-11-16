@@ -211,8 +211,11 @@ written:
                               HR EU B G   hydraulic
 
 An undone stroke and its * are dim (or gone, with u), and what it
-had cleared comes back. The suggestions: the words you typed, and under each every
-outline that writes them, shortest first; each words once (typed
+had cleared comes back. Fingerspelling the same way: each
+stroke shows its letter, and when the word ends (at the next stroke)
+the letters are cleared and the last one shows the whole word. The suggestions: the words you typed, and under each every
+outline that writes them, shortest first (a fingerspelled word once
+it ends, not its halves); each words once (typed
 again, they move to the bottom). The newest is at the bottom in both.
 
     q, Ctrl+C          quit

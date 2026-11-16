@@ -165,6 +165,32 @@ static void tape_merge(struct box *b, int i, int n)
     }
 }
 
+/* = <tab> WORD <tab> N: the last N live strokes fingerspelled WORD;
+ * the last of them shows it, the others are cleared as in an outline */
+static void tape_spelled(struct box *b, const char *word, int n)
+{
+    char *t;
+    int j, last;
+
+    last = -1;
+    for (j = b->nlines - 1; j >= 0 && n > 0; j--) {
+        if (b->undo[j] || b->dead[j])
+            continue;
+        if (last < 0) {
+            last = j;
+            t = strchr(b->lines[j], '\t');
+            t = t ? strchr(t + 1, '\t') : 0;
+            if (t) {
+                t[1] = 0;
+                scat(b->lines[j], word, CELL_MAX);
+            }
+        } else if (!b->by[j]) {
+            b->by[j] = b->seq[last];
+        }
+        n--;
+    }
+}
+
 /* one line of the tape feed: STROKE <tab> TRANSLATION <tab> N, kept
  * as the stroke in the tape's columns, the stroke as written, the
  * translation, with tabs between */
@@ -187,6 +213,10 @@ static void got_tape(char *line)
         n = atoi_small(nst + 1);
     } else {
         n = !(tr[0] == '*' && !tr[1]);    /* an engine before N */
+    }
+    if (!strcmp(line, "=")) {
+        tape_spelled(&boxes[0], tr, n);
+        return;
     }
     st = stroke_parse(line, strlen(line));
     if (st < 0) {

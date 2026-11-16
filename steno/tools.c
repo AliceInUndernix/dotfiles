@@ -7,7 +7,10 @@
  *
  *   tape      one line a stroke: STROKE <tab> TRANSLATION <tab> N,
  *             N the strokes of that translation (0: the stroke undid
- *             one), so the viewer can clear the N - 1 before it
+ *             one), so the viewer can clear the N - 1 before it; and
+ *             when a fingerspelled word ends, before the stroke after
+ *             it: = <tab> WORD <tab> N, N its letters, so the viewer
+ *             shows the word on the last of them
  *   suggest   one line when the last words change and have outlines:
  *             WORDS <tab> OUTLINES [<tab> WORDS <tab> OUTLINES]...
  *
@@ -31,6 +34,10 @@
 char user_dict[1024];          /* where -a writes ("user" setting) */
 
 static int tape_fd = -1, sugg_fd = -1;
+
+/* the word being fingerspelled: its letters so far, and as typed */
+static int spell_n;
+static char spell_word[TEXT_MAX];
 
 /* $XDG_STATE_HOME/steno/NAME, or ~/.local/state/steno/NAME; the
  * directories are made (0700) when missing */
@@ -134,9 +141,11 @@ static void trim(char *s)
         memmove(s, s + a, n - a + 1);
 }
 
-/* The last few words, longest first, and how else they are written.
- * Sent only when they change; a new viewer gets the current ones. */
-static void suggestions(int fresh)
+/* The last few words, longest first, and how else they are written;
+ * spelled, a word just fingerspelled (it is not among the last words
+ * when the stroke after it made a word of its own). Sent only when
+ * they change; a new viewer gets the current ones. */
+static void suggestions(int fresh, const char *spelled)
 {
     int res;
     static char last_key[TEXT_MAX];
@@ -147,17 +156,25 @@ static void suggestions(int fresh)
     res = last_words(SUGGEST_WORDS, key, sizeof(key));
     if (!res)
         return;
-    if (!fresh && !strcmp(key, last_key))
+    if (!fresh && !spelled[0] && !strcmp(key, last_key))
         return;
     scopy(last_key, key, sizeof(last_key));
     out[0] = 0;
     seen[0] = 0;
+    if (spelled[0]) {
+        res = dict_outlines(spelled, o, sizeof(o), SUGGEST_MAX);
+        if (res) {
+            put_escaped(out, sizeof(out) - TEXT_MAX, spelled);
+            scat(out, "\t", sizeof(out));
+            scat(out, o, sizeof(out) - 2);
+        }
+    }
     for (i = SUGGEST_WORDS; i >= 1; i--) {
         res = last_words(i, w, sizeof(w));
         if (!res)
             continue;
         trim(w);
-        if (!w[0] || !strcmp(w, seen))
+        if (!w[0] || !strcmp(w, seen) || !strcmp(w, spelled))
             continue;
         scopy(seen, w, sizeof(seen));
         res = dict_outlines(w, o, sizeof(o), SUGGEST_MAX);
@@ -182,6 +199,7 @@ static void suggestions(int fresh)
 int stroke_result(long st, struct trans *top, char *out, int size)
 {
     char s[STROKE_MAX * 32];
+    const char *g, *e;
     struct trans *t;
     int n;
 
@@ -189,7 +207,14 @@ int stroke_result(long st, struct trans *top, char *out, int size)
     n = history_count();
     t = n ? history_at(n - 1) : 0;
     if (t && t != top && t->nst && t->st[t->nst - 1] == st) {
-        if (t->has_english) {
+        g = t->has_english ? strstr(t->english, "{&") : 0;
+        e = g ? strchr(g, '}') : 0;
+        if (e && e - g - 2 < (int)sizeof(s)) {
+            /* a fingerspelled letter: just the letter */
+            memcpy(s, g + 2, e - g - 2);
+            s[e - g - 2] = 0;
+            put_escaped(out, size, s);
+        } else if (t->has_english) {
             put_escaped(out, size, t->english);
         } else {
             outline_text(t->st, t->nst, s, sizeof(s));
@@ -201,13 +226,52 @@ int stroke_result(long st, struct trans *top, char *out, int size)
     return 0;
 }
 
+/* A fingerspelled letter: {&s}, {>}{&s}, ... (Plover's glue) */
+static int is_spelled(struct trans *t)
+{
+    return t && t->has_english && strstr(t->english, "{&") != 0;
+}
+
 /* after each stroke; top is the newest translation before it */
 void tape_stroke(long st, struct trans *top)
 {
-    char line[TAPE_LINE + 64];
-    int n, was, open_now, k;
+    char line[TAPE_LINE + 64], spelled[TEXT_MAX];
+    struct trans *t;
+    int n, was, open_now, k, made, ended;
 
+    /* fingerspelling: count the letters; the stroke after the last
+     * ends the word, for the tape and the suggestions */
+    n = history_count();
+    t = n ? history_at(n - 1) : 0;
+    made = t && t != top && t->nst && t->st[t->nst - 1] == st;
+    spelled[0] = 0;
+    ended = 0;
+    if (made && is_spelled(t)) {
+        spell_n++;
+        last_words(1, spell_word, sizeof(spell_word));
+        trim(spell_word);
+    } else if (!made && spell_n > 0) {
+        spell_n--;             /* a letter undone */
+        if (spell_n) {
+            last_words(1, spell_word, sizeof(spell_word));
+            trim(spell_word);
+        }
+    } else if (made) {
+        if (spell_n > 1 && spell_word[0]) {
+            scopy(spelled, spell_word, sizeof(spelled));
+            ended = spell_n;
+        }
+        spell_n = 0;
+    }
     open_now = feed_open(&tape_fd, "tape");
+    if (open_now && ended) {
+        scopy(line, "=\t", sizeof(line));
+        put_escaped(line, TAPE_LINE, spelled);
+        n = strlen(line);
+        sprintf(line + n, "\t%d\n", ended);
+        feed_write(&tape_fd, line);
+        open_now = tape_fd >= 0;
+    }
     if (open_now) {
         stroke_text(st, line);
         scat(line, "\t", sizeof(line));
@@ -220,9 +284,11 @@ void tape_stroke(long st, struct trans *top)
     was = sugg_fd >= 0;
     if (!output_on)
         return;
+    if (spell_n)
+        return;                /* no suggestions for half a word */
     open_now = feed_open(&sugg_fd, "suggest");
     if (open_now)
-        suggestions(!was);
+        suggestions(!was, spelled);
 }
 
 /* --- steno -l -------------------------------------------------------- */
