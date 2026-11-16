@@ -78,7 +78,8 @@ in a small screen, in the look of btop:
 steno would say on stderr.
 
     j k, Up Down   choose a dictionary (g, G: the first, the last)
-    J K            move it up or down: the higher one wins
+    J K, Shift+Up Shift+Down
+                   move it up or down: the higher one wins
     space          turn it on or off (in raw mode: for when it ends)
     a              add one: a name in the dictionaries directory, or
                    a path; it goes last (Enter adds, Esc stops)

@@ -383,9 +383,20 @@ int tui_key(void)
     tui_dirty = 1;
     for (i = 0; i < n; i++) {
         c = b[i];
-        /* the arrows: ESC [ A and ESC [ B (or ESC O A) */
+        /* Shift+arrows move, as J and K: ESC [ 1 ; 2 A (st, xterm)
+         * or ESC [ a (rxvt) */
+        if (c == 27 && i + 5 < n && b[i + 1] == '[' && b[i + 2] == '1' &&
+            b[i + 3] == ';' && b[i + 4] == '2')
+        {
+            c = b[i + 5] == 'A' ? 'K' : b[i + 5] == 'B' ? 'J' : 0;
+            i += 5;
+            if (asking || !c)
+                continue;
+        }
+        /* the arrows choose: ESC [ A and ESC [ B (or ESC O A) */
         if (c == 27 && i + 2 < n && (b[i + 1] == '[' || b[i + 1] == 'O')) {
-            c = b[i + 2] == 'A' ? 'k' : b[i + 2] == 'B' ? 'j' : 0;
+            c = b[i + 2] == 'A' ? 'k' : b[i + 2] == 'B' ? 'j' :
+                b[i + 2] == 'a' ? 'K' : b[i + 2] == 'b' ? 'J' : 0;
             i += 2;
             if (asking || !c)
                 continue;
