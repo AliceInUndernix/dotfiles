@@ -659,6 +659,10 @@ static int kind_of(int fd, long long size)
         return k_svg;
     if (is_word(h, "PK\003\004") || is_word(h, "PK\005\006"))
         return k_zip;
+    if (h[0] == 0x1f && h[1] == 0x8b && h[2] == 8)
+        return k_gz;
+    if (rc == 0 && is_tar(x, n))
+        return k_tar;
     why = "not a kind of file clean knows";
     return k_unknown;
 }
@@ -675,6 +679,7 @@ static int run_in_memory(int kind, struct buf *in, struct buf *out)
     case k_svg: return clean_svg(in->p, in->n, out);
     case k_bmp: return clean_bmp(in->p, in->n, out);
     case k_zip: return clean_zip(in->p, in->n, out);
+    case k_gz: return clean_gz(in->p, in->n, out);
     default: return clean_pdf(in->p, in->n, out);
     }
 }
@@ -741,6 +746,7 @@ static int run_in_place(int fd, long long size, int kind)
     case k_aiff: return clean_aiff(fd, size);
     case k_asf: return clean_asf(fd, size);
     case k_tiff: return clean_tiff(fd, size);
+    case k_tar: return clean_tar(fd, size);
     default: return clean_riff(fd, size);
     }
 }
@@ -832,7 +838,8 @@ static int clean_file(const char *path)
         r = -1;
     else if (kind == k_mp4 || kind == k_mkv || kind == k_mp3 ||
         kind == k_flac || kind == k_riff || kind == k_heif ||
-        kind == k_ogg || kind == k_aiff || kind == k_asf || kind == k_tiff)
+        kind == k_ogg || kind == k_aiff || kind == k_asf || kind == k_tiff ||
+        kind == k_tar)
     {
         r = clean_in_place(path, abs, fd, &st, kind);
     } else {
@@ -928,9 +935,9 @@ static void usage(void)
         "Takes the metadata out of each file, in place.\n"
         "Pictures: JPEG, PNG, GIF, WebP, HEIF/AVIF, TIFF, camera raw,\n"
         "SVG, BMP. Documents: PDF, DOCX/XLSX/PPTX, ODT/ODS/ODP, EPUB,\n"
-        "zip. Video and audio: MP4/MOV/M4A, MKV/WebM, AVI, WMV/WMA,\n");
+        "zip, tar, gzip. Video and audio: MP4/MOV/M4A, MKV/WebM, AVI,\n");
     fprintf(stderr,
-        "MP3, AAC, FLAC, Ogg (Vorbis, Opus, Theora), WAV, AIFF.\n");
+        "WMV/WMA, MP3, AAC, FLAC, Ogg (Vorbis, Opus, Theora), WAV, AIFF.\n");
     fprintf(stderr,
         "The original goes to ~/.system/state/clean first.\n"
         "  -n  only say what would go; change nothing\n"

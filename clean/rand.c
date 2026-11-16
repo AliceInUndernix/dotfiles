@@ -321,6 +321,7 @@ int rand_mem(int kind, struct buf *b)
     case k_svg: r = rand_svg(b, &out); break;
     case k_bmp: r = rand_bmp(b, &out); break;
     case k_zip: r = rand_zip(b->p, b->n, &out); break;
+    case k_gz: r = rand_gz(b->p, b->n, &out); break;
     default: r = -1; break;
     }
     if (r < 0) {
@@ -554,6 +555,7 @@ int rand_place(int kind, int fd, long long size)
     case k_aiff: r = rand_aiff(fd, size); break;
     case k_asf: r = rand_asf(fd, size); break;
     case k_tiff: r = rand_tiff(fd, size); break;
+    case k_tar: r = rand_tar(fd, size); break;
     default: r = 0; break;
     }
     if (r == 1)

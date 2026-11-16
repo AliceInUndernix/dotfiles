@@ -10,7 +10,7 @@ struct buf {
 enum {
     k_unknown, k_jpeg, k_png, k_gif, k_webp, k_pdf,
     k_mp4, k_mkv, k_mp3, k_flac, k_riff, k_heif, k_ogg, k_aiff, k_asf,
-    k_tiff, k_svg, k_bmp, k_zip
+    k_tiff, k_svg, k_bmp, k_zip, k_tar, k_gz
 };
 
 /* clean.c */
@@ -48,6 +48,11 @@ int clean_svg(const unsigned char *in, long n, struct buf *out);
 int clean_bmp(const unsigned char *in, long n, struct buf *out);
 int clean_zip(const unsigned char *in, long n, struct buf *out);
 int rand_zip(const unsigned char *in, long n, struct buf *out);
+int clean_gz(const unsigned char *in, long n, struct buf *out);
+int rand_gz(const unsigned char *in, long n, struct buf *out);
+int clean_tar(int fd, long long size);
+int rand_tar(int fd, long long size);
+int is_tar(const unsigned char *h, long n);
 
 /* svg.c: 1 when the file starts like an SVG drawing; bmp_end: where a
  * BMP's last part ends (-1 when it is broken) */
@@ -115,6 +120,8 @@ long xml_find(const unsigned char *p, long n, long i, const char *w);
  * bigger than max (a zip bomb stops there) */
 int inflate_zlib(const unsigned char *in, long n, struct buf *out, long max);
 int inflate_raw(const unsigned char *in, long n, struct buf *out, long max);
+int inflate_used(const unsigned char *in, long n, struct buf *out,
+    long max, long *used);
 
 /* deflate.c: packs n bytes (raw deflate, as in zip files) */
 void deflate_raw(const unsigned char *in, long n, struct buf *out);

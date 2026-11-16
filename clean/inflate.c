@@ -269,7 +269,7 @@ static int dynamic(struct inf *s)
 }
 
 static int run(const unsigned char *in, long n, long pos, struct buf *out,
-    long max)
+    long max, long *used)
 {
     struct inf s;
     int last, type, r;
@@ -296,6 +296,8 @@ static int run(const unsigned char *in, long n, long pos, struct buf *out,
         if (r < 0 || s.bad)
             return -1;
     } while (!last);
+    if (used)
+        *used = s.pos;
     return 0;
 }
 
@@ -306,10 +308,17 @@ int inflate_zlib(const unsigned char *in, long n, struct buf *out, long max)
     {
         return -1;
     }
-    return run(in, n, 2, out, max);
+    return run(in, n, 2, out, max, 0);
 }
 
 int inflate_raw(const unsigned char *in, long n, struct buf *out, long max)
 {
-    return run(in, n, 0, out, max);
+    return run(in, n, 0, out, max, 0);
+}
+
+/* inflate_used: as inflate_raw; used: how many bytes the data took */
+int inflate_used(const unsigned char *in, long n, struct buf *out,
+    long max, long *used)
+{
+    return run(in, n, 0, out, max, used);
 }

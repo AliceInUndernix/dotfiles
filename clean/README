@@ -98,6 +98,11 @@ ODP        dates, editing time, template), the thumbnail, names and
 EPUB       the program's tags (calibre, Sigil) and the change date
            (which EPUB 3 needs: it becomes 2000-01-01). The book's own
            author, title and ID stay: they are the book.
+tar        file times, owners (user and group names and IDs), and in
+           pax headers more times, owner names and extended attributes
+           (a browser notes there where a file was downloaded from)
+gzip       the original file's name, its time and system, comments;
+           in a .tar.gz the tar inside too
 zip        and inside all of the above: file times, owner IDs, the
            system it was made on, comments, anything after it. Every
            picture inside is cleaned as a picture. The words stay
@@ -143,6 +148,8 @@ WMA, WMV   a new random file ID
 TIFF, raw  32 random bytes at the end, which nothing points to
 SVG        32 random spaces, tabs and line ends after the drawing
 BMP        32 random bytes after the picture
+tar        32 random bytes after the two empty blocks that end it
+gzip       a comment of 32 random spaces and tabs
 DOCX, ODT, 32 random spaces, tabs and line ends after the document
 EPUB...    information (or the book's description); in a plain zip,
            a comment of them
@@ -165,6 +172,12 @@ What it leaves
   older office files (DOC, XLS, PPT), and PDFs packed in ways other
   than Flate.
 - Encrypted zip files.
+- Not yet: 7z (its list of files, with their times, is packed with
+  LZMA, which clean can't unpack yet), and the tar inside .tar.xz,
+  .tar.bz2 and .tar.zst (xz, bzip2 and zstd themselves hold no names
+  or times). RAR files can't be written again by free software.
+- Pictures inside a tar keep their metadata: clean them before
+  packing (tar is changed in place, and a cleaned picture is smaller).
 - In raw files: the maker notes (raw programs need them for the
   colours; some cameras put the serial number in them too), and the
   previews inside, as the camera made them.
@@ -206,7 +219,8 @@ By hand (the build makes clean-bin, since "make clean" removes it):
 Files: clean.c (the command, backups), img.c (JPEG, PNG, GIF, WebP),
 media.c (video, audio, HEIF), ogg.c (Ogg), more.c (AIFF, WMA/WMV,
 TIFF, raw), svg.c (SVG, BMP), zip.c (zip, office documents, EPUB),
-xml.c (edits XML parts), deflate.c (packs the changed parts of zip
-files), pdf.c (PDF), rand.c (the random bytes), inflate.c (unpacks
-the compressed parts of PDFs and zip files; it stops at a size limit,
+archive.c (tar, gzip), xml.c (edits XML parts), deflate.c (packs the
+changed parts of zip and gzip files), pdf.c (PDF), rand.c (the random
+bytes), inflate.c (unpacks the compressed parts of PDFs, zip and gzip
+files; it stops at a size limit,
 so a zip bomb can't fill the memory).
