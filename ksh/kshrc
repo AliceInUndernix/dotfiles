@@ -19,7 +19,7 @@ HISTSIZE=1000000
 # once, even if you ran it many times. ksh93 only (its KEYBD trap); its
 # own Up already searches like this, but its Down does not. Other ksh
 # keep their plain arrows.
-case ${KSH_VERSION:-} in *93*) eval "$(cat <<'EOF'
+case ${KSH_VERSION:-} in *93*) IFS= read -r -d '' _hs_code <<'EOF'
 # Reads the history lazily: a new search reads the history once into
 # file descriptor 7, and each Up reads only as far as the next match, so
 # a search costs what it finds, not the length of the history (a million
@@ -89,7 +89,7 @@ _hs_key() {
 }
 trap _hs_key KEYBD
 EOF
-)" ;; esac
+eval "$_hs_code"; unset _hs_code ;; esac
 
 # Prompt: directory (~ for home), then $ for you or # for root,
 # e.g. "~/dotfiles $ " and "/etc # ".

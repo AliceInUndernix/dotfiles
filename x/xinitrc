@@ -30,10 +30,12 @@ fi
 xss-lock -- slock &
 
 # Status text on the right of dwm's bar (Mod+b shows the bar): the date
-# and time, updated at the start of every minute. See date(1) for the
-# % codes in STATUS_DATE. STATUS_CLOCK=false turns the clock off (the bar
-# then just says dwm-6.8); restart X for a change to take effect.
-STATUS_CLOCK=true
+# and time, updated at the start of every minute. Off by default (the bar
+# is hidden, and the loop wakes up every minute for nothing): set
+# STATUS_CLOCK=true to turn it on. See date(1) for the % codes in
+# STATUS_DATE. Off, the bar just says dwm-6.8. Restart X for a change to
+# take effect.
+STATUS_CLOCK=false
 STATUS_DATE="%H:%M %Z, %A, %d %B %Y"
 # The bar shows your own time; everything else stays in UTC (the system
 # zone), so no program can send your time zone anywhere. Put your zone's
