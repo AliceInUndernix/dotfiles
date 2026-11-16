@@ -112,8 +112,9 @@ int atoi_small(const char *s);         /* -1: not a number */
 
 extern char user_dict[1024];
 void tape_stroke(long st, struct trans *top);
-void stroke_result(long st, struct trans *top, char *out, int size);
-int view_main(int tape, int sugg);     /* view.c */
+int stroke_result(long st, struct trans *top, char *out, int size);
+int view_main(int tape, int sugg, const char *cfg);   /* view.c */
+void open_viewer(const char *flag);     /* -T, -S, -TS in a terminal */
 const char *feed_path(const char *name);
 int tool_lookup(const char *s);
 int tool_add(const char *outline, const char *text);
@@ -153,6 +154,7 @@ void output_toggle(void);
 #define DEC_OFF "\033(B"
 
 extern int scr_colour;
+extern int scr_title_dim;
 void scr_write(const char *s, int n);
 void scr_put(const char *s);
 void scr_put_n(const char *s, int n);

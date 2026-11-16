@@ -4,6 +4,14 @@
  * runs, and a hidden box's feed is closed, so the engine stops
  * looking for suggestions nobody sees.
  *
+ * The tape clears the text of strokes that a later stroke turned into
+ * one outline with it (HAOEU high, TKRAU draw, then HREUBG makes
+ * hydraulic of all three), and brings it back when that is undone.
+ * The suggestions keep each words once: typed again, they move to the
+ * bottom. Both scroll (j k, arrows, Ctrl+U Ctrl+D, g G), Tab choosing
+ * which. l or / looks a word or outline up (steno -l), in a box that
+ * is there only while it is used.
+ *
  * On a terminal it takes the whole screen; into a pipe it just writes
  * the lines. What it shows lives only in its memory. */
 #define _XOPEN_SOURCE 700
@@ -16,6 +24,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -24,6 +33,8 @@
 #define FEED_LINE 4096
 #define KEEP_LINES 400         /* kept for each box */
 #define CELL_MAX 512           /* bytes of one kept line */
+#define FOUND_MAX 200          /* lines of a lookup's answer */
+#define FIND_MAX 128           /* bytes typed into the lookup */
 
 struct box {
     const char *name;          /* the feed, and the title */
@@ -33,11 +44,26 @@ struct box {
     int ngot;
     char lines[KEEP_LINES][CELL_MAX];
     int nlines;                /* the newest is lines[nlines - 1] */
+    int scroll;                /* lines up from the newest (0: follow) */
+    /* the tape's lines only: */
+    long seq[KEEP_LINES];      /* a number for each, never reused */
+    long by[KEEP_LINES];       /* cleared by that line (0: shown) */
+    char dead[KEEP_LINES];     /* undone by a * after it */
+    char undo[KEEP_LINES];     /* a * line */
 };
 
 static struct box boxes[2];    /* 0 tape, 1 suggestions */
-static int fullscreen;
+static int fullscreen, focus;
+static long next_seq = 1;
 static volatile int resized, stop_view;
+static const char *view_cfg;   /* -c, for steno -l */
+
+/* the lookup: asking (typing), and its last answer */
+static int finding;
+static char find[FIND_MAX];
+static int nfind;
+static char found[FOUND_MAX][CELL_MAX];
+static int nfound;
 
 static const char tape_keys[] = "#STKPWHRAO*EUFRPBLGTSDZ";
 
@@ -73,24 +99,75 @@ static void feed_hide(struct box *b)
     b->shown = 0;
 }
 
-static void keep(struct box *b, const char *s)
+/* line i out, the ones after it one place up */
+static void drop_line(struct box *b, int i)
 {
-    if (b->nlines == KEEP_LINES) {
-        memmove(b->lines[0], b->lines[1], (KEEP_LINES - 1) * CELL_MAX);
-        b->nlines--;
-    }
-    scopy(b->lines[b->nlines], s, CELL_MAX);
-    b->nlines++;
+    int k;
+
+    k = b->nlines - i - 1;
+    memmove(b->lines[i], b->lines[i + 1], k * CELL_MAX);
+    memmove(b->seq + i, b->seq + i + 1, k * sizeof(long));
+    memmove(b->by + i, b->by + i + 1, k * sizeof(long));
+    memmove(b->dead + i, b->dead + i + 1, k);
+    memmove(b->undo + i, b->undo + i + 1, k);
+    b->nlines--;
 }
 
-/* one line of the tape feed: STROKE <tab> TRANSLATION, kept as the
- * stroke in the tape's columns, the stroke as written, the
+static void keep(struct box *b, const char *s)
+{
+    int i;
+
+    if (b->nlines == KEEP_LINES)
+        drop_line(b, 0);
+    i = b->nlines;
+    scopy(b->lines[i], s, CELL_MAX);
+    b->seq[i] = next_seq;
+    next_seq++;
+    b->by[i] = 0;
+    b->dead[i] = 0;
+    b->undo[i] = 0;
+    b->nlines++;
+    if (b->scroll)
+        b->scroll++;           /* what you scrolled to stays */
+}
+
+/* The newest line i is a stroke of a translation of n strokes: the
+ * n - 1 live strokes before it are part of it, so their text goes; a
+ * stroke that is * undoes the newest live one, and what that one had
+ * cleared comes back. */
+static void tape_merge(struct box *b, int i, int n)
+{
+    int j, k;
+
+    if (b->undo[i]) {
+        for (j = i - 1; j >= 0; j--)
+            if (!b->undo[j] && !b->dead[j])
+                break;
+        if (j < 0)
+            return;
+        b->dead[j] = 1;
+        for (k = 0; k < j; k++)
+            if (b->by[k] == b->seq[j])
+                b->by[k] = 0;
+        return;
+    }
+    for (j = i - 1; j >= 0 && n > 1; j--) {
+        if (b->undo[j] || b->dead[j])
+            continue;
+        if (!b->by[j])
+            b->by[j] = b->seq[i];
+        n--;
+    }
+}
+
+/* one line of the tape feed: STROKE <tab> TRANSLATION <tab> N, kept
+ * as the stroke in the tape's columns, the stroke as written, the
  * translation, with tabs between */
 static void got_tape(char *line)
 {
-    char cell[CELL_MAX], *tr;
+    char cell[CELL_MAX], *tr, *nst;
     long st;
-    int i;
+    int i, n;
 
     tr = strchr(line, '\t');
     if (tr) {
@@ -98,6 +175,13 @@ static void got_tape(char *line)
         tr++;
     } else {
         tr = "";
+    }
+    nst = strchr(tr, '\t');
+    if (nst) {
+        *nst = 0;
+        n = atoi_small(nst + 1);
+    } else {
+        n = !(tr[0] == '*' && !tr[1]);    /* an engine before N */
     }
     st = stroke_parse(line, strlen(line));
     if (st < 0) {
@@ -114,13 +198,19 @@ static void got_tape(char *line)
     scat(cell, "\t", sizeof(cell));
     scat(cell, tr, sizeof(cell));
     keep(&boxes[0], cell);
+    i = boxes[0].nlines - 1;
+    boxes[0].undo[i] = n == 0;
+    tape_merge(&boxes[0], i, n);
 }
 
 /* one line of the suggest feed: WORDS <tab> OUTLINES ..., kept as one
- * line for each WORDS <tab> OUTLINES */
+ * line for each WORDS <tab> OUTLINES; words already there move to the
+ * bottom, so each shows once */
 static void got_suggest(char *line)
 {
     char cell[CELL_MAX], *w, *o, *next;
+    struct box *b;
+    int i, k;
 
     for (w = line; w && *w; w = next) {
         o = strchr(w, '\t');
@@ -135,10 +225,18 @@ static void got_suggest(char *line)
         }
         scopy(cell, w, sizeof(cell));
         scat(cell, "\t", sizeof(cell));
+        k = strlen(cell);
         scat(cell, o, sizeof(cell));
-        keep(&boxes[1], cell);
-        if (!fullscreen)
+        b = &boxes[1];
+        for (i = 0; i < b->nlines; i++) {
+            if (!strncmp(b->lines[i], cell, k)) {
+                drop_line(b, i);
+                break;
+            }
+        }
+        if (!fullscreen && i == b->nlines)
             printf("%s%s  %s\n", boxes[0].shown ? "= " : "", w, o);
+        keep(b, cell);
     }
 }
 
@@ -174,7 +272,9 @@ static void draw_tape(int y, int x, int w, int h)
     int i, row, n, cols;
 
     b = &boxes[0];
-    i = b->nlines - h;
+    if (b->scroll > b->nlines - h)
+        b->scroll = b->nlines - h > 0 ? b->nlines - h : 0;
+    i = b->nlines - h - b->scroll;
     if (i < 0)
         i = 0;
     for (row = 0; row < h; row++, i++) {
@@ -195,10 +295,12 @@ static void draw_tape(int y, int x, int w, int h)
                 n = scr_text(st, w);
                 *tr = '\t';
             }
-            if (n + 2 < w) {
+            /* the text: gone when a later stroke made one outline of
+             * it; dim when undone */
+            if (n + 2 < w && !b->by[i]) {
                 scr_put("  ");
                 n += 2;
-                scr_col(C_TEAL);
+                scr_col(b->undo[i] || b->dead[i] ? C_DIM : C_TEAL);
                 n += scr_text(tr + 1, w - n);
             }
         }
@@ -256,12 +358,15 @@ static void draw_sugg(int y, int x, int w, int h)
 {
     static char rows[64][CELL_MAX];
     struct box *b;
-    int i, j, n, row, filled, first;
+    int i, j, n, row, filled, first, last;
 
     b = &boxes[1];
-    /* from the newest back, until the box is full */
+    if (b->scroll > b->nlines - 1)
+        b->scroll = b->nlines > 0 ? b->nlines - 1 : 0;
+    last = b->nlines - b->scroll;
+    /* from the newest shown back, until the box is full */
     filled = 0;
-    first = b->nlines;
+    first = last;
     while (first > 0) {
         n = sugg_rows(b->lines[first - 1], w, rows, 64);
         if (filled + n > h && filled)
@@ -270,7 +375,7 @@ static void draw_sugg(int y, int x, int w, int h)
         first--;
     }
     row = 0;
-    for (i = first; i < b->nlines; i++) {
+    for (i = first; i < last; i++) {
         n = sugg_rows(b->lines[i], w, rows, 64);
         for (j = 0; j < n && row < h; j++, row++) {
             scr_move(y + row, x);
@@ -287,20 +392,69 @@ static void draw_sugg(int y, int x, int w, int h)
 static void draw_box(int which, int y, int x, int w, int h, int last)
 {
     static const char *const keys_all[] = {
-        "quit", "clear", "tape", "suggestions"
+        "quit", "clear", "tape", "suggestions", "l lookup"
     };
+    struct box *b;
+    char title[64];
     int row;
 
     if (w < 8 || h < 3)
         return;
-    scr_border(y, x, w, 1, which ? "suggestions" : "tape", 0, 0);
+    b = &boxes[which];
     for (row = 1; row < h - 1; row++)
         scr_side(y + row, x, w);
+    /* the inside first: it says how far it can scroll */
     if (which)
         draw_sugg(y + 1, x + 1, w - 2, h - 2);
     else
         draw_tape(y + 1, x + 1, w - 2, h - 2);
-    scr_border(y + h - 1, x, w, 0, 0, last ? keys_all : 0, last ? 4 : 0);
+    scopy(title, which ? "suggestions" : "tape", sizeof(title));
+    if (b->scroll)
+        sprintf(title + strlen(title), " -%d", b->scroll);
+    /* with both: the one j and k scroll has its title lit */
+    scr_title_dim = boxes[!which].shown && focus != which;
+    scr_border(y, x, w, 1, title, 0, 0);
+    scr_title_dim = 0;
+    scr_border(y + h - 1, x, w, 0, 0, last ? keys_all : 0, last ? 5 : 0);
+}
+
+/* the lookup, over the bottom of the screen: what is typed, then the
+ * answer of steno -l */
+static void draw_find(int rows, int cols)
+{
+    static const char *const keys[] = { "Enter look up", "Esc close" };
+    int h, y, row, n;
+
+    h = 3 + (nfound ? nfound + 1 : 0);
+    if (h > rows)
+        h = rows;
+    if (h < 3 || cols < 12)
+        return;
+    y = rows - h;
+    scr_border(y, 0, cols, 1, "lookup", 0, 0);
+    scr_side(y + 1, 0, cols);
+    scr_move(y + 1, 1);
+    scr_col(C_BLUE);
+    scr_put("> ");
+    scr_col(C_TEXT);
+    n = 2 + scr_text(find, cols - 5);
+    scr_col(C_SELECT);
+    scr_put(finding ? " " : "");
+    scr_col(C_PLAIN);
+    scr_fill(' ', cols - 2 - n - (finding ? 1 : 0));
+    for (row = 0; row < h - 3; row++) {
+        scr_side(y + 2 + row, 0, cols);
+        scr_move(y + 2 + row, 1);
+        n = 0;
+        if (row > 0 && row - 1 < nfound) {
+            /* "X gives" and "X is written" lines; the rest under */
+            scr_col(found[row - 1][0] == ' ' ? C_TEAL : C_TEXT);
+            n = scr_text(found[row - 1], cols - 2);
+        }
+        scr_col(C_PLAIN);
+        scr_fill(' ', cols - 2 - n);
+    }
+    scr_border(y + h - 1, 0, cols, 0, 0, keys, 2);
 }
 
 static void draw(void)
@@ -324,7 +478,103 @@ static void draw(void)
     } else {
         draw_box(boxes[1].shown, 0, 0, cols, rows, 1);
     }
+    if (finding || nfound)
+        draw_find(rows, cols);
     scr_end();
+}
+
+/* --- the lookup ------------------------------------------------------ */
+
+/* steno [-c CFG] -l WHAT, its answer into found[] */
+static void look_up(void)
+{
+    char buf[FOUND_MAX * 128], *p, *nl;
+    const char *argv[6];
+    int fd[2], r, n, k;
+    pid_t pid;
+
+    nfound = 0;
+    if (!find[0])
+        return;
+    r = pipe(fd);
+    if (r < 0)
+        return;
+    k = 0;
+    argv[k] = "steno";
+    k++;
+    if (view_cfg) {
+        argv[k] = "-c";
+        k++;
+        argv[k] = view_cfg;
+        k++;
+    }
+    argv[k] = "-l";
+    k++;
+    argv[k] = find;
+    k++;
+    argv[k] = 0;
+    pid = fork();
+    if (pid == 0) {
+        close(fd[0]);
+        dup2(fd[1], 1);
+        dup2(fd[1], 2);
+        close(fd[1]);
+        r = open("/dev/null", O_RDONLY);
+        if (r >= 0)
+            dup2(r, 0);
+        execv("/proc/self/exe", (char *const *)argv);
+        _exit(127);
+    }
+    close(fd[1]);
+    n = 0;
+    while (pid > 0 && n < (int)sizeof(buf) - 1) {
+        r = read(fd[0], buf + n, sizeof(buf) - 1 - n);
+        if (r < 0 && errno == EINTR)
+            continue;
+        if (r <= 0)
+            break;
+        n += r;
+    }
+    close(fd[0]);
+    if (pid > 0)
+        waitpid(pid, 0, 0);
+    buf[n] = 0;
+    for (p = buf; *p && nfound < FOUND_MAX; p = nl + 1) {
+        nl = strchr(p, '\n');
+        if (!nl)
+            nl = p + strlen(p);
+        k = (int)(nl - p);
+        if (k > CELL_MAX - 1)
+            k = CELL_MAX - 1;
+        memcpy(found[nfound], p, k);
+        found[nfound][k] = 0;
+        nfound++;
+        if (!*nl)
+            break;
+    }
+}
+
+/* a key while the lookup is asked */
+static void find_key(int c)
+{
+    if (c == 27) {
+        finding = 0;
+        nfound = 0;
+    } else if (c == '\r' || c == '\n') {
+        look_up();
+    } else if (c == 127 || c == 8) {
+        if (nfind > 0) {
+            nfind--;
+            find[nfind] = 0;
+        }
+    } else if (c == 21) {
+        nfind = 0;             /* Ctrl+U */
+        find[0] = 0;
+    } else if (c >= 32 && c < 127 && nfind < FIND_MAX - 1) {
+        find[nfind] = (char)c;
+        nfind++;
+        find[nfind] = 0;
+    }
 }
 
 /* --- the loop ------------------------------------------------------- */
@@ -353,16 +603,102 @@ static void toggle(int which)
     } else {
         feed_show(b);
     }
+    if (!boxes[focus].shown)
+        focus = !focus;
 }
 
-int view_main(int tape, int sugg)
+/* j k and the rest: n lines down (towards the newest) or up */
+static void scroll_by(int n)
+{
+    struct box *b;
+    int rows, cols;
+
+    b = &boxes[focus];
+    scr_size(&rows, &cols);
+    if (n == 1000000 || n == -1000000)
+        b->scroll = n > 0 ? 0 : b->nlines;
+    else if (n == 500 || n == -500)
+        b->scroll -= n > 0 ? rows / 2 : -(rows / 2);
+    else
+        b->scroll -= n;
+    if (b->scroll < 0)
+        b->scroll = 0;
+    if (b->scroll > b->nlines)
+        b->scroll = b->nlines;
+}
+
+/* the keys read at once: -1 quit */
+static int view_keys(const unsigned char *k, int n)
+{
+    int i, c;
+
+    for (i = 0; i < n; i++) {
+        c = k[i];
+        /* arrows and pages: ESC [ A, B, 5~, 6~ (or ESC O A, B) */
+        if (c == 27 && i + 2 < n && (k[i + 1] == '[' || k[i + 1] == 'O')) {
+            c = k[i + 2];
+            i += 2;
+            if (c == '5' || c == '6') {
+                if (i + 1 < n && k[i + 1] == '~')
+                    i++;
+                c = c == '5' ? 21 : 4;
+            } else {
+                c = c == 'A' ? 'k' : c == 'B' ? 'j' : c == 'H' ? 'g' :
+                    c == 'F' ? 'G' : 0;
+            }
+            if (finding || !c)
+                continue;
+        }
+        if (finding) {
+            find_key(c);
+            continue;
+        }
+        if (c == 'q' || c == 3)
+            return -1;
+        if (c == 27 && nfound) {
+            nfound = 0;
+        } else if (c == 'l' || c == '/') {
+            finding = 1;
+            nfind = 0;
+            find[0] = 0;
+            nfound = 0;
+        } else if (c == 'c') {
+            boxes[0].nlines = 0;
+            boxes[1].nlines = 0;
+            boxes[0].scroll = 0;
+            boxes[1].scroll = 0;
+        } else if (c == 't') {
+            toggle(0);
+        } else if (c == 's') {
+            toggle(1);
+        } else if (c == '\t' && boxes[!focus].shown) {
+            focus = !focus;
+        } else if (c == 'j') {
+            scroll_by(1);
+        } else if (c == 'k') {
+            scroll_by(-1);
+        } else if (c == 4) {
+            scroll_by(500);    /* Ctrl+D, Page Down */
+        } else if (c == 21) {
+            scroll_by(-500);   /* Ctrl+U, Page Up */
+        } else if (c == 'G') {
+            scroll_by(1000000);
+        } else if (c == 'g') {
+            scroll_by(-1000000);
+        }
+    }
+    return 0;
+}
+
+int view_main(int tape, int sugg, const char *cfg)
 {
     struct pollfd pf[3];
     struct termios old, raw;
     struct sigaction sa;
     int i, n, r, tty, ix[2];
-    unsigned char c;
+    unsigned char k[64];
 
+    view_cfg = cfg;
     boxes[0].name = "tape";
     boxes[1].name = "suggest";
     boxes[0].fd = -1;
@@ -373,6 +709,7 @@ int view_main(int tape, int sugg)
     r = sugg ? feed_show(&boxes[1]) : 0;
     if (r < 0)
         return 1;
+    focus = !tape;
     fullscreen = isatty(1);
     scr_colour = fullscreen &&
         (!getenv("NO_COLOR") || !getenv("NO_COLOR")[0]);
@@ -389,8 +726,9 @@ int view_main(int tape, int sugg)
     sigaction(SIGTERM, &sa, 0);
     sigaction(SIGHUP, &sa, 0);
     if (tty) {
+        /* raw: Ctrl+C, Ctrl+D and the rest come as keys */
         raw = old;
-        raw.c_lflag &= ~(ICANON | ECHO);
+        raw.c_lflag &= ~(ICANON | ECHO | ISIG);
         raw.c_cc[VMIN] = 1;
         raw.c_cc[VTIME] = 0;
         tcsetattr(0, TCSANOW, &raw);
@@ -420,18 +758,12 @@ int view_main(int tape, int sugg)
         if (r < 0 && errno != EINTR)
             break;
         if (r > 0 && tty && pf[n - 1].revents) {
-            c = 0;
-            r = read(0, &c, 1);
-            if (r <= 0 || c == 'q' || c == 4)
+            r = read(0, k, sizeof(k));
+            if (r <= 0)
                 break;
-            if (c == 'c') {
-                boxes[0].nlines = 0;
-                boxes[1].nlines = 0;
-            } else if (c == 't') {
-                toggle(0);
-            } else if (c == 's') {
-                toggle(1);
-            }
+            r = view_keys(k, r);
+            if (r < 0)
+                break;
             resized = 1;       /* draw again, also for Ctrl+L */
         }
         for (i = 0; i < 2; i++) {

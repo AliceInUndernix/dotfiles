@@ -5,7 +5,9 @@
  * The engine writes to two FIFOs in $XDG_STATE_HOME/steno, each only
  * while a viewer has it open, so nothing is kept anywhere:
  *
- *   tape      one line a stroke: STROKE <tab> TRANSLATION
+ *   tape      one line a stroke: STROKE <tab> TRANSLATION <tab> N,
+ *             N the strokes of that translation (0: the stroke undid
+ *             one), so the viewer can clear the N - 1 before it
  *   suggest   one line when the last words change and have outlines:
  *             WORDS <tab> OUTLINES [<tab> WORDS <tab> OUTLINES]...
  *
@@ -175,8 +177,9 @@ static void suggestions(int fresh)
 
 /* What a stroke did: the text of the translation it made, its
  * strokes when they mean nothing, or * when it undid one. top is the
- * newest translation before it. */
-void stroke_result(long st, struct trans *top, char *out, int size)
+ * newest translation before it. Gives the translation's strokes, 0
+ * for *. */
+int stroke_result(long st, struct trans *top, char *out, int size)
 {
     char s[STROKE_MAX * 32];
     struct trans *t;
@@ -192,24 +195,26 @@ void stroke_result(long st, struct trans *top, char *out, int size)
             outline_text(t->st, t->nst, s, sizeof(s));
             put_escaped(out, size, s);
         }
-    } else {
-        scopy(out, "*", size);    /* undone */
+        return t->nst;
     }
+    scopy(out, "*", size);        /* undone */
+    return 0;
 }
 
 /* after each stroke; top is the newest translation before it */
 void tape_stroke(long st, struct trans *top)
 {
     char line[TAPE_LINE + 64];
-    int n, was, open_now;
+    int n, was, open_now, k;
 
     open_now = feed_open(&tape_fd, "tape");
     if (open_now) {
         stroke_text(st, line);
         scat(line, "\t", sizeof(line));
         n = strlen(line);
-        stroke_result(st, top, line + n, TAPE_LINE - n);
-        scat(line, "\n", sizeof(line));
+        k = stroke_result(st, top, line + n, TAPE_LINE - n);
+        n = strlen(line);
+        sprintf(line + n, "\t%d\n", k);
         feed_write(&tape_fd, line);
     }
     was = sugg_fd >= 0;
@@ -234,12 +239,38 @@ static int lookup_outline(const char *s, char *norm, int size)
     return n;
 }
 
+/* What each stroke of an outline writes alone, as "high + draw +
+ * lick": why the outline is written so. Empty for one stroke. */
+static void outline_parts(const long *st, int n, char *out, int size)
+{
+    char s[32];
+    const char *v;
+    int i;
+
+    out[0] = 0;
+    if (n < 2)
+        return;
+    for (i = 0; i < n; i++) {
+        if (i)
+            scat(out, " + ", size);
+        v = dict_lookup(st + i, 1);
+        if (v) {
+            put_escaped(out, size, v);
+        } else {
+            stroke_text(st[i], s);
+            scat(out, s, size);
+            scat(out, "?", size);
+        }
+    }
+}
+
 int tool_lookup(const char *s)
 {
     int res;
-    char out[TEXT_MAX * 8], norm[STROKE_MAX * 32];
+    char out[TEXT_MAX * 8], norm[STROKE_MAX * 32], parts[TEXT_MAX * 2];
+    char *o, *e;
     long st[STROKE_MAX];
-    int n, found, got;
+    int n, found, got, end, w;
 
     found = 0;
     n = outline_parse(s, st, STROKE_MAX);
@@ -247,11 +278,44 @@ int tool_lookup(const char *s)
     if (got) {
         outline_text(st, n, norm, sizeof(norm));
         printf("%s gives\n%s", norm, out);
+        outline_parts(st, n, parts, sizeof(parts));
+        if (parts[0])
+            printf("  stroke by stroke: %s\n", parts);
         found = 1;
     }
     res = dict_outlines(s, out, sizeof(out), 50);
     if (res) {
-        printf("%s is written %s\n", s, out);
+        /* one outline a line, shortest first, each with its parts */
+        printf("%s is written\n", s);
+        w = 0;
+        for (o = out; *o; o = e) {
+            while (*o == ' ')
+                o++;
+            e = o;
+            while (*e && *e != ' ')
+                e++;
+            if (e - o > w)
+                w = (int)(e - o);
+        }
+        for (o = out; *o; o = end ? e : e + 1) {
+            while (*o == ' ')
+                o++;
+            if (!*o)
+                break;
+            e = o;
+            while (*e && *e != ' ')
+                e++;
+            end = !*e;
+            *e = 0;
+            n = outline_parse(o, st, STROKE_MAX);
+            parts[0] = 0;
+            if (n > 0)
+                outline_parts(st, n, parts, sizeof(parts));
+            if (parts[0])
+                printf("  %-*s  %s\n", w, o, parts);
+            else
+                printf("  %s\n", o);
+        }
         found = 1;
     }
     if (!found)

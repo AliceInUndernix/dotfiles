@@ -120,7 +120,9 @@ static void field(int y, int x, int w, const char *label, const char *c,
 
 static void draw_status(int y, int w)
 {
-    static const char *const keys[] = { "q quit", "o output" };
+    static const char *const keys[] = {
+        "q quit", "o output", "t tape", "s suggestions", "b both"
+    };
     const char *port, *why, *d;
     char s[LOG_LEN + 64];
     int i, on;
@@ -163,7 +165,7 @@ static void draw_status(int y, int w)
     sprintf(s, "%ld strokes, %d dictionaries, %ld entries", nstrokes,
         dict_count(), dict_entries());
     field(y + 5, 1, w - 2, "since start", C_TEXT, s, 0, 0);
-    scr_border(y + 6, 0, w, 0, 0, keys, 2);
+    scr_border(y + 6, 0, w, 0, 0, keys, 5);
 }
 
 /* home as ~, and when it is too long, its end: ..steno/user.json */
@@ -444,6 +446,12 @@ int tui_key(void)
             tui_log("read again the dictionaries that changed");
         } else if (c == 'o') {
             output_toggle();
+        } else if (c == 't' || c == 's' || c == 'b') {
+            /* a window of its own, where you type: -T, -S or -TS */
+            open_viewer(c == 't' ? "-T" : c == 's' ? "-S" : "-TS");
+            tui_log(c == 't' ? "opened the tape" : c == 's' ?
+                "opened the suggestions" : "opened the tape and "
+                "suggestions");
         }
     }
     return 0;

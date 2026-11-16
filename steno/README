@@ -75,7 +75,7 @@ in a small screen, in the look of btop:
     | doing       typing                                            |
     | last        KAT  cat                                          |
     | since start 212 strokes, 10 dictionaries, 130831 entries      |
-    +--+q quit+-+o output+------------------------------------------+
+    +--+q quit+-+o output+-+t tape+-+s suggestions+-+b both+--------+
     +-+dictionaries+------------------------------------------------+
     |> 1 on  ~/.system/share/steno/user.dict    3  dict, -a adds .. |
     |  2 on  dotterel-base.dict            113816  dict             |
@@ -100,6 +100,9 @@ steno would say on stderr.
                    stays
     r              read again the dictionary files that changed
     o              output on or off, as PLOVER:TOGGLE
+    t, s, b        open the tape, the suggestions or both in a window
+                   of their own (steno -T, -S, -TS in the "terminal"
+                   setting), to put next to what you write
     q, Ctrl+C      quit steno
 
 Every change to the list is written to the settings file at once (its
@@ -116,7 +119,10 @@ OPTIONS
     -S        show the suggestions
     -TS       show both (also -ST, or -T -S)
     -l X      what outline X gives in each dictionary, and how text X
-              is written (shortest first)
+              is written (shortest first); for an outline of several
+              strokes, what each stroke writes alone, which is why it
+              is written so (high + draw + lick: hydraulic). STROKE?
+              is a stroke that writes nothing alone
     -a O T    add outline O -> T to the user dictionary; says first
               what O gives now and how T is written already
     -A        the same, asking for one outline and translation after
@@ -148,6 +154,8 @@ One a line, # for comments (see config, which install.sh links to
     start_capitalized yes|no
     start_attached yes|no
     command NAME SHELL...    {PLOVER:NAME} runs SHELL with /bin/sh
+    terminal COMMAND         what t, s and b on the status screen open
+                             steno -T, -S, -TS with (st -e)
 
 The commands Plover itself knows: {PLOVER:TOGGLE}, RESUME, SUSPEND
 (each also forgets what was typed, for undo) and QUIT.
@@ -193,15 +201,32 @@ or in two, wherever there is room.
     |                                 ||  THOPB                       |
     +---------------------------------++--+quit+-+clear+-+tape+-+sugg..+
 
-The tape: each stroke in the steno order's columns and what it wrote
-(* for a stroke that undid one). The suggestions: the last words, and
-under them every outline that writes them, shortest first; the newest
-at the bottom in both.
+The tape: each stroke in the steno order's columns and what it wrote.
+When a later stroke makes one outline of the strokes before it, their
+text goes and the last one shows the word, so you see what was
+written:
 
-    q    quit (Ctrl+C, Ctrl+D too)
-    t    show or hide the tape
-    s    show or hide the suggestions
-    c    clear both
+    H AO EU     high          H AO EU
+    TK  RA U    draw    ->    TK  RA U
+                              HR EU B G   hydraulic
+
+An undone stroke and its * are dim, and what it had cleared comes
+back. The suggestions: the words you typed, and under each every
+outline that writes them, shortest first; each words once (typed
+again, they move to the bottom). The newest is at the bottom in both.
+
+    q, Ctrl+C          quit
+    t                  show or hide the tape
+    s                  show or hide the suggestions
+    c                  clear both
+    j k, Down Up       scroll a line (the title says how far up)
+    Ctrl+D Ctrl+U,     half a screen
+    PageDown PageUp
+    G g, End Home      the newest (follow again), the oldest
+    Tab                with both: which one scrolls (its title is lit)
+    l, /               look up a word or outline: type it, Enter; the
+                       box shows each outline and why (steno -l); Esc
+                       closes it
     any other key draws it again
 
 At least one box stays. Into a pipe, it writes the lines instead

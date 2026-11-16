@@ -40,6 +40,7 @@ static int ncmds;
 static int reset_pending;
 static volatile int stop_now;
 static char cfg_path[1024];
+static char terminal[LINE_MAX_LEN] = "st -e";  /* opens the viewers */
 
 int atoi_small(const char *s);
 
@@ -788,6 +789,8 @@ static int read_config(const char *path, int must)
             start_capitalized = yes(val);
         } else if (!strcmp(key, "start_attached")) {
             start_attached = yes(val);
+        } else if (!strcmp(key, "terminal")) {
+            scopy(terminal, val, sizeof(terminal));
         } else if (!strcmp(key, "command")) {
             char *sp;
             sp = val;
@@ -834,6 +837,24 @@ static void run_shell(const char *line)
         execl("/bin/sh", "sh", "-c", line, (char *)0);
         _exit(127);
     }
+}
+
+/* t, s and b on the status screen: steno -T, -S or -TS in a new
+ * terminal window (the "terminal" setting, st -e by default) */
+void open_viewer(const char *flag)
+{
+    char exe[1024], line[LINE_MAX_LEN + 2200];
+    int n;
+
+    n = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
+    if (n <= 0 || strchr(cfg_path, '\'') || memchr(exe, '\'', n)) {
+        say("can't open the viewer", 0);
+        return;
+    }
+    exe[n] = 0;
+    sprintf(line, "exec %s '%s' -c '%s' %s", terminal, exe, cfg_path,
+        flag);
+    run_shell(line);
 }
 
 /* o on the status screen: as PLOVER:TOGGLE */
@@ -1212,7 +1233,7 @@ int main(int argc, char **argv)
         }
     }
     if (show_tape || show_sugg)
-        return view_main(show_tape, show_sugg);
+        return view_main(show_tape, show_sugg, cfg);
     out_mode = test;
     scopy(cfg_path, cfg ? cfg : config_path("~/.config/steno/config"),
         sizeof(cfg_path));

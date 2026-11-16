@@ -13,6 +13,7 @@
 #define SCREEN_MAX 262144
 
 int scr_colour;
+int scr_title_dim;         /* the next border's title dim */
 static char screen[SCREEN_MAX];
 static int nscreen;
 
@@ -118,7 +119,7 @@ void scr_border(int y, int x, int w, int top, const char *title,
     if (title && used + scr_width(title) + 3 <= w) {
         scr_put(top ? "k" : "j");
         scr_put(DEC_OFF);
-        scr_col(C_TITLE);
+        scr_col(scr_title_dim ? C_DIM : C_TITLE);
         used += 1 + scr_text(title, w - used - 3);
         scr_col(C_BOX);
         scr_put(DEC_ON);

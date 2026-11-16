@@ -34,5 +34,8 @@ undo 100
 start_capitalized no
 start_attached no
 
+# t, s and b on the status screen open the tape and suggestions with
+terminal st -e
+
 # {PLOVER:NAME} runs a shell command, for example:
 #command LOOKUP st -e steno -A
