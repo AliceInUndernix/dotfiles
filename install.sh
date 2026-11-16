@@ -732,10 +732,11 @@ install_net() {
 	say "install /etc/init.d/vpnfw, vpn; /etc/vpn; /etc/sysctl.d/vpn.conf"
 	rootcopy "$net/proxychains.conf" /etc/proxychains.conf
 	# proxychains PROGRAM: each program on a Tor port of its own
-	# (9100-9199 in torrc), one config per port
+	# (9200-9299 in torrc), one config per port
 	install -d -m 755 /etc/proxychains.d
-	p=9100
-	while [ $p -le 9199 ]; do
+	rm -f /etc/proxychains.d/[0-9]*.conf
+	p=9200
+	while [ $p -le 9299 ]; do
 		sed "s/^socks5 127\.0\.0\.1 9050\$/socks5 127.0.0.1 $p/" \
 			"$net/proxychains.conf" > "/etc/proxychains.d/$p.conf"
 		chmod 644 "/etc/proxychains.d/$p.conf"

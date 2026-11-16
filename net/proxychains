@@ -1,6 +1,6 @@
 #!/bin/sh
 # proxychains for net/ (vpn): runs a program through Tor on a SOCKS
-# port of its own (9100-9199 in /etc/tor/torrc), so no two programs
+# port of its own (9200-9299 in /etc/tor/torrc), so no two programs
 # share Tor circuits or exits, and a site can't link one program to
 # another by the exit it comes from. The same program always gets the
 # same port; the list is ~/.system/state/proxychains/ports ("name
@@ -13,8 +13,8 @@
 #   proxychains -l                    the programs and their ports
 #   proxychains -f FILE PROGRAM       that config, as proxychains4 does
 
-FIRST=9100
-LAST=9199
+FIRST=9200
+LAST=9299
 CONFS=/etc/proxychains.d
 
 say() { printf '%s\n' "$*"; }
@@ -63,14 +63,19 @@ if ! mkdir -p "$state" 2>/dev/null || ! touch "$list" 2>/dev/null; then
     exec "$real" $quiet "$@"
 fi
 
-port=$(awk -v n="$name" '$1 == n { print $2; exit }' "$list")
+# a port from an older range (9100-9199 clashed with the browsers'
+# 9150-9153) doesn't count: the program gets a new one
+port=$(awk -v n="$name" -v f=$FIRST -v l=$LAST '
+    $1 == n && $2 >= f && $2 <= l { print $2; exit }' "$list")
 if [ -z "$port" ]; then
     port=$(awk -v f=$FIRST -v l=$LAST '
-        { used[$2] = 1 }
+        $2 >= f && $2 <= l { used[$2] = 1 }
         END { for (p = f; p <= l; p++) if (!(p in used)) { print p; exit } }
     ' "$list")
     [ -n "$port" ] ||
         die "all ports $FIRST-$LAST are taken: delete lines in $list"
+    awk -v n="$name" '$1 != n' "$list" > "$list.new" &&
+        mv "$list.new" "$list"
     say "$name $port" >> "$list"
     [ -n "$quiet" ] || say "proxychains: $name gets Tor port $port" >&2
 fi

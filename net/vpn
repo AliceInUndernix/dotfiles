@@ -1101,7 +1101,7 @@ cmd_status() {
         [ -z "$sp" ] || say "speed:    $sp"
     fi
     [ -z "$si" ] || say "since:    $si"
-    [ -z "$to" ] || say "Tor:      $to (SOCKS 9100+ programs, 9150+ browsers)"
+    [ -z "$to" ] || say "Tor:      $to (SOCKS 9200+ programs, 9150+ browsers)"
     say "DNS:      $(sed -n 's/^nameserver //p' /etc/resolv.conf | head -n 1)"
     if [ -e "$ETC/lan" ]; then say "LAN:      on"; else say "LAN:      off"; fi
     if [ -e "$RUN/fw-off" ]; then
@@ -1553,8 +1553,8 @@ cmd_selftest() {
     st "Tor's browser port 9150 is Tor" \
         "curl -s -m 40 --socks5-hostname 127.0.0.1:9150 $TOR_CHECK |
         grep -q '\"IsTor\":true'"
-    st "Tor's program port 9100 is Tor" \
-        "curl -s -m 40 --socks5-hostname 127.0.0.1:9100 $TOR_CHECK |
+    st "Tor's program port 9200 is Tor" \
+        "curl -s -m 40 --socks5-hostname 127.0.0.1:9200 $TOR_CHECK |
         grep -q '\"IsTor\":true'"
     st "proxychains goes through Tor" \
         "$(as_nobody "proxychains -q curl -s -m 40 $TOR_CHECK") |

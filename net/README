@@ -112,7 +112,7 @@ Tor ports. Each SOCKS port has its own Tor circuits and exits, so a
 site can't link what comes through one port to what comes through
 another:
 
-    9100-9199  proxychains PROGRAM: each program gets one for itself,
+    9200-9299  proxychains PROGRAM: each program gets one for itself,
                the first time it runs, and keeps it (the list is
                ~/.system/state/proxychains/ports; delete a line to
                free a port). What the program starts uses its port too.
@@ -230,7 +230,7 @@ Files
     net/mirrors       /etc/vpn/mirrors
     net/torrc         /etc/tor/torrc (with the old User, DataDirectory)
     net/proxychains.conf  /etc/proxychains.conf, and one copy per
-                      port in /etc/proxychains.d (9100.conf ...)
+                      port in /etc/proxychains.d (9200.conf ...)
     net/proxychains   /usr/local/bin/proxychains (a port per program)
     net/sysctl.conf   /etc/sysctl.d/vpn.conf (IPv6 off)
 
