@@ -25,6 +25,8 @@ struct secret {
 extern struct secret *sec;
 extern int opt_force;
 extern int opt_quiet;
+extern int opt_verbose;   /* -v: name each path (-t: list them) */
+extern int opt_dry;       /* -n: check, write nothing */
 extern volatile int stop_now;
 
 /* seal.c */
@@ -54,7 +56,8 @@ int pack_remove(const char *disk);
 
 /* unpack_open: start reading fd (after its salt); the top directory's
  * name (at most 255 bytes) goes into name. unpack_rest: unpack it
- * into the directory tmp, or with list set only print what is in it.
+ * into the directory tmp, or with list set only read it all and check
+ * it (printing the names with -v).
  * 0 when fine, 1 when there were problems but -f went on, -1 when it
  * failed (the caller then removes what is in tmp). */
 int unpack_open(int fd, char *name);

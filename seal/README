@@ -1,24 +1,25 @@
 seal - turns a directory into one encrypted file, and back
 ==========================================================
 
+SYNOPSIS
+
+    seal [-knqsv] [-o FILE] DIR       DIR -> DIR.seal, then DIR goes
+    unseal [-fknqsvL] [-d DIR] FILE   FILE -> RAM, with a link to it
+    unseal -t [-fqs] FILE             check FILE, list what it holds
+    seal -l                           what is unsealed in RAM
+    seal -a [-nqsv]                   seal all of it back
+    seal -c [-q]                      take away dead links
+    seal -h                           help
+
+unseal is the same program (a link to seal; seal -u is unseal too).
+
+DESCRIPTION
+
 Disk encryption protects everything while the computer is off. Once
 it is on and you are logged in, every file is open to whatever runs
 as you. seal keeps the files you don't need every day locked even
 then: one command turns a directory into one encrypted file, and one
 command gives it back.
-
-    seal baba                  baba/ -> baba.seal, then baba/ goes
-    seal -o holiday.mp4 baba   any name: baba/ -> holiday.mp4
-    unseal baba.seal           -> into RAM: /run/user/UID/seal/baba,
-                               and the link baba -> it, next to the file
-    seal baba                  (the link) back into baba.seal; the RAM
-                               copy and the link go
-    seal -a                    everything unsealed back into its file
-    seal -l                    what is unsealed in RAM, from where, and
-                               its link
-    seal -c                    take away links whose directory is gone
-    unseal -d . baba.seal      -> ./baba on the disk, baba.seal goes
-    unseal -t baba.seal        check it and list what it holds
 
 It asks for the password on the terminal, with nothing echoed: twice
 when sealing (a typo would lock the files away for good), once when
@@ -26,26 +27,64 @@ unsealing. It says what it did:
 
     baba -> baba.seal (3 directories, 12 files, 1 link, 40.2 MiB)
 
-Options:
+OPTIONS
 
     -o FILE   seal: the file to write (default DIR.seal; for a
-              directory from RAM, the file it was unsealed from)
+              directory from RAM, the file it was unsealed from). It
+              must not exist yet.
     -d DIR    unseal onto the disk, into DIR, and remove FILE
     -k        keep: seal leaves DIR, unseal -d leaves FILE
-    -n        unseal: make no link next to FILE
-    -t        unseal: only check FILE and list what is in it
+    -L        unseal: make no link next to FILE
+    -n        dry run: check everything, say what would happen, change
+              nothing. seal -n needs no password: it reads DIR and
+              finds what can't be sealed. unseal -n asks for it and
+              reads and checks all of FILE.
+    -t        unseal: check FILE and list what is in it (-n -v)
     -f        unseal: go on when FILE is damaged or the password
               seems wrong (see below)
     -s        read the password from standard input (one line), for
-              scripts: pass show baba | seal -s baba
+              scripts: pass show baba | seal -s baba. Only from a pipe
+              or a file: on a terminal it would be echoed, so seal
+              stops and says so.
     -q        say nothing but errors (and -t's list)
-    -l        seal: list the directories unsealed in RAM
+    -v        name each file as it goes in or comes out
+    -l        seal: list the directories unsealed in RAM, where they
+              came from and their links
     -a        seal: seal all of them back (a password for each)
     -c        seal: take away the links whose directory is gone
     -u        seal -u is unseal
+    -h        help (also --help)
+    --        end of options: seal -- -odd
 
-Exit status 0 when all went well, 1 when not (it says why), 2 for
-wrong options.
+Options go before the name. A wrong one, or one that doesn't fit
+(seal -d, unseal -o, unseal -k without -d), stops it before anything
+is done.
+
+EXIT STATUS
+
+    0   done
+    1   it failed, and says why (and what it left as it was)
+    2   wrong options; nothing was done
+
+EXAMPLES
+
+    seal baba                  baba/ -> baba.seal, then baba/ goes
+    seal -n baba               would it work? (no password, no change)
+    seal -o holiday.mp4 baba   any name: baba/ -> holiday.mp4
+    unseal baba.seal           -> into RAM: /run/user/UID/seal/baba,
+                               and the link baba -> it, next to the file
+    seal baba                  (the link) back into baba.seal; the RAM
+                               copy and the link go
+    seal -a                    everything unsealed back into its file
+    unseal -d . baba.seal      -> ./baba on the disk, baba.seal goes
+    unseal -t baba.seal        check it and list what it holds
+
+CHANGED OPTIONS
+
+So that a letter means the same in seal and clean: unseal -n (no link)
+is now -L, and -n is the dry run in both programs. New: -n, -v, -h.
+seal -s keeps its meaning (the password from standard input); clean's
+old -s is now -H.
 
 
 Unsealing into RAM
@@ -65,7 +104,7 @@ sealed file, named like the directory: unseal baba.seal makes
 baba -> /run/user/UID/seal/baba. Work in baba as usual; seal baba
 seals the directory behind the link, and takes the link away. seal -a
 does it for every unsealed directory at once. (If something named
-baba is already there, unseal says so and makes no link; -n makes
+baba is already there, unseal says so and makes no link; -L makes
 none.)
 
 Each link is written down in ~/.system/state/seal/links before it is

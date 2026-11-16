@@ -224,8 +224,8 @@ unseal vid.mp4 2>err
 check "a file in the way: no link, the rest works" '[ -f baba ] && [ -d "$RAM/baba" ] && grep -q "no link" err'
 seal "$RAM/baba"
 rm baba
-unseal -n vid.mp4
-check "unseal -n makes no link" '[ ! -e baba ] && [ -d "$RAM/baba" ]'
+unseal -L vid.mp4
+check "unseal -L makes no link" '[ ! -e baba ] && [ -d "$RAM/baba" ]'
 seal "$RAM/baba"
 unseal -d . vid.mp4
 rm -f other.seal
@@ -269,7 +269,49 @@ if command -v script >/dev/null 2>&1; then
 	mkdir tty; echo t > tty/f
 	printf 'one\ntwo\n' | script -qc "$SEAL tty" /dev/null >/dev/null 2>&1
 	check "two different passwords: nothing sealed" '[ -d tty ] && [ ! -e tty.seal ]'
+	script -qc "$SEAL -s tty" /dev/null < /dev/null > o.txt 2>&1
+	check "-s on a terminal is refused (it would echo)" 'grep -q "from a pipe" o.txt && [ ! -e tty.seal ]'
 fi
+
+# --- the command line: help, wrong options, dry runs, -v
+rm -rf tty tty.seal cl cl.seal
+"$SEAL" -h > o.txt 2>err
+check "seal -h: help on stdout, exit 0" '[ $? -eq 0 ] && grep -q "^usage: seal" o.txt && [ ! -s err ]'
+"$UNSEAL" --help > o.txt 2>&1
+check "unseal --help works too" '[ $? -eq 0 ] && grep -q "unseal -t" o.txt'
+"$SEAL" -x baba > o.txt 2>err
+check "an unknown option: exit 2, named" '[ $? -eq 2 ] && grep -q "unknown option -x" err && [ ! -s o.txt ]'
+"$SEAL" -o 2>err
+check "-o without FILE: exit 2" '[ $? -eq 2 ] && grep -q "needs an argument" err'
+mkdir cl; echo x > cl/f; mkdir cl/d; ln -s f cl/l
+"$SEAL" cl -k 2>err
+check "an option after the name is refused" '[ $? -eq 2 ] && grep -q "options go before" err && [ ! -e cl.seal ]'
+"$SEAL" -d . cl 2>err
+check "seal -d: for unseal only" '[ $? -eq 2 ] && grep -q "for unseal" err && [ -d cl ]'
+"$UNSEAL" -k cl.seal 2>err
+check "unseal -k without -d: said, exit 2" '[ $? -eq 2 ] && grep -q "goes with -d" err'
+"$SEAL" -n cl > o.txt 2>err
+check "seal -n: no password, nothing changed, says it" '[ $? -eq 0 ] && [ -d cl ] && [ ! -e cl.seal ] && grep -q "would seal cl -> cl.seal (1 directory, 1 file, 1 link" o.txt'
+"$SEAL" -n -v cl > o.txt 2>err
+check "seal -nv names what would go in" 'grep -q "^cl/f$" o.txt && grep -q "^cl/l -> f$" o.txt && grep -q "^cl/d/$" o.txt'
+mkfifo cl/p
+"$SEAL" -n cl > o.txt 2>err
+check "seal -n finds what can't be sealed" '[ $? -ne 0 ] && grep -q pipe err && [ ! -e cl.seal ]'
+rm cl/p
+echo pw | "$SEAL" -s -v cl > o.txt 2>err
+check "seal -v names each file" '[ -f cl.seal ] && grep -q "^cl/f$" o.txt && grep -q "^cl -> cl.seal" o.txt'
+echo pw | "$UNSEAL" -s -n cl.seal > o.txt 2>err
+check "unseal -n: checks, makes nothing" '[ $? -eq 0 ] && [ ! -e cl ] && [ ! -e "$RAM/cl" ] && grep -q "all is well" o.txt && grep -q "would unseal cl.seal into" o.txt'
+echo pw | "$UNSEAL" -s -n -d . cl.seal > o.txt 2>err
+check "unseal -n -d: keeps the file" '[ -f cl.seal ] && [ ! -e cl ] && grep -q "then remove it" o.txt'
+echo pw | "$UNSEAL" -s -v -d . cl.seal > o.txt 2>err
+check "unseal -v names each file" '[ -d cl ] && grep -q "^cl/f$" o.txt'
+"$SEAL" -l cl 2>err
+check "seal -l takes no name" '[ $? -eq 2 ]'
+"$SEAL" 2>err
+check "no DIR: said, exit 2" '[ $? -eq 2 ] && grep -q "give the DIR" err'
+"$SEAL" -- -dash 2>err
+check "-- ends the options" '[ $? -eq 1 ] && grep -q "^seal: -dash: No such" err'
 
 echo
 if [ "$FAILS" -eq 0 ]; then

@@ -1,7 +1,9 @@
 /* clean: takes metadata out of files (see README).
  *
- *   clean [-n] [-k] [-q] FILE...    clean each file where it is
- *   clean -u FILE...                put the newest backup back
+ *   clean [-bHnpqv] FILE...     clean each file where it is
+ *   clean [-Hnpqv] -o OUT FILE  a clean copy of FILE in OUT
+ *   clean [-Hnqv] - > OUT       from standard input to standard output
+ *   clean -u [-nqv] FILE...     put the newest backup back
  *
  * The file is replaced by its clean version; the original is kept in
  * ~/.system/state/clean (list: that directory's file "list"). */
@@ -27,8 +29,10 @@ int dry_run;
 int randomized;
 const char *why;
 
-static int opt_dry, opt_keep, opt_quiet, opt_nobackup;
-static int opt_random = 1;     /* -s turns it off */
+static int opt_dry, opt_keep, opt_quiet, opt_verbose, opt_nobackup;
+static int opt_random = 1;     /* -H turns it off */
+static FILE *say;              /* stdout; stderr when that is the file */
+static char last_backup[4200]; /* where backup() put the original */
 static char note_text[MAX_NOTES][NOTE_SIZE];
 static int note_count[MAX_NOTES];
 static int notes;
@@ -125,19 +129,19 @@ static void print_notes(const char *path, const char *verb)
 
     if (opt_quiet)
         return;
-    printf("%s:", path);
+    fprintf(say, "%s:", path);
     if (notes)
-        printf(" %s ", verb);
+        fprintf(say, " %s ", verb);
     else
-        printf(" nothing to remove");
+        fprintf(say, " nothing to remove");
     for (i = 0; i < notes; i++) {
-        printf("%s%s", i ? ", " : "", note_text[i]);
+        fprintf(say, "%s%s", i ? ", " : "", note_text[i]);
         if (note_count[i] > 1)
-            printf(" x%d", note_count[i]);
+            fprintf(say, " x%d", note_count[i]);
     }
     if (randomized)
-        printf("; new random bytes (a hash of its own)");
-    printf("\n");
+        fprintf(say, "; new random bytes (a hash of its own)");
+    fprintf(say, "\n");
 }
 
 /* ------------------------------------------------------------ bytes */
@@ -348,14 +352,29 @@ static int read_file(int fd, long long size, struct buf *b)
     return 0;
 }
 
+/* copy_fd: all of in into out; -1 on error */
+static int copy_fd(int in, int out)
+{
+    static unsigned char block[65536];
+    long r;
+    int rc;
+
+    while ((r = read(in, block, sizeof block)) != 0) {
+        if (r < 0 && errno == EINTR)
+            continue;
+        if (r < 0)
+            return -1;
+        rc = write_all(out, block, r);
+        if (rc < 0)
+            return -1;
+    }
+    return 0;
+}
+
 /* copy_file: from to to (made new, mode 600); -1 on error */
 static int copy_file(const char *from, const char *to, int excl)
 {
-    int rc;
-    static unsigned char block[65536];
-    int in, out, flags;
-    long r;
-    int bad;
+    int in, out, flags, r, bad;
 
     in = open(from, O_RDONLY);
     if (in < 0)
@@ -366,21 +385,12 @@ static int copy_file(const char *from, const char *to, int excl)
         close(in);
         return -1;
     }
-    bad = 0;
-    while ((r = read(in, block, sizeof block)) > 0) {
-        rc = write_all(out, block, r);
-        if (rc < 0) {
-            bad = 1;
-            break;
-        }
-    }
-    if (r < 0)
-        bad = 1;
+    bad = copy_fd(in, out);
     close(in);
     r = close(out);
     if (r < 0)
-        bad = 1;
-    return bad ? -1 : 0;
+        bad = -1;
+    return bad;
 }
 
 static void join(char *d, int size, const char *a, const char *b)
@@ -490,8 +500,10 @@ static int backup(const char *path, const char *abs)
         join(file, sizeof file, backup_dir, "/");
         copy_str(file + strlen(file), name, sizeof file - strlen(file));
         r = copy_file(path, file, 1);
-        if (r == 0)
+        if (r == 0) {
+            copy_str(last_backup, file, sizeof last_backup);
             break;
+        }
         if (errno != EEXIST || backup_seq > 100000) {
             why = "can't make the backup";
             return -1;
@@ -796,14 +808,18 @@ static int clean_in_place(const char *path, const char *abs, int fd,
         why = "could not write";
         r = -1;
     }
-    if (r < 0)
-        fprintf(stderr, "clean: %s: half done; the original is in %s\n",
-            path, backup_dir);
+    if (r < 0 && opt_nobackup)
+        fprintf(stderr, "clean: %s: half done, and with -b there is no "
+            "backup\n", path);
+    else if (r < 0)
+        fprintf(stderr, "clean: %s: half done; the original is %s\n",
+            path, last_backup);
     set_times(path, st);
     return r;
 }
 
-static int clean_file(const char *path)
+/* clean_file: path cleaned in place; shown is its name in messages */
+static int clean_file(const char *path, const char *shown)
 {
     int rc;
     struct stat st;
@@ -813,30 +829,36 @@ static int clean_file(const char *path)
     notes = 0;
     randomized = 0;
     why = 0;
+    last_backup[0] = 0;
     r = lstat(path, &st);
     if (r < 0) {
-        fprintf(stderr, "clean: %s: not found\n", path);
+        fprintf(stderr, "clean: %s: %s\n", shown, strerror(errno));
         return -1;
     }
     if (S_ISLNK(st.st_mode)) {
         fprintf(stderr, "clean: %s: a link: clean the file it points to\n",
-            path);
+            shown);
+        return -1;
+    }
+    if (S_ISDIR(st.st_mode)) {
+        fprintf(stderr, "clean: %s: a directory (for all files in it: "
+            "find DIR -type f -exec clean {} +)\n", shown);
         return -1;
     }
     if (!S_ISREG(st.st_mode)) {
-        fprintf(stderr, "clean: %s: not a file\n", path);
+        fprintf(stderr, "clean: %s: not a file\n", shown);
         return -1;
     }
     rc = -1;
     if (!strchr(path, '\n'))
         rc = abs_path(path, abs, sizeof abs);
     if (rc < 0) {
-        fprintf(stderr, "clean: %s: can't use this name\n", path);
+        fprintf(stderr, "clean: %s: can't use this name\n", shown);
         return -1;
     }
     fd = open(path, O_RDONLY);
     if (fd < 0) {
-        fprintf(stderr, "clean: %s: can't read it\n", path);
+        fprintf(stderr, "clean: %s: %s\n", shown, strerror(errno));
         return -1;
     }
     kind = kind_of(fd, st.st_size);
@@ -852,35 +874,68 @@ static int clean_file(const char *path)
         r = clean_in_memory(path, abs, fd, &st, kind);
     }
     close(fd);
-    if (r < 0) {
-        fprintf(stderr, "clean: %s: %s (left as it was)\n", path,
+    if (r < 0 && kind == k_unknown && !why)
+        fprintf(stderr, "clean: %s: not a kind of file clean knows (left "
+            "as it was)\n", shown);
+    else if (r < 0)
+        fprintf(stderr, "clean: %s: %s (left as it was)\n", shown,
             why ? why : "broken");
+    if (r < 0)
         return -1;
-    }
     if (!notes && !randomized) {
         if (!opt_quiet)
-            printf("%s: nothing to remove\n", path);
+            fprintf(say, "%s: nothing to remove\n", shown);
     } else {
-        print_notes(path, opt_dry ? "would remove" : "removed");
+        print_notes(shown, opt_dry ? "would remove" : "removed");
     }
+    if (opt_verbose && last_backup[0])
+        fprintf(say, "%s: the original is %s\n", shown, last_backup);
     return 0;
 }
 
-/* undo: the newest backup of path back in its place */
+/* list_drop: the list without its bytes from start to end */
+static int list_drop(const char *list, struct buf *b, long start, long end)
+{
+    char tmp[4200];
+    int fd, r, rc;
+
+    join(tmp, sizeof tmp, list, ".new");
+    fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (fd < 0)
+        return -1;
+    r = write_all(fd, b->p, start);
+    if (r == 0)
+        r = write_all(fd, b->p + end, b->n - end);
+    rc = close(fd);
+    if (rc < 0)
+        r = -1;
+    if (r == 0)
+        r = rename(tmp, list);
+    if (r < 0)
+        unlink(tmp);
+    return r;
+}
+
+/* undo: the newest backup of path back in its place. The backup then
+ * leaves the list (and goes), so a second undo goes one further back. */
 static int undo_file(const char *path)
 {
     int rc;
     char abs[4096], list[4200], from[4200], name[64], tmp[4200];
     struct stat now;
     struct buf b;
-    long i, start, sp;
+    long i, start, sp, m_start, m_end;
     int fd, r;
 
     memset(&b, 0, sizeof b);
     name[0] = 0;
+    m_start = 0;
+    m_end = 0;
     rc = abs_path(path, abs, sizeof abs);
-    if (rc < 0)
+    if (rc < 0) {
+        fprintf(stderr, "clean: %s: can't use this name\n", path);
         return -1;
+    }
     join(list, sizeof list, backup_dir, "/list");
     fd = open(list, O_RDONLY);
     if (fd >= 0) {
@@ -904,16 +959,24 @@ static int undo_file(const char *path)
         {
             memcpy(name, b.p + start, sp - start);
             name[sp - start] = 0;
+            m_start = start;
+            m_end = i + 1;
         }
         start = i + 1;
     }
-    buf_free(&b);
     if (!name[0]) {
+        buf_free(&b);
         fprintf(stderr, "clean: %s: no backup of it\n", path);
         return -1;
     }
     join(from, sizeof from, backup_dir, "/");
     copy_str(from + strlen(from), name, sizeof from - strlen(from));
+    if (opt_dry) {
+        buf_free(&b);
+        if (!opt_quiet)
+            fprintf(say, "%s: would put back %s\n", path, from);
+        return 0;
+    }
     join(tmp, sizeof tmp, path, ".clean-new");
     r = copy_file(from, tmp, 1);
     rc = -1;
@@ -924,67 +987,280 @@ static int undo_file(const char *path)
     if (r == 0)
         r = rename(tmp, path);
     if (r < 0) {
+        buf_free(&b);
         unlink(tmp);
         fprintf(stderr, "clean: %s: could not put %s back\n", path, from);
         return -1;
     }
+    r = list_drop(list, &b, m_start, m_end);
+    buf_free(&b);
+    if (r == 0)
+        unlink(from);
     if (!opt_quiet)
-        printf("%s: put back from %s\n", path, from);
+        fprintf(say, "%s: put back from %s\n", path, from);
     return 0;
 }
 
-static void usage(void)
+/* ram_dir: a directory in RAM for the work copy of standard input, so
+ * the metadata never reaches the disk; else $TMPDIR or /tmp */
+static void ram_dir(char *d, int size)
 {
-    fprintf(stderr,
-        "usage: clean [-n] [-k] [-q] [-s] [-b] FILE...\n"
-        "       clean -u FILE...\n"
-        "Takes the metadata out of each file, in place.\n"
-        "Pictures: JPEG, PNG, GIF, WebP, HEIF/AVIF, TIFF, camera raw,\n"
-        "SVG, BMP. Documents: PDF, DOCX/XLSX/PPTX, ODT/ODS/ODP, EPUB,\n"
-        "zip, tar, gzip. Video and audio: MP4/MOV/M4A, MKV/WebM, AVI,\n");
-    fprintf(stderr,
-        "WMV/WMA, MP3, AAC, FLAC, Ogg (Vorbis, Opus, Theora), WAV, AIFF.\n");
-    fprintf(stderr,
-        "The original goes to ~/.system/state/clean first.\n"
-        "  -n  only say what would go; change nothing\n"
-        "  -k  keep the file's times (else: 2000-01-01 00:00 UTC)\n"
-        "  -q  say nothing but errors\n"
-        "  -s  same hash: no random bytes (else each run gives the\n"
-        "      file new ones, so each copy you share differs)\n"
-        "  -b  no backup (then -u can't undo it)\n"
-        "  -u  undo: put the newest backup of each file back\n");
+    const char *c[3];
+    struct stat st;
+    int i, r;
+
+    c[0] = getenv("XDG_RUNTIME_DIR");
+    c[1] = "/dev/shm";
+    c[2] = getenv("TMPDIR");
+    for (i = 0; i < 3; i++) {
+        if (!c[i] || c[i][0] != '/')
+            continue;
+        r = stat(c[i], &st);
+        if (r == 0 && S_ISDIR(st.st_mode) && !access(c[i], W_OK)) {
+            copy_str(d, c[i], size);
+            return;
+        }
+    }
+    copy_str(d, "/tmp", size);
+}
+
+/* clean_copy: a clean copy of in ("-": standard input) into out ("-":
+ * standard output); in stays as it was. The copy is cleaned in a work
+ * file (next to out, or in RAM), which becomes out only when all went
+ * well: a file clean doesn't know never comes out as if clean. */
+static int clean_copy(const char *in, const char *out)
+{
+    char work[4200], dir[4096], shown[8300];
+    struct stat st;
+    struct timeval tv[2];
+    int to_stdout, ifd, wfd, r, rc, mask;
+
+    opt_nobackup = 1;       /* in stays as it was: nothing to back up */
+    to_stdout = !strcmp(out, "-");
+    if (!strcmp(in, "-"))
+        copy_str(shown, to_stdout ? "-" : out, sizeof shown);
+    else if (to_stdout)
+        copy_str(shown, in, sizeof shown);
+    else
+        sprintf(shown, "%.4090s -> %.4090s", in, out);
+    if (to_stdout && isatty(1) && !opt_dry) {
+        fprintf(stderr, "clean: won't write a file onto the terminal: "
+            "clean - < IN > OUT, or -o OUT\n");
+        return -1;
+    }
+    if (!to_stdout) {
+        r = lstat(out, &st);
+        if (r == 0) {
+            fprintf(stderr, "clean: %s: already exists; nothing was done\n",
+                out);
+            return -1;
+        }
+    }
+    ifd = 0;
+    if (strcmp(in, "-"))
+        ifd = open(in, O_RDONLY);
+    if (ifd < 0) {
+        fprintf(stderr, "clean: %s: %s\n", in, strerror(errno));
+        return -1;
+    }
+    r = fstat(ifd, &st);
+    if (r == 0 && S_ISDIR(st.st_mode)) {
+        fprintf(stderr, "clean: %s: a directory\n", in);
+        r = -1;
+    }
+    if (r < 0) {
+        if (ifd)
+            close(ifd);
+        return -1;
+    }
+    if (to_stdout) {
+        ram_dir(dir, sizeof dir);
+        sprintf(work, "%.4000s/.clean-%ld", dir, (long)getpid());
+    } else {
+        join(work, sizeof work, out, ".clean-new");
+    }
+    wfd = open(work, O_RDWR | O_CREAT | O_EXCL, 0600);
+    if (wfd < 0) {
+        fprintf(stderr, "clean: can't make %s: %s\n", work,
+            strerror(errno));
+        if (ifd)
+            close(ifd);
+        return -1;
+    }
+    r = copy_fd(ifd, wfd);
+    if (ifd)
+        close(ifd);
+    rc = close(wfd);
+    if (r < 0 || rc < 0) {
+        fprintf(stderr, "clean: %s: can't copy it\n", in);
+        unlink(work);
+        return -1;
+    }
+    r = clean_file(work, shown);
+    if (r < 0 || opt_dry) {
+        unlink(work);
+        return r;
+    }
+    if (opt_keep && strcmp(in, "-")) {
+        tv[0].tv_sec = st.st_atime;
+        tv[1].tv_sec = st.st_mtime;
+        tv[0].tv_usec = 0;
+        tv[1].tv_usec = 0;
+        utimes(work, tv);
+    }
+    if (to_stdout) {
+        wfd = open(work, O_RDONLY);
+        unlink(work);
+        r = -1;
+        if (wfd >= 0)
+            r = copy_fd(wfd, 1);
+        if (wfd >= 0)
+            close(wfd);
+        if (r < 0)
+            fprintf(stderr, "clean: can't write to standard output\n");
+        return r;
+    }
+    if (strcmp(in, "-")) {
+        chmod(work, st.st_mode & 0777);
+    } else {
+        mask = umask(077);
+        umask(mask);
+        chmod(work, 0666 & ~mask);
+    }
+    /* link: never over a file that appeared meanwhile */
+    r = link(work, out);
+    if (r < 0)
+        fprintf(stderr, "clean: can't make %s: %s\n", out, strerror(errno));
+    unlink(work);
+    return r;
+}
+
+static void help(FILE *f)
+{
+    fprintf(f,
+        "usage: clean [-bHnpqv] FILE...      clean each file, in place\n"
+        "       clean [-Hnpqv] -o OUT FILE   a clean copy of FILE in OUT\n"
+        "       clean [-Hnqv] - < IN > OUT   standard input to output\n"
+        "       clean -u [-nqv] FILE...      undo: the newest backup "
+        "back\n"
+        "Takes the metadata out of each file. In place, the original "
+        "goes to\n"
+        "~/.system/state/clean first.\n");
+    fprintf(f,
+        "Pictures: JPEG, PNG, GIF, WebP, HEIF/AVIF, TIFF, camera raw, "
+        "SVG, BMP.\n"
+        "Documents: PDF, DOCX/XLSX/PPTX, ODT/ODS/ODP, EPUB, zip, tar, "
+        "gzip.\n"
+        "Video and audio: MP4/MOV/M4A, MKV/WebM, AVI, WMV/WMA, MP3, "
+        "AAC, FLAC,\n"
+        "Ogg (Vorbis, Opus, Theora), WAV, AIFF.\n");
+    fprintf(f,
+        "  -o OUT  write a clean copy to OUT (new; - is standard output)\n"
+        "  -b      no backup (then -u can't undo it)\n"
+        "  -H      same hash: no new random bytes (else each run gives "
+        "the\n"
+        "          file new ones, so each copy you share differs)\n"
+        "  -p      keep the file's times (else: 2000-01-01 00:00 UTC)\n"
+        "  -n      dry run: say what would go, change nothing\n"
+        "  -u      undo: put the newest backup back (again: the one "
+        "before)\n");
+    fprintf(f,
+        "  -q      say nothing but errors   -v  also name the backup\n"
+        "  -h      this help                --  end of options\n"
+        "Exit status: 0 done, 1 a file failed (it says why), 2 wrong "
+        "options.\n");
+}
+
+/* a wrong option or argument: say what, and how to get help */
+static void usage(const char *what, const char *arg)
+{
+    fprintf(stderr, "clean: ");
+    fprintf(stderr, what, arg);
+    fprintf(stderr, " (clean -h for help)\n");
     exit(2);
 }
 
 int main(int argc, char **argv)
 {
-    int i, j, undo, bad, r;
+    const char *out;
+    char opt[2];
+    int i, j, undo, bad, r, c;
 
     undo = 0;
+    out = 0;
+    opt[1] = 0;
+    say = stdout;
     for (i = 1; i < argc && argv[i][0] == '-' && argv[i][1]; i++) {
         if (!strcmp(argv[i], "--")) {
             i++;
             break;
         }
+        if (!strcmp(argv[i], "--help")) {
+            help(stdout);
+            return 0;
+        }
         for (j = 1; argv[i][j]; j++) {
-            switch (argv[i][j]) {
+            c = argv[i][j];
+            opt[0] = (char)c;
+            switch (c) {
+            case 'h':
+                help(stdout);
+                return 0;
             case 'n': opt_dry = 1; break;
-            case 'k': opt_keep = 1; break;
+            case 'p': opt_keep = 1; break;
             case 'q': opt_quiet = 1; break;
-            case 'r': opt_random = 1; break;   /* the default */
-            case 's': opt_random = 0; break;
+            case 'v': opt_verbose = 1; break;
+            case 'H': opt_random = 0; break;
             case 'b': opt_nobackup = 1; break;
             case 'u': undo = 1; break;
-            default: usage();
+            case 'k': usage("%s", "-k is now -p (keep the times)"); break;
+            case 's': usage("%s", "-s is now -H (same hash)"); break;
+            case 'o':
+                if (argv[i][j + 1]) {
+                    out = argv[i] + j + 1;
+                } else if (i + 1 < argc) {
+                    i++;
+                    out = argv[i];
+                } else {
+                    usage("%s", "-o needs a file to write");
+                }
+                if (!out[0])
+                    usage("%s", "-o needs a file to write");
+                goto next;
+            default:
+                usage("unknown option -%s", opt);
             }
         }
+next:
+        ;
     }
+    if (opt_quiet)
+        opt_verbose = 0;
     if (i >= argc)
-        usage();
+        usage("%s", "give the files to clean (- for standard input)");
+    if (undo && (out || opt_nobackup || !opt_random || opt_keep))
+        usage("%s", "-u takes only -n, -q and -v");
+    for (j = i; j < argc; j++) {
+        if (!strcmp(argv[j], "-") && (argc - i > 1 || undo))
+            usage("%s", "- (standard input) goes alone, and not with -u");
+    }
+    if (out && argc - i > 1)
+        usage("%s", "-o makes one copy: give one FILE");
+    if (!out && !strcmp(argv[i], "-"))
+        out = "-";
+    if (out && opt_nobackup)
+        usage("%s", "-b: a copy needs no backup (the FILE stays as it "
+            "was)");
+    if (out && !strcmp(out, "-"))
+        say = stderr;
     set_backup_dir();
+    if (out) {
+        r = clean_copy(argv[i], out);
+        return r ? 1 : 0;
+    }
     bad = 0;
     for (; i < argc; i++) {
-        r = undo ? undo_file(argv[i]) : clean_file(argv[i]);
+        r = undo ? undo_file(argv[i]) : clean_file(argv[i], argv[i]);
         if (r)
             bad = 1;
     }

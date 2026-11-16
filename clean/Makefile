@@ -19,6 +19,9 @@ $(OBJ): clean.h
 clean-bin: $(OBJ)
 	$(CC) $(LDFLAGS) -o $@ $(OBJ)
 
+test: clean-bin
+	sh test/run.sh ./clean-bin
+
 clean:
 	rm -f clean-bin $(OBJ)
 
@@ -30,4 +33,4 @@ install: clean-bin
 uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/clean
 
-.PHONY: all clean install uninstall
+.PHONY: all test clean install uninstall

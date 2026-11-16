@@ -1,14 +1,11 @@
 /* seal: turns a directory into one encrypted file, and back (see
  * README).
  *
- *   seal [-k] [-q] [-s] [-o FILE] DIR     DIR -> DIR.seal, DIR removed
- *   seal -l                               what is unsealed in RAM
- *   unseal [-k] [-n] [-q] [-s] [-f] [-d DIR] FILE
- *                                         FILE -> RAM (or DIR)
- *   unseal -t [-q] [-s] [-f] FILE         check FILE, list what it holds
- *   seal -a                               all in RAM back into their files
- *   seal -c                               remove links whose directory
- *                                         is gone (after a crash)
+ *   seal [-knqsv] [-o FILE] DIR           DIR -> DIR.seal, DIR removed
+ *   unseal [-fknqsvL] [-d DIR] FILE       FILE -> RAM (or DIR)
+ *   unseal -t [-fqs] FILE                 check FILE, list what it holds
+ *   seal -l | -a | -c                     list, seal back all, or remove
+ *                                         dead links (after a crash)
  *
  * unseal is the same program (a link to seal, or seal -u). */
 #define _XOPEN_SOURCE 700
@@ -37,10 +34,13 @@
 struct secret *sec;
 int opt_force;
 int opt_quiet;
+int opt_verbose;
+int opt_dry;
 volatile int stop_now;
 
 static const char *prog = "seal";
 static int opt_keep, opt_stdin, opt_list, opt_all, opt_clean, opt_nolink;
+static int opt_check;      /* unseal -n or -t: read it all, write nothing */
 static const char *opt_out, *opt_dest;
 
 static int tty_fd = -1;
@@ -316,6 +316,11 @@ static long get_pass(const char *what, int twice)
     char prompt[300];
     long n, m;
 
+    if (opt_stdin && isatty(0)) {
+        warn("%s", "-s reads the password from a pipe; on a terminal "
+            "leave -s out (then nothing is echoed)", 0);
+        return -1;
+    }
     if (opt_stdin) {
         n = read_line(0, sec->pass, sizeof sec->pass);
     } else {
@@ -914,6 +919,19 @@ static int cmd_seal(const char *arg)
         return 1;
     }
 
+    if (opt_dry) {
+        r = pack(-1, dir, name, 0, 0, &c);
+        if (r < 0) {
+            warn("%s: it can't be sealed (above)", dir, 0);
+            return 1;
+        }
+        if (!opt_quiet) {
+            counts_text(state, &c);
+            printf("would seal %s -> %s (%s)%s\n", dir, out, state,
+                opt_keep ? "" : ", then remove it");
+        }
+        return 0;
+    }
     pass_len = get_pass(name, 1);
     if (pass_len < 0)
         return 1;
@@ -1029,6 +1047,7 @@ static int cmd_unseal(const char *file)
     unsigned char salt[SALT_SIZE];
     struct counts c;
     struct stat st;
+    const char *s;
     long n, pass_len;
     int fd, r, in_ram;
 
@@ -1051,18 +1070,20 @@ static int cmd_unseal(const char *file)
         return 1;
     }
     in_ram = !opt_dest;
-    if (!opt_list) {
-        if (opt_dest)
-            r = join(dest, opt_dest, "");
-        else
-            r = ram_base(dest, 1);
-        if (r < 0) {
-            warn("%s", in_ram ? "found no RAM directory (tmpfs) to "
-                "unseal into; -d DIR unseals onto the disk" :
-                "the path is too long", 0);
-            close(fd);
-            return 1;
-        }
+    if (opt_dest)
+        r = join(dest, opt_dest, "");
+    else
+        r = ram_base(dest, 1);
+    if (r < 0 && opt_check && in_ram) {
+        strcpy(dest, "RAM");    /* -t needs none; -n only says so */
+        r = 0;
+    }
+    if (r < 0) {
+        warn("%s", in_ram ? "found no RAM directory (tmpfs) to "
+            "unseal into; -d DIR unseals onto the disk" :
+            "the path is too long", 0);
+        close(fd);
+        return 1;
     }
     pass_len = get_pass(file, 0);
     if (pass_len < 0) {
@@ -1078,7 +1099,7 @@ static int cmd_unseal(const char *file)
         return 1;
     }
 
-    if (opt_list) {
+    if (opt_check) {
         r = unpack_rest(0, 1, &c);
         close(fd);
         if (r < 0) {
@@ -1091,6 +1112,26 @@ static int cmd_unseal(const char *file)
             counts_text(text, &c);
             printf("%s/ holds %s\n", name, text);
         }
+        n = join(final, dest, "/");
+        if (n == 0)
+            n = join(final, final, name);
+        if (!opt_dry || n < 0)
+            return r ? 1 : 0;
+        n = lstat(final, &st);
+        if (n == 0) {
+            warn("%s: already there, so it can't be unsealed into it",
+                final, 0);
+            return 1;
+        }
+        if (opt_quiet)
+            return r ? 1 : 0;
+        if (in_ram && !opt_nolink)
+            s = ", with a link next to it";
+        else if (!in_ram && !opt_keep)
+            s = ", then remove it";
+        else
+            s = "";
+        printf("would unseal %s into %s%s\n", file, final, s);
         return r ? 1 : 0;
     }
 
@@ -1173,102 +1214,161 @@ static int cmd_unseal(const char *file)
 
 /* -------------------------------------------------------------- main */
 
-static void usage(void)
+static void help(FILE *f)
 {
-    fprintf(stderr,
-        "usage: seal [-kqs] [-o FILE] DIR   DIR -> DIR.seal, then DIR "
+    fprintf(f,
+        "usage: seal [-knqsv] [-o FILE] DIR   DIR -> DIR.seal, then DIR "
         "goes\n"
-        "       seal -l                     what is unsealed in RAM\n"
-        "       unseal [-knqsf] [-d DIR] FILE  FILE -> RAM, link (-d: "
-        "into DIR)\n"
-        "       unseal -t [-qsf] FILE       check FILE, list it\n"
-        "       seal -a                     seal back all in RAM\n"
-        "       seal -c                     remove dead links\n"
-        "  -k keep DIR (seal) or FILE (unseal -d)  -q quiet\n"
-        "  -n unseal: no link next to FILE\n"
-        "  -s password from standard input  -f go on when it is "
-        "damaged\n");
+        "       unseal [-fknqsvL] [-d DIR] FILE  FILE -> RAM, with a "
+        "link\n"
+        "       unseal -t [-fqs] FILE        check FILE, list what it "
+        "holds\n"
+        "       seal -l                      what is unsealed in RAM\n"
+        "       seal -a                      seal back all of it\n"
+        "       seal -c                      remove dead links\n");
+    fprintf(f,
+        "  -o FILE  seal into FILE (else DIR.seal, or where it came "
+        "from)\n"
+        "  -d DIR   unseal onto the disk, into DIR, and remove FILE\n"
+        "  -k       keep DIR (seal) or FILE (unseal -d)\n"
+        "  -L       unseal: make no link next to FILE\n"
+        "  -n       dry run: check all, say what would happen, change "
+        "nothing\n"
+        "  -t       unseal: check FILE and list it (-n -v)\n"
+        "  -f       unseal: go on when FILE is damaged\n"
+        "  -s       read the password from standard input (a pipe)\n"
+        "  -q       say nothing but errors   -v  name each file\n");
+    fprintf(f,
+        "  -u       seal -u is unseal        -h  this help\n"
+        "Exit status: 0 done, 1 failed (it says why), 2 wrong "
+        "options.\n");
+}
+
+/* a wrong option or argument: say what, and how to get help */
+static void usage(const char *what, const char *arg)
+{
+    fprintf(stderr, "%s: ", prog);
+    fprintf(stderr, what, arg);
+    fprintf(stderr, " (%s -h for help)\n", prog);
     exit(2);
 }
 
 int main(int argc, char **argv)
 {
     const char *s, *arg;
-    int i, j, unseal, r, c;
+    char opt[2];
+    int i, j, unseal, r, c, tlist;
 
+    tlist = 0;
     s = strrchr(argv[0], '/');
     s = s ? s + 1 : argv[0];
     unseal = !strcmp(s, "unseal");
     prog = unseal ? "unseal" : "seal";
     arg = 0;
+    opt[1] = 0;
     for (i = 1; i < argc; i++) {
-        if (argv[i][0] != '-' || !argv[i][1]) {
-            if (arg)
-                usage();
-            arg = argv[i];
-            continue;
-        }
         if (!strcmp(argv[i], "--")) {
-            if (arg || i + 2 != argc)
-                usage();
-            arg = argv[i + 1];
+            i++;
             break;
         }
+        if (!strcmp(argv[i], "--help")) {
+            help(stdout);
+            return 0;
+        }
+        if (argv[i][0] != '-' || !argv[i][1])
+            break;
         for (j = 1; argv[i][j]; j++) {
-            switch (argv[i][j]) {
+            c = argv[i][j];
+            opt[0] = (char)c;
+            switch (c) {
+            case 'h':
+                help(stdout);
+                return 0;
             case 'k': opt_keep = 1; break;
             case 'q': opt_quiet = 1; break;
+            case 'v': opt_verbose = 1; break;
+            case 'n': opt_dry = 1; break;
             case 's': opt_stdin = 1; break;
             case 'f': opt_force = 1; break;
             case 'l': opt_list = 1; break;
-            case 't': opt_list = 1; break;
             case 'a': opt_all = 1; break;
             case 'c': opt_clean = 1; break;
-            case 'n': opt_nolink = 1; break;
+            case 'L': opt_nolink = 1; break;
+            case 't':
+                opt_dry = 1;
+                opt_verbose = 1;
+                tlist = 1;
+                break;
             case 'u':
                 unseal = 1;
                 prog = "unseal";
                 break;
             case 'o':
             case 'd':
-                c = argv[i][j];
                 if (argv[i][j + 1]) {
                     s = argv[i] + j + 1;
                 } else if (i + 1 < argc) {
                     i++;
                     s = argv[i];
                 } else {
-                    usage();
+                    usage("-%s needs an argument", opt);
                 }
+                if (!s[0])
+                    usage("-%s needs an argument", opt);
                 if (c == 'o')
                     opt_out = s;
                 else
                     opt_dest = s;
                 goto next;
             default:
-                usage();
+                usage("unknown option -%s", opt);
             }
         }
 next:
         ;
     }
+    if (i < argc) {
+        arg = argv[i];
+        i++;
+    }
+    if (i < argc && argv[i][0] == '-')
+        usage("options go before the name: %s -h", prog);
+    if (i < argc)
+        usage("one name at a time (%s is one too many)", argv[i]);
+    if (opt_list + opt_all + opt_clean > 1)
+        usage("%s", "-l, -a and -c go alone");
+    if ((opt_list || opt_all || opt_clean) && (unseal || arg || opt_out ||
+        opt_keep || tlist || (opt_dry && !opt_all)))
+    {
+        usage("%s", "seal -l, -a and -c take no name, and no -o, -k, -t "
+            "or -u (-a takes -n)");
+    }
+    if (!unseal && tlist)
+        usage("%s", "-t is for unseal (seal -n -v says what would go "
+            "in)");
+    if (!unseal && (opt_dest || opt_nolink || opt_force))
+        usage("%s", "-d, -L and -f are for unseal");
+    if (unseal && opt_out)
+        usage("%s", "-o is for seal (unseal -d DIR unseals onto the "
+            "disk)");
+    if (unseal && opt_keep && !opt_dest)
+        usage("%s", "unseal -k goes with -d (into RAM, FILE is kept "
+            "anyway)");
+    if (opt_quiet && !tlist)
+        opt_verbose = 0;
+    opt_check = unseal && opt_dry;
+    if (!arg && !opt_list && !opt_all && !opt_clean)
+        usage("%s", unseal ? "give the sealed FILE" : "give the DIR "
+            "to seal");
     setup();
     links_init();
-    if (!unseal && (opt_list || opt_all || opt_clean)) {
-        if (arg || opt_out)
-            usage();
-        if (opt_clean)
-            r = cmd_clean();
-        else if (opt_all)
-            r = cmd_all();
-        else
-            r = cmd_list();
-        finish();
-        return r;
-    }
-    if (!arg)
-        usage();
-    if (unseal)
+    if (opt_clean)
+        r = cmd_clean();
+    else if (opt_all)
+        r = cmd_all();
+    else if (opt_list)
+        r = cmd_list();
+    else if (unseal)
         r = cmd_unseal(arg);
     else
         r = cmd_seal(arg);

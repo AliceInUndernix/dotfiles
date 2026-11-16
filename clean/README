@@ -1,22 +1,21 @@
 clean - takes metadata out of files
 ===================================
 
+SYNOPSIS
+
+    clean [-bHnpqv] FILE...          clean each file, in place
+    clean [-Hnpqv] -o OUT FILE       a clean copy of FILE in OUT
+    clean [-Hnqv] - < IN > OUT       standard input to standard output
+    clean -u [-nqv] FILE...          undo: the newest backup back
+    clean -h                         help
+
+DESCRIPTION
+
 Pictures, documents, video and audio carry more than you see: the camera
 and its serial number, where a photo was taken, who wrote a document
 and with which program, dates, earlier versions, comments. clean takes
 it out, in place: the file is replaced by its clean version, and the
 original is kept in ~/.system/state/clean first.
-
-    clean FILE...          clean each file
-    clean -n FILE...       only say what would go; change nothing
-    clean -k FILE...       keep the files' times
-    clean -q FILE...       say nothing but errors
-    clean -s FILE...       same hash: no random bytes (see "A hash
-                           of its own"); only what goes changes it
-    clean -b FILE...       no backup (then -u can't undo it)
-    clean -u FILE...       undo: put the newest backup back
-
-    find ~/pictures -type f -exec clean -q {} +    a whole directory
 
 It says what it took out:
 
@@ -27,8 +26,60 @@ It says what it took out:
         unused parts (12)
 
 A file it doesn't know, or one that is broken, is left as it was and
-named on stderr (exit status 1), never passed off as clean. Running it
-again on a clean file says "nothing to remove".
+named on stderr, never passed off as clean. Running it again on a
+clean file says "nothing to remove".
+
+OPTIONS
+
+    -o OUT  write a clean copy of FILE to OUT and leave FILE as it was
+            (no backup needed). OUT must not exist yet: clean never
+            writes over a file. With - as FILE the copy comes from
+            standard input; -o - (or just "clean -") writes it to
+            standard output, and the messages go to stderr.
+    -b      no backup (then -u can't undo it)
+    -H      same hash: no new random bytes (see "A hash of its own");
+            only what goes changes the file
+    -p      keep the file's times (else 2000-01-01 00:00 UTC)
+    -n      dry run: say what would go, change nothing (with -u: say
+            which backup would come back)
+    -u      undo: put the newest backup of each FILE back. The backup
+            then goes; -u again puts the one before it back, and so on
+            back to the original.
+    -q      say nothing but errors
+    -v      also say where each backup went
+    -h      help (also --help)
+    --      end of options: a FILE named -x is clean -- -x
+
+Options go before the files; a FILE starting with - needs --.
+
+EXIT STATUS
+
+    0   every file was cleaned (or had nothing to remove)
+    1   a file was not: it is named on stderr, with why, and left as
+        it was (the other files are still cleaned)
+    2   wrong options; nothing was done
+
+EXAMPLES
+
+    clean photo.jpg report.pdf          clean both, in place
+    clean -n photo.jpg                  only look
+    clean -o share.jpg photo.jpg        a clean copy to share
+    clean - < photo.jpg > share.jpg     the same, as a filter
+    clean -u photo.jpg                  oops: the original back
+    find ~/pictures -type f -exec clean -q -H {} +
+                                        a whole directory (-H: see
+                                        "A hash of its own")
+
+From standard input clean works on a copy in RAM ($XDG_RUNTIME_DIR or
+/dev/shm), so the metadata doesn't reach the disk; video and audio
+must fit there.
+
+CHANGED OPTIONS
+
+So that a letter means the same in clean and seal: -k (keep the times)
+is now -p, and -s (same hash) is now -H. The old letters stop with a
+message saying the new one. New: -o, - (standard input), -v, -h, and
+-u going further back each time.
 
 
 What goes
@@ -116,7 +167,7 @@ Pictures are not decoded and encoded again: they stay exactly the
 same. Video and audio can be big, so they are changed where they are:
 what goes becomes padding of the same size, so nothing else moves.
 
-The file's times become 2000-01-01 00:00 UTC (-k keeps them).
+The file's times become 2000-01-01 00:00 UTC (-p keeps them).
 
 
 A hash of its own
@@ -157,9 +208,9 @@ EPUB...    information (or the book's description); in a plain zip,
 
 Nothing of it says "clean". It happens on every run, even when nothing
 else goes ("nothing to remove; new random bytes"), so each copy you
-share gets its own hash; clean -s leaves it out. Running clean over a
+share gets its own hash; clean -H leaves it out. Running clean over a
 whole directory again rewrites every file (and backs each one up),
-so use -s there, or -b. The picture and the sound stay exactly the
+so use -H there, or -b. The picture and the sound stay exactly the
 same: this was checked by decoding each format before and after.
 
 Not the same thing: "perceptual" hashes (PhotoDNA and the like) look at
@@ -224,12 +275,16 @@ Plain C (C89), only libc, static. install.sh builds it into
 By hand (the build makes clean-bin, since "make clean" removes it):
 
     make
+    make test          sample files (made with ImageMagick and ffmpeg;
+                       formats without their tool are skipped), the
+                       command line, and 200 broken copies of each
+                       sample (FUZZ=n make test for more or fewer)
     make PREFIX=$HOME/.system install
 
 Files: clean.c (the command, backups), img.c (JPEG, PNG, GIF, WebP),
 media.c (video, audio, HEIF), ogg.c (Ogg), more.c (AIFF, WMA/WMV,
 TIFF, raw), svg.c (SVG, BMP), zip.c (zip, office documents, EPUB),
-archive.c (tar, gzip), xml.c (edits XML parts), deflate.c (packs the
+archive.c (tar, gzip), test/run.sh (the tests), xml.c (edits XML parts), deflate.c (packs the
 changed parts of zip and gzip files), pdf.c (PDF), rand.c (the random
 bytes), inflate.c (unpacks the compressed parts of PDFs, zip and gzip
 files; it stops at a size limit,

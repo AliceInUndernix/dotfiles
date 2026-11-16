@@ -64,6 +64,10 @@ static int w_flush(int final)
     u8 nonce[24];
     int r;
 
+    if (opt_dry) {          /* seal -n: only count, write nothing */
+        w_n = 0;
+        return 0;
+    }
     make_nonce(nonce, w_no, final);
     aead_lock(sec->out, sec->out + w_n, sec->key, nonce, sec->buf, w_n);
     r = write_all(w_fd, sec->out, w_n + 16);
@@ -475,6 +479,12 @@ static int pack_file(struct stat *st, long plen, struct counts *c)
         return -1;
     }
     left = st2.st_size;
+    if (opt_dry) {          /* readable is all seal -n needs to know */
+        close(fd);
+        c->files++;
+        c->bytes += left;
+        return 0;
+    }
     r = put_head('f', st2.st_mode & 0777, apath, plen);
     if (r == 0)
         r = put_num((unsigned long long)left, 8);
@@ -528,6 +538,8 @@ static int pack_one(struct counts *c)
         return -1;
     }
     if (S_ISDIR(st.st_mode)) {
+        if (opt_verbose)
+            printf("%s/\n", apath);
         c->dirs++;
         r = put_head('d', st.st_mode & 0777, apath, plen);
         if (r < 0)
@@ -541,6 +553,8 @@ static int pack_one(struct counts *c)
                 "the link is too long");
             return -1;
         }
+        if (opt_verbose)
+            printf("%s -> %.*s\n", apath, (int)n, target);
         c->links++;
         r = put_head('l', 0, apath, plen);
         if (r == 0)
@@ -549,8 +563,11 @@ static int pack_one(struct counts *c)
             r = put(target, n);
         return r;
     }
-    if (S_ISREG(st.st_mode))
+    if (S_ISREG(st.st_mode)) {
+        if (opt_verbose)
+            printf("%s\n", apath);
         return pack_file(&st, plen, c);
+    }
     warn("%s: %s", dpath, "a device, pipe or socket: seal can't keep "
         "it, so nothing was sealed");
     return -1;
@@ -878,6 +895,8 @@ int unpack_open(int fd, char *name)
 
 static void list_rec(int t)
 {
+    if (!opt_verbose)
+        return;
     if (t == 'd')
         printf("%s/\n", rec.path);
     else if (t == 'l')
@@ -905,6 +924,7 @@ int unpack_rest(const char *tmp, int list, struct counts *c)
             warn("can't make %s: %s", upath, strerror(errno));
             return -1;
         }
+        list_rec('d');
         add_entry(rec.path, 'd', rec.mode, 0, 0);
         c->dirs++;
     }
@@ -930,6 +950,7 @@ int unpack_rest(const char *tmp, int list, struct counts *c)
             }
             continue;
         }
+        list_rec(t);
         r = unpack_one(tmp, t, c);
         if (r < 0)
             goto failed;
