@@ -20,13 +20,37 @@ HISTSIZE=1000000
 # own Up already searches like this, but its Down does not. Other ksh
 # keep their plain arrows.
 case ${KSH_VERSION:-} in *93*) eval "$(cat <<'EOF'
+# Reads the history lazily: a new search reads the history once into
+# file descriptor 7, and each Up reads only as far as the next match, so
+# a search costs what it finds, not the length of the history (a million
+# commands took seconds when all were read at the first Up).
+_hs_more() {
+	typeset l
+	while IFS= read -u7 -r l; do
+		[[ $l == $'\t'* ]] || continue     # commands start with a Tab
+		l=${l#$'\t'}
+		# a command split over lines with \ at the ends comes back
+		# as one line, the way the shell reads it: shown with the
+		# \ at its end, the next arrow key was taken literally
+		# (it printed ^[[A and the arrows stopped working)
+		if [[ -n $_hs_pend ]]; then l=${_hs_pend%\\}$l _hs_pend=; fi
+		if [[ $l == *\\ ]]; then _hs_pend=$l; continue; fi
+		# leave out lines with control characters (Esc, Ctrl+C...):
+		# pasted terminal junk, not commands, and putting them back
+		# on the line confused the editor
+		[[ $l == *[[:cntrl:]]* ]] && continue
+		[[ $l == "$_hs_prefix"?* && -z ${_hs_seen[$l]-} ]] || continue
+		_hs_seen[$l]=1 _hs_list[_hs_n]=$l
+		_hs_n=$((_hs_n + 1))
+		return 0
+	done
+	return 1
+}
 _hs_key() {
-	typeset dir l n t pend
+	typeset dir l t
 	case ${.sh.edchar} in
 	$'\e[A'|$'\eOA') dir=up ;;
 	$'\e[B'|$'\eOB') dir=down ;;
-	# Enter: update the VPN marker in the prompt (see _vpn_set below)
-	$'\r'|$'\n') _hs_on= ; _vpn_set ; return ;;
 	*) _hs_on= ; return ;;
 	esac
 	# a new search, unless the last key was an arrow (any other key ends
@@ -36,39 +60,24 @@ _hs_key() {
 	# Up/Down then found nothing and seemed stuck. An empty line (after
 	# Ctrl+C) starts over too.
 	if [[ -z $_hs_on || ( -z ${.sh.edtext} && -n $_hs_shown ) ]]; then
-		_hs_on=1 _hs_i=0 _hs_prefix=${.sh.edtext}
+		_hs_on=1 _hs_i=0 _hs_prefix=${.sh.edtext} _hs_pend= _hs_n=0
 		unset _hs_list _hs_seen; typeset -a _hs_list; typeset -A _hs_seen
-		n=0
 		# Only ksh's own commands here, no pipes or programs: running
 		# one from this trap (the old "hist | awk") left the terminal
 		# out of line-editing mode in UTF-8, so the next arrow printed
 		# ^[[A instead of doing nothing.
 		t=$(hist -lnr -$HISTSIZE 2>/dev/null)
-		pend=
-		while IFS= read -r l; do
-			[[ $l == $'\t'* ]] || continue     # commands start with a Tab
-			l=${l#$'\t'}
-			# a command split over lines with \ at the ends comes back
-			# as one line, the way the shell reads it: shown with the
-			# \ at its end, the next arrow key was taken literally
-			# (it printed ^[[A and the arrows stopped working)
-			if [[ -n $pend ]]; then l=${pend%\\}$l pend=; fi
-			if [[ $l == *\\ ]]; then pend=$l; continue; fi
-			# leave out lines with control characters (Esc, Ctrl+C...):
-			# pasted terminal junk, not commands, and putting them back
-			# on the line confused the editor
-			[[ $l == *[[:cntrl:]]* ]] && continue
-			[[ $l == "$_hs_prefix"?* && -z ${_hs_seen[$l]-} ]] || continue
-			_hs_seen[$l]=1 _hs_list[n++]=$l
-		done <<< "$t"
-		unset _hs_seen
+		exec 7<&-
+		exec 7<<< "$t"
 	fi
 	if [[ $dir == up ]]; then
-		(( _hs_i < ${#_hs_list[@]} )) || { .sh.edchar= ; return; }
-		(( _hs_i++ ))
+		if (( _hs_i >= _hs_n )); then
+			_hs_more || { .sh.edchar= ; return; }
+		fi
+		_hs_i=$((_hs_i + 1))
 	else
 		(( _hs_i > 0 )) || { .sh.edchar= ; return; }
-		(( _hs_i-- ))
+		_hs_i=$((_hs_i - 1))
 	fi
 	if (( _hs_i == 0 )); then l=$_hs_prefix; else l=${_hs_list[_hs_i-1]}; fi
 	_hs_shown=$l
@@ -82,50 +91,11 @@ EOF
 
 # Prompt: directory (~ for home), then $ for you or # for root,
 # e.g. "~/dotfiles $ " and "/etc # ".
-_pwd() {
-	case $PWD in
-	"$HOME") printf '~' ;;
-	"$HOME"/*) printf '~%s' "${PWD#"$HOME"}" ;;
-	*) printf '%s' "$PWD" ;;
-	esac
-}
-# Before it, when vpn (net/) is installed: VPN when something is wrong
-# with it or it isn't up yet (vpn status says what), OFF at level -1,
-# else the level when it isn't the usual 2 ("tor dns"): L0 (bare), L1 (vpn),
-# L3 (tor) or SANDBOX.
-# _vpn_set puts it in _vm (only shell builtins, no programs or output);
-# _vpn prints it.
-_vpn_set() {
-	_vm=
-	[ -e /etc/init.d/vpn ] || return 0
-	if [ -e /etc/vpn/off ]; then _vm='OFF '; return 0; fi
-	_s= _l=
-	[ -r /run/vpn/state ] && read -r _s _l < /run/vpn/state
-	if [ -e /run/vpn/fw-off ] || [ "$_s" != ok ]; then
-		_vm='VPN '
-	else
-		case $_l in
-		2) ;;
-		sandbox) _vm='SANDBOX ' ;;
-		*) _vm="L$_l " ;;
-		esac
-	fi
-}
-_vpn() { _vpn_set; printf '%s' "$_vm"; }
-if [ "$(id -u)" -eq 0 ]; then _ps_end='#'; else _ps_end='$'; fi
-PS1='$(_vpn)$(_pwd) '$_ps_end' '
-# ksh93: a prompt that runs code, $(...) or a PS1.get function, gets
-# garbled by its line editor when a new window is resized (dwm resizes
-# every new window): st stayed blank until Ctrl+C or clear. So in ksh93
-# PS1 runs nothing and only uses variables: the directory comes from $PWD,
-# and the VPN marker from _vm, which is set here and again each time
-# you press Enter (in _hs_key above). It shows the state from when your
-# last command started; it still reads only the local files above.
-case ${KSH_VERSION:-} in *93*)
-	_vpn_set
-	PS1='${_vm}${PWD/#"$HOME"/\~} '$_ps_end' '
-	;;
-esac
+if [ "$(id -u)" -eq 0 ]; then
+    PS1='${PWD/#$HOME/\~} # '
+else
+    PS1='${PWD/#$HOME/\~} $ '
+fi
 
 alias ls='ls -F'          # / after directories, * after programs, @ after links; no colours
 alias ll='ls -lh'
