@@ -1575,11 +1575,13 @@ cmd_selftest() {
     [ -z "$phys" ] || st_not "kill switch: nothing goes out on $phys itself" \
         "$(as_nobody "curl -s -o /dev/null -m 10 --interface $phys $WEB")"
     st "Tor's browser port 9150 is Tor" \
-        "curl -s -m 40 --socks5-hostname 127.0.0.1:9150 $TOR_CHECK |
-        grep -q '\"IsTor\":true'"
+        "for i in 1 2; do curl -sS -m 40 --socks5-hostname \\
+        127.0.0.1:9150 $TOR_CHECK | grep -q '\"IsTor\":true' && exit 0
+        done; exit 1"
     st "Tor's program port 9200 is Tor" \
-        "curl -s -m 40 --socks5-hostname 127.0.0.1:9200 $TOR_CHECK |
-        grep -q '\"IsTor\":true'"
+        "for i in 1 2; do curl -sS -m 40 --socks5-hostname \\
+        127.0.0.1:9200 $TOR_CHECK | grep -q '\"IsTor\":true' && exit 0
+        done; exit 1"
     st_clock
     st "proxychains goes through Tor" \
         "$(as_nobody "proxychains -q curl -s -m 40 $TOR_CHECK") |
