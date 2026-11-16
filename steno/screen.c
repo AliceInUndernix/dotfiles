@@ -108,8 +108,9 @@ int scr_width(const char *s)
 void scr_border(int y, int x, int w, int top, const char *title,
     const char *const *keys, int nkeys)
 {
-    int used, i, n, k;
+    int used, i, n, k, all;
     const char *sp;
+    char letters[64];
 
     scr_move(y, x);
     scr_col(C_BOX);
@@ -125,6 +126,43 @@ void scr_border(int y, int x, int w, int top, const char *title,
         scr_put(DEC_ON);
         scr_put(top ? "l" : "m");
         used++;
+    }
+    /* no room for every key: only their letters, "qctsl" */
+    all = used + 1;
+    for (i = 0; i < nkeys; i++)
+        all += scr_width(keys[i]) + 3;
+    if (nkeys && all > w) {
+        /* single letters run together; longer keys (j/k, space)
+         * stand apart */
+        letters[0] = 0;
+        for (i = 0; i < nkeys; i++) {
+            sp = strchr(keys[i], ' ');
+            k = sp ? (int)(sp - keys[i]) : 1;
+            n = strlen(letters);
+            if (n + k + 2 >= (int)sizeof(letters))
+                break;
+            if (n && k > 1 && letters[n - 1] != ' ') {
+                letters[n] = ' ';
+                n++;
+            }
+            memcpy(letters + n, keys[i], k);
+            letters[n + k] = 0;
+            if (k > 1 && i + 1 < nkeys)
+                scat(letters, " ", sizeof(letters));
+        }
+        n = strlen(letters);
+        if (used + n + 4 <= w) {
+            scr_put("q");
+            scr_put(top ? "k" : "j");
+            scr_put(DEC_OFF);
+            scr_col(C_BLUE);
+            scr_put(letters);
+            scr_col(C_BOX);
+            scr_put(DEC_ON);
+            scr_put(top ? "l" : "m");
+            used += n + 3;
+        }
+        nkeys = 0;
     }
     for (i = 0; i < nkeys; i++) {
         n = scr_width(keys[i]);

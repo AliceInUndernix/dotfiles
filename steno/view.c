@@ -411,12 +411,17 @@ static void draw_sugg(int y, int x, int w, int h)
     }
 }
 
-static void draw_box(int which, int y, int x, int w, int h, int last)
+/* the keys under the boxes: under one box all of them; with both, the
+ * tape's under the tape and the rest under the suggestions */
+static const char *const keys_all[] = {
+    "quit", "clear", "tape", "undo", "suggestions", "l lookup", "mouse"
+};
+
+static void draw_box(int which, int y, int x, int w, int h)
 {
-    static const char *const keys_all[] = {
-        "quit", "clear", "tape", "suggestions", "l lookup",
-        "undo", "mouse"
-    };
+    const char *const *keys;
+    int nkeys;
+
     struct box *b;
     char title[64];
     int row;
@@ -442,7 +447,13 @@ static void draw_box(int which, int y, int x, int w, int h, int last)
     scr_title_dim = boxes[!which].shown && focus != which;
     scr_border(y, x, w, 1, title, 0, 0);
     scr_title_dim = 0;
-    scr_border(y + h - 1, x, w, 0, 0, last ? keys_all : 0, last ? 7 : 0);
+    keys = keys_all;
+    nkeys = 7;
+    if (boxes[!which].shown) {
+        keys = which ? keys_all + 4 : keys_all;
+        nkeys = which ? 3 : 4;
+    }
+    scr_border(y + h - 1, x, w, 0, 0, keys, nkeys);
 }
 
 /* the lookup, over the bottom of the screen: what is typed, then the
@@ -496,14 +507,14 @@ static void draw(void)
             wt = cols / 2;
             if (wt < NUM_KEYS + 16)
                 wt = NUM_KEYS + 16;
-            draw_box(0, 0, 0, wt, rows, 0);
-            draw_box(1, 0, wt, cols - wt, rows, 1);
+            draw_box(0, 0, 0, wt, rows);
+            draw_box(1, 0, wt, cols - wt, rows);
         } else {
-            draw_box(0, 0, 0, cols, rows / 2, 0);
-            draw_box(1, rows / 2, 0, cols, rows - rows / 2, 1);
+            draw_box(0, 0, 0, cols, rows / 2);
+            draw_box(1, rows / 2, 0, cols, rows - rows / 2);
         }
     } else {
-        draw_box(boxes[1].shown, 0, 0, cols, rows, 1);
+        draw_box(boxes[1].shown, 0, 0, cols, rows);
     }
     if (finding || nfound)
         draw_find(rows, cols);
