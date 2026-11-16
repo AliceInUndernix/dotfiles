@@ -9,11 +9,14 @@
 #            net/README)
 #   icecat, chromium   the browsers (emerge)
 #
-#   ./install.sh               a numbered menu: type numbers, then Enter
-#                              (Enter alone: everything, as "all")
-#   ./install.sh 1 4 19        the parts with those numbers (0: --deps)
+#   ./install.sh               everything that needs no root, as "all":
+#                              the configs for what is there, no questions
+#   ./install.sh 1 4 19        the parts with those numbers (0: --deps;
+#                              ./install.sh --list shows the order)
+#   ./install.sh --new-pc      a new computer, as root: --deps, all (net
+#                              and slock too) and IceCat; takes hours
 #   ./install.sh nvim dwm      only the parts named
-#   ./install.sh all           everything, without the menu
+#   ./install.sh all           everything that needs no root (as no argument)
 #   ./install.sh all icecat    everything, and the parts named too
 #   ./install.sh check [part]  only look: what is installed, missing or
 #                              out of date (changes nothing)
@@ -46,7 +49,7 @@ umask 022
 DOTFILES=$(cd "$(dirname "$0")" && pwd)
 STAMP=$(date +%Y%m%d-%H%M%S)
 PARTS="ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver moonlander plover net icecat chromium clean seal"
-# only when named (or numbered): not in "all" or Enter alone
+# only when named (or numbered): not in "all" or without arguments
 ONLY_NAMED="icecat chromium"
 
 say()  { printf '==> %s\n' "$*"; }
@@ -1199,46 +1202,6 @@ do_check() {
 	return 1
 }
 
-# --- the menu --------------------------------------------------------------
-
-part_info() {
-	case $1 in
-	ksh) echo "Korn shell settings [root: ksh as login shell]" ;;
-	xdg) echo "Download, Pictures... all in ~" ;;
-	x) echo "xinitrc for startx" ;;
-	nvim) echo "Neovim" ;;
-	dwm|st|dmenu) echo "build and install $1" ;;
-	slock) echo "build and install slock [root]" ;;
-	webarchiver) echo "build and install WebArchiver" ;;
-	clean) echo "build and install clean (takes metadata out of files)" ;;
-	seal) echo "build and install seal and unseal (encrypted directories)" ;;
-	moonlander) echo "QMK and the keyboard's firmware" ;;
-	plover) echo "Plover and Dotterel [root once: group dialout]" ;;
-	net) echo "Riseup VPN, Tor, kill switch (Gentoo, OpenRC) [root]" ;;
-	icecat) echo "IceCat browser, builds for hours (Gentoo) [root]" ;;
-	chromium) echo "ungoogled-chromium, builds for hours (Gentoo) [root]" ;;
-	*) echo "$1 settings" ;;
-	esac
-}
-
-# menu: the parts, numbered; MENU_ANSWER is what was typed.
-menu() {
-	echo "What should install.sh do? Type numbers or names with spaces"
-	echo "between them (like: 1 4 19), then Enter. Enter alone does"
-	echo "everything but the browsers (20, 21: only when typed); parts"
-	echo "marked [root] need: su -c '$DOTFILES/install.sh'"
-	echo "(./install.sh check only looks at what is installed)"
-	echo
-	printf '  %2d  %-12s %s\n' 0 deps "system packages (emerge -qv) [root]"
-	i=1
-	for p in $PARTS; do
-		printf '  %2d  %-12s %s\n' "$i" "$p" "$(part_info "$p")"
-		i=$((i + 1))
-	done
-	printf '> '
-	read -r MENU_ANSWER || MENU_ANSWER=
-}
-
 # --- main -----------------------------------------------------------------
 
 want_deps=no
@@ -1277,21 +1240,14 @@ case ${1:-} in update|--update)
 	/bin/sh "$DOTFILES/install.sh" check || rc=$?
 	exit $rc ;;
 esac
-# no arguments in a terminal: ask (not again in the logged run below)
-if [ $# -eq 0 ] && [ -t 0 ] && [ -z "${INSTALL_LOG:-}" ]; then
-	menu
-	set -f
-	set -- $MENU_ANSWER
-	set +f
-	[ $# -gt 0 ] || set -- all
-fi
 for arg in "$@"; do
 	case $arg in
 	all) want_all=yes ;;
 	--deps|0) want_deps=yes ;;
+	--new-pc) want_deps=yes; want_all=yes; parts="$parts icecat" ;;
 	[1-9]|[1-9][0-9])
 		p=$(echo $PARTS | awk -v n="$arg" '{ print $n }')
-		[ -n "$p" ] || die "there is no part $arg (see the menu: ./install.sh)"
+		[ -n "$p" ] || die "there is no part $arg (see ./install.sh --list)"
 		parts="$parts $p" ;;
 	-a) EMERGE_OPTS=-qva ;;
 	--list) echo "$PARTS"; exit 0 ;;

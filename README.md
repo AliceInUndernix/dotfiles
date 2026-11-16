@@ -102,8 +102,9 @@ pacman, dnf and xbps are also known). Add `-a` to make emerge ask first
 when the dependencies are already there:
 
 ```sh
-./install.sh all        # everything, no menu (all icecat: and IceCat too)
-./install.sh            # a numbered menu (Enter alone: all but the browsers)
+./install.sh            # the configs, no questions (the same as: all)
+./install.sh all        # the same (all icecat: and IceCat too)
+su -c '~user/dotfiles/install.sh --new-pc'   # a new computer: --deps, all, net, slock, IceCat
 ./install.sh nvim       # only some parts: ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver moonlander plover net icecat chromium clean seal
 su -c '~user/dotfiles/install.sh icecat'    # a browser: icecat (20) or chromium (21)
 ./install.sh 4 12       # the same by number (0 is --deps)
@@ -125,7 +126,7 @@ What the script does:
 - **Login shell**: ksh becomes the shell of both the user and root (`chsh`, no password asked; root gets copies of `profile` and `kshrc`, owned by root).
 - **Browsers**: IceCat (`icecat`, 20) and ungoogled-chromium (`chromium`,
   21) are parts of their own, built with emerge (Gentoo, as root). They
-  build from source for hours, so `all` and Enter alone leave them out:
+  build from source for hours, so `all` and no arguments leave them out:
   name or number them. Only the program is installed; their settings and
   profiles are not touched. `./install.sh check` shows whether they are in.
 - **Moonlander**: the layout is in its own repo (below); `moonlander`
