@@ -795,12 +795,14 @@ clock_tor() {
     while [ $n -lt 4 ]; do
         if clock_from "through Tor" tor_epoch; then
             ev "clock: $S_CLOCK"
+            note ""
             return 0
         fi
         n=$((n + 1))
         sleep 5
     done
     ev "clock: no answer through Tor (is Tor up? $RUN/tor.log)"
+    note ""
     return 1
 }
 
