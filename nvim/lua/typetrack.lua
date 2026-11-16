@@ -22,7 +22,8 @@
 -- How it works:
 --   1. The book's text is read by Neovim itself (EPUB: unzip the chapters
 --      in spine order and strip the HTML; PDF: pdftotext, page by page)
---      and split into words. The EPUB table of contents gives the
+--      and split into words. Pictures are skipped, except headings drawn
+--      as pictures and drop caps, which are typed as their alt text. The EPUB table of contents gives the
 --      chapter list for :TypeChapter (PDF: one entry per page).
 --   2. On every change, the buffer's words are lined up with the book
 --      from the chosen start: align() walks along word by word; where a
@@ -279,11 +280,41 @@ for _, t in ipairs({ "p", "div", "h1", "h2", "h3", "h4", "h5", "h6",
   BLOCK[t] = true
 end
 
+-- Pictures are not typed, with two exceptions where the picture is the
+-- printed text and its alt text says what it reads: a heading drawn as
+-- a picture ("Chapter Two"), and a drop cap (a picture of the first
+-- letter, the rest of the word right after it: <img alt="I"/>t was).
+-- Their alt text goes into the text in place of the picture. Other
+-- pictures only separate paragraphs. (Before 2026-11-16 all alt text
+-- was dropped: chapter titles drawn as pictures were missing, and
+-- "It" was expected as "t".)
+local function image_text(s, pos, attrs, after)
+  local alt = attrs:match('%salt%s*=%s*"([^"]*)"')
+    or attrs:match("%salt%s*=%s*'([^']*)'") or ""
+  alt = alt:gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")
+  if alt == "" then return "\n\n" end
+  local before = s:sub(math.max(1, pos - 2000), pos - 1):lower()
+  local open = before:match(".*()<h[1-6][%s>]")
+  local close = before:match(".*()</h[1-6]")
+  if open and (not close or close < open) then return " " .. alt .. " " end
+  local rest = s:sub(after, after + 200)
+  repeat
+    local n
+    rest, n = rest:gsub("^</[^>]*>", "")
+  until n == 0
+  if #alt <= 3 and rest:match("^[%w\128-\255]") then return alt end
+  return "\n\n"
+end
+
 local function html_to_text(s)
   s = s:gsub("<!%-%-.-%-%->", " ")
   s = s:gsub("<[hH][eE][aA][dD][%s>].-</[hH][eE][aA][dD]>", " ")
   s = s:gsub("<script.-</script>", " "):gsub("<style.-</style>", " ")
   s = s:gsub("<[!?][^>]*>", " ")
+  local src = s
+  s = s:gsub("()<[iI][mM][gG](%s[^>]*)>()", function(pos, attrs, after)
+    return image_text(src, pos, attrs, after)
+  end)
   s = s:gsub("<(/?)([%w:]+)[^>]*>", function(_, name)
     name = name:lower():gsub("^.*:", "")
     if name == "br" then return "\n" end
@@ -538,9 +569,18 @@ local function align(book, typed, b, t, done, keep)
           end
         end
       end
-      -- ...or typed words that are not in the book.
+      -- ...or typed words that are not in the book. The word still
+      -- being typed counts too, by its start: without it, a word typed
+      -- for a picture, then Enter and "T", lined "T" up with the word
+      -- after "Then" and the T was red (reported 2026-11-16).
       for j = 1, 3 do
         local s = t + j <= done and fit(t + j, b)
+        if not s and t + j == #typed and t + j > done and book[b]
+            and typed[t + j].key ~= ""
+            and book[b].key:sub(1, #typed[t + j].key) == typed[t + j].key
+        then
+          s = 2
+        end
         if s then
           s = s - 0.6 - 0.25 * (j - 1) + agree(b + 1, t + j + 1)
           if s > best then best, kind, n = s, "extra", j end
