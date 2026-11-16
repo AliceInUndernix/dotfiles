@@ -593,6 +593,8 @@ static int kind_of(int fd, long long size)
         return k_pdf;
     if (is_word(h, "fLaC"))
         return k_flac;
+    if (is_word(h, "OggS"))
+        return k_ogg;
     if (is_word(h, "ID3")) {
         n = id3_size(h);
         if (n + 4 <= size && at_read(fd, n, f, 4) == 0 &&
@@ -623,8 +625,6 @@ static int kind_of(int fd, long long size)
     }
     if (is_word(h, "PK\003\004"))
         why = "zip files (office documents, EPUB) are not supported yet";
-    else if (is_word(h, "OggS"))
-        why = "Ogg (Vorbis, Opus) is not supported yet";
     else if (is_word(h, "II*") || is_word(h, "MM\000*"))
         why = "TIFF and camera raw files are not supported yet";
     else
@@ -700,6 +700,7 @@ static int run_in_place(int fd, long long size, int kind)
     case k_mp3: return clean_mp3(fd, size);
     case k_flac: return clean_flac(fd, size);
     case k_heif: return clean_heif(fd, size);
+    case k_ogg: return clean_ogg(fd, size);
     default: return clean_riff(fd, size);
     }
 }
@@ -779,7 +780,8 @@ static int clean_file(const char *path)
     if (kind == k_unknown)
         r = -1;
     else if (kind == k_mp4 || kind == k_mkv || kind == k_mp3 ||
-        kind == k_flac || kind == k_riff || kind == k_heif)
+        kind == k_flac || kind == k_riff || kind == k_heif ||
+        kind == k_ogg)
     {
         r = clean_in_place(path, abs, fd, &st, kind);
     } else {
@@ -868,8 +870,8 @@ static void usage(void)
         "usage: clean [-n] [-k] [-q] [-r] FILE...\n"
         "       clean -u FILE...\n"
         "Takes the metadata out of each file, in place: JPEG, PNG, GIF,\n"
-        "WebP, HEIF/AVIF, PDF, MP4/MOV/M4A, MKV/WebM, MP3, FLAC, WAV,\n"
-        "AVI.\n");
+        "WebP, HEIF/AVIF, PDF, MP4/MOV/M4A, MKV/WebM, MP3, FLAC, Ogg\n"
+        "(Vorbis, Opus, Theora), WAV, AVI.\n");
     fprintf(stderr,
         "The original goes to ~/.system/state/clean first.\n"
         "  -n  only say what would go; change nothing\n"

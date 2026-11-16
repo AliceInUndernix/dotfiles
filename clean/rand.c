@@ -3,8 +3,9 @@
  * format already allows to vary changes, so the content stays the
  * same: how many fill bytes a JPEG has before its markers, where PNG
  * and GIF split their picture data, the binary bytes on a PDF's second
- * line, and the content of a padding block (MP4, HEIF, Matroska, FLAC,
- * WAV). There is no text or name of ours in it. */
+ * line, the content of a padding block (MP4, HEIF, Matroska, FLAC,
+ * WAV, Ogg, WebP), the "private" bits of MP3 frames. There is no text
+ * or name of ours in it. */
 #define _XOPEN_SOURCE 500
 #include <fcntl.h>
 #include <stdio.h>
@@ -49,12 +50,17 @@ static long rnd(long n)
     return v % n;
 }
 
-static int rand_fill(unsigned char *p, long n)
+void rand_bytes(unsigned char *p, long n)
 {
     long i;
 
     for (i = 0; i < n; i++)
         p[i] = (unsigned char)rand_byte();
+}
+
+static int rand_fill(unsigned char *p, long n)
+{
+    rand_bytes(p, n);
     return 0;
 }
 
@@ -190,6 +196,80 @@ static int rand_pdf(struct buf *in, struct buf *out)
     return 0;
 }
 
+/* WebP: a chunk of 32 random bytes at the end, under a random name of
+ * small letters (readers skip chunks they don't know; theirs are
+ * capitals). A simple WebP gets the extended header that allows it. */
+static int rand_webp(struct buf *in, struct buf *out)
+{
+    unsigned char h[18], c[40];
+    const unsigned char *d;
+    long i, size, total, last, w, ht;
+    int k, alpha;
+
+    i = 12;
+    last = -1;
+    d = 0;
+    alpha = 0;
+    w = 0;
+    ht = 0;
+    while (i + 8 <= in->n) {
+        size = get32le(in->p + i + 4);
+        if (size < 0 || size > in->n - i - 8)
+            return -1;
+        total = 8 + size + (size & 1);
+        if (total > in->n - i)
+            return -1;
+        if (i == 12)
+            d = in->p + i;
+        last = i;
+        i += total;
+    }
+    if (!d || i != in->n)
+        return -1;
+    if (is_word(d, "VP8 ") && get32le(d + 4) >= 10 && d[11] == 0x9d &&
+        d[12] == 0x01 && d[13] == 0x2a)
+    {
+        w = get16le(d + 14) & 0x3fff;
+        ht = get16le(d + 16) & 0x3fff;
+    } else if (is_word(d, "VP8L") && get32le(d + 4) >= 5 && d[8] == 0x2f) {
+        w = (get16le(d + 9) & 0x3fff) + 1;
+        ht = ((get32le(d + 9) >> 14) & 0x3fff) + 1;
+        alpha = (d[12] >> 4) & 1;
+    } else if (!is_word(d, "VP8X")) {
+        return -1;
+    }
+    buf_put(out, in->p, 12);
+    if (!is_word(d, "VP8X")) {
+        if (w < 1 || ht < 1)
+            return -1;
+        memset(h, 0, sizeof h);
+        memcpy(h, "VP8X", 4);
+        put32le(h + 4, 10);
+        h[8] = alpha ? 0x10 : 0;
+        w--;
+        ht--;
+        for (k = 0; k < 3; k++) {
+            h[12 + k] = (unsigned char)(w >> (8 * k) & 0xff);
+            h[15 + k] = (unsigned char)(ht >> (8 * k) & 0xff);
+        }
+        buf_put(out, h, 18);
+    }
+    if (last > 12 && get32le(in->p + last + 4) == 32 &&
+        in->p[last] >= 'a' && in->p[last] <= 'z')
+    {
+        buf_put(out, in->p + 12, last - 12);   /* ours, from before */
+    } else {
+        buf_put(out, in->p + 12, in->n - 12);
+    }
+    for (k = 0; k < 4; k++)
+        c[k] = (unsigned char)('a' + rnd(26));
+    put32le(c + 4, 32);
+    rand_bytes(c + 8, 32);
+    buf_put(out, c, 40);
+    put32le(out->p + 4, out->n - 8);
+    return 0;
+}
+
 int rand_mem(int kind, struct buf *b)
 {
     struct buf out;
@@ -201,6 +281,7 @@ int rand_mem(int kind, struct buf *b)
     case k_png: r = rand_png(b, &out); break;
     case k_gif: r = rand_gif(b, &out); break;
     case k_pdf: r = rand_pdf(b, &out); break;
+    case k_webp: r = rand_webp(b, &out); break;
     default: r = -1; break;
     }
     if (r < 0) {
@@ -344,6 +425,44 @@ static int rand_riff(int fd, long long size)
     return at_write(fd, 4, h, 4) < 0 ? -1 : 1;
 }
 
+/* MP3: the "private" bit of each frame header, which decoders don't
+ * read, set at random in the first frames. Not the first frame (it
+ * may be the encoder's Info frame, which has a checksum over its
+ * header), nor frames whose header a CRC covers. */
+static int rand_mp3(int fd, long long size)
+{
+    unsigned char h[10];
+    long long off;
+    long len;
+    int n, done, r;
+
+    off = 0;
+    r = at_read(fd, 0, h, 10);
+    if (r < 0)
+        return 0;
+    if (is_word(h, "ID3"))
+        off = 10 + ((long long)(h[6] & 127) << 21 | (h[7] & 127) << 14 |
+            (h[8] & 127) << 7 | (h[9] & 127)) + (h[5] & 0x10 ? 10 : 0);
+    done = 0;
+    for (n = 0; n < 1024 && off + 4 <= size; n++) {
+        r = at_read(fd, off, h, 4);
+        if (r < 0)
+            return 0;
+        len = mp3_frame(h);
+        if (len < 4 || off + len > size)
+            break;
+        if (n > 0 && (h[1] & 1)) {
+            h[2] = (unsigned char)((h[2] & 0xfe) | (rand_byte() & 1));
+            r = at_write(fd, off + 2, h + 2, 1);
+            if (r < 0)
+                return -1;
+            done++;
+        }
+        off += len;
+    }
+    return done >= 64 ? 1 : 0;
+}
+
 /* rand_place: 1 done, 0 no room in this file, -1 error */
 int rand_place(int kind, int fd, long long size)
 {
@@ -354,6 +473,8 @@ int rand_place(int kind, int fd, long long size)
     case k_mkv: r = rand_void(fd, size); break;
     case k_flac: r = rand_flac(fd, size); break;
     case k_riff: r = rand_riff(fd, size); break;
+    case k_ogg: r = rand_ogg(fd, size); break;
+    case k_mp3: r = rand_mp3(fd, size); break;
     default: r = 0; break;
     }
     if (r == 1)

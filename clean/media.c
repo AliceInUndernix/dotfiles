@@ -68,7 +68,7 @@ static int encoder_text(int fd, long long size)
 {
     static unsigned char b[65536];
     static const char *names[] = {
-        "x264 - core ", "x265 (build ", "Lavc", "Lavf", "LAME", 0
+        "x264 - core ", "x265 (build ", "Lavc", "Lavf", 0
     };
     long long off;
     long k, i, j, e, wl;
@@ -530,11 +530,112 @@ static int id3_clean(int fd, long long off, long long fsize,
     return at_zero(fd, off + 10, body);
 }
 
+/* mp3_frame: the length of the MPEG audio frame with header h, 0 when
+ * it is not one */
+long mp3_frame(const unsigned char *h)
+{
+    static const int rate1[3][16] = {
+        { 0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384,
+            416, 448, 0 },
+        { 0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320,
+            384, 0 },
+        { 0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256,
+            320, 0 }
+    };
+    static const int rate2[2][16] = {
+        { 0, 32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224,
+            256, 0 },
+        { 0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160,
+            0 }
+    };
+    static const long freq[3] = { 44100, 48000, 32000 };
+    int ver, layer, br, sr, pad;
+    long rate, f;
+
+    if (h[0] != 0xff || (h[1] & 0xe0) != 0xe0)
+        return 0;
+    ver = (h[1] >> 3) & 3;      /* 3 MPEG-1, 2 MPEG-2, 0 MPEG-2.5 */
+    layer = 4 - ((h[1] >> 1) & 3);
+    br = h[2] >> 4;
+    sr = (h[2] >> 2) & 3;
+    pad = (h[2] >> 1) & 1;
+    if (ver == 1 || layer == 4 || br == 0 || br == 15 || sr == 3)
+        return 0;
+    if (ver == 3)
+        rate = rate1[layer - 1][br];
+    else
+        rate = rate2[layer == 1 ? 0 : 1][br];
+    f = freq[sr];
+    if (ver == 2)
+        f /= 2;
+    else if (ver == 0)
+        f /= 4;
+    rate *= 1000;
+    if (layer == 1)
+        return (12 * rate / f + pad) * 4;
+    if (layer == 3 && ver != 3)
+        return 72 * rate / f + pad;
+    return 144 * rate / f + pad;
+}
+
+/* lame_crc: the checksum of LAME's tag (CRC-16, reflected) */
+static long lame_crc(const unsigned char *p, long n)
+{
+    long c, i;
+    int k;
+
+    c = 0;
+    for (i = 0; i < n; i++) {
+        c ^= p[i];
+        for (k = 0; k < 8; k++)
+            c = c & 1 ? (c >> 1) ^ 0xa001 : c >> 1;
+    }
+    return c;
+}
+
+/* lame_tag: where the encoder's tag in the first frame (its Info or
+ * Xing frame) is, -1 when there is none; ok: its checksum was right */
+static long long lame_tag(int fd, long long off, long long size,
+    unsigned char *f, int *ok)
+{
+    static const int side[4] = { 13, 21, 36, 0 };
+    long len, flags, t;
+    int i, r;
+
+    *ok = 0;
+    if (off + 4 > size)
+        return -1;
+    r = at_read(fd, off, f, 4);
+    if (r < 0)
+        return -1;
+    len = mp3_frame(f);
+    if (len < 40 || len > 2048 || off + len > size)
+        return -1;
+    r = at_read(fd, off, f, len);
+    if (r < 0)
+        return -1;
+    for (i = 0; side[i]; i++) {
+        if (is_word(f + side[i], "Info") || is_word(f + side[i], "Xing"))
+            break;
+    }
+    if (!side[i])
+        return -1;
+    flags = get32be(f + side[i] + 4);
+    t = side[i] + 8 + (flags & 1 ? 4 : 0) + (flags & 2 ? 4 : 0) +
+        (flags & 4 ? 100 : 0) + (flags & 8 ? 4 : 0);
+    if (t + 36 > len)
+        return -1;
+    *ok = lame_crc(f, t + 34) == get16be(f + t + 34);
+    return t;
+}
+
 int clean_mp3(int fd, long long size)
 {
+    static unsigned char f[2048];
     unsigned char t[3];
-    long long total;
-    int r;
+    long long total, tag;
+    long c;
+    int r, ok;
 
     r = id3_clean(fd, 0, size, &total);
     if (r < 0)
@@ -549,7 +650,26 @@ int clean_mp3(int fd, long long size)
         }
         size -= 128;
     }
-    return encoder_text(fd, size);
+    /* the encoder's name and version in its tag (in the first frame)
+     * become "LAME": players read the gap at each end from the tag
+     * only when it starts with a name they know. (LAME's name in the
+     * other frames stays: those bytes are read as sound.) */
+    tag = lame_tag(fd, total, size, f, &ok);
+    if (tag < 0 || !memcmp(f + tag, "LAME     ", 9))
+        return 0;
+    note("encoder settings");
+    if (dry_run)
+        return 0;
+    memcpy(f + tag, "LAME     ", 9);
+    if (ok) {
+        c = lame_crc(f, (long)tag + 34);
+        f[tag + 34] = (unsigned char)(c >> 8);
+        f[tag + 35] = (unsigned char)(c & 0xff);
+    }
+    r = at_write(fd, total + tag, f + tag, 9);
+    if (r == 0 && ok)
+        r = at_write(fd, total + tag + 34, f + tag + 34, 2);
+    return r;
 }
 
 /* ------------------------------------------------------------ FLAC */

@@ -9,7 +9,7 @@ struct buf {
 
 enum {
     k_unknown, k_jpeg, k_png, k_gif, k_webp, k_pdf,
-    k_mp4, k_mkv, k_mp3, k_flac, k_riff, k_heif
+    k_mp4, k_mkv, k_mp3, k_flac, k_riff, k_heif, k_ogg
 };
 
 /* clean.c */
@@ -53,6 +53,8 @@ int clean_mp3(int fd, long long size);
 int clean_flac(int fd, long long size);
 int clean_riff(int fd, long long size);
 int clean_heif(int fd, long long size);
+int clean_ogg(int fd, long long size);
+int rand_ogg(int fd, long long size);
 
 /* img.c: notes what EXIF (from its TIFF header) holds; orient: its
  * orientation, when not 0 */
@@ -63,11 +65,16 @@ int at_fill(int fd, long long off, long long n, int c);
  * -1 when the file doesn't end where its elements say */
 long long mkv_last(int fd, long long size);
 
+/* media.c: the length of the MPEG audio frame with header h; 0 when it
+ * is not one */
+long mp3_frame(const unsigned char *h);
+
 /* rand.c: random bytes where the format lets things vary, so the file
  * gets a hash of its own; 1 when done (notes it), 0 when there is no
  * room, -1 on error */
 int rand_mem(int kind, struct buf *b);
 int rand_place(int kind, int fd, long long size);
+void rand_bytes(unsigned char *p, long n);
 
 /* inflate.c: zlib data in, at most max bytes out; -1 when broken or
  * bigger than max (a zip bomb stops there) */
