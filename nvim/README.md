@@ -33,9 +33,6 @@ mention `nvim-config/nvim` now mean this `nvim/` directory.
 |---|---|
 | `Space p` / `:Prose` | Prose mode on and off |
 | `Space s` | Spell check on and off |
-| `Space g` | Proofread the file with Claude |
-| `Space f` | Apply Claude's fix under the cursor |
-| `Space G` | Clear Claude's marks (`:ClaudeLog` shows its last answer) |
 | `Space t` | Book typing check on and off |
 | `Space T` | Book typing with ghost text on and off |
 | `Space w` | Save |
@@ -46,7 +43,6 @@ mention `nvim-config/nvim` now mean this `nvim/` directory.
 | `saiw"` / `sd"` / `sr"'` | Add / delete / replace quotes or brackets around |
 | `Space` and wait | A box lists the keys that can follow (which-key) |
 | `Esc` | Clear search highlight |
-| `]d` / `[d` | Next / previous grammar or Claude mark |
 
 ## Two modes
 
@@ -101,24 +97,6 @@ feel like one tab. Real tab characters in existing files are left alone
 Trailing spaces show as dim `·` (not while you type), no-break spaces
 as `␣`, and `›` / `‹` mark lines that go past the screen edge.
 `:s/old/new` shows its changes live while you type.
-
-## Proofread with Claude (optional)
-
-`Space g` sends the file you are in to Claude (Sonnet, low effort) and
-underlines the exact words it thinks are wrong. Rest the cursor on them
-to see why and the suggested fix; `Space f` applies it. `]d` / `[d` jump
-between marks, `Space G` clears them, `:ClaudeLog` shows Claude's last
-raw answer (saved on your computer only).
-Nothing in your file changes unless you press `Space f`.
-
-Setup, once: install Claude Code (https://claude.com/claude-code), run
-`claude` in a terminal and sign in with your Claude account.
-
-Privacy: only the text of the current file is sent, piped in directly.
-Claude runs with every tool switched off and no connectors, from an empty
-temporary directory, so it cannot open other files or run commands. API-key
-variables are removed, so it always uses your signed-in account. The text
-does go to Claude online and counts toward your usage.
 
 ## Terminal theme
 

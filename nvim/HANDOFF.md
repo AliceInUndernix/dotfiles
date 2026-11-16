@@ -26,8 +26,7 @@ nvim/
   `/etc/portage/package.accept_keywords/neovim`; whether they finished
   is unknown. The config must keep working on 0.11 (no `vim.pack`).
 - Writes fiction with stenography (Plover). Spelling comes from steno,
-  so spell checks are off by default; grammar and misstroke checks are
-  wanted.
+  so spell checks are off by default.
 - Terminal: st 0.9.3 (patched, see `st/UPSTREAM`), often with tmux,
   under dwm on X11. Changes go to the dotfiles repo; `~/.config/nvim` is
   a symlink to it, so nothing needs copying.
@@ -47,8 +46,6 @@ nvim/
 | Remember cursor, folds, undo between sessions | undofile/viewdir/shada in stdpath("state"), mkview/loadview autocmds | not confirmed |
 | Single Enter must not be pulled back into the paragraph | `pencil#autoformat = 0`; `gqip` to re-wrap | fixed after user report, not confirmed |
 | Arrows move by screen line in prose mode only | buffer-local gj/gk maps added on_open, removed on_close | not confirmed |
-| Claude proofreading with the signed-in account, current file only | `Space g`: `claude -p` with no tools, no MCP, empty cwd, API-key vars unset, Sonnet, low effort | user ran it; it over-marked fine lines |
-| Show exact words, explain, offer a fix, work in prose mode | diagnostics with col ranges, popup on CursorHold, `Space f` applies | prompt tightened after over-marking, not confirmed |
 | Spell check toggle | `Space s` | not confirmed |
 | plover-vim | only plover-vim-tutor help pages installed; user is NOT using plover-vim yet (doesn't want to learn Emily's modifiers) but wants the line kept | `:help plover-vim-tutorial` opened in a test |
 | Em dash etc. from Plover arrived as "2014" | insert-mode `<C-S-u>` expr map reads hex digits and inserts the character; st sends Ctrl+Shift+U as CSI u, tmux has extended-keys on | key tested reaching Neovim in st and st+tmux; real Plover symbol not confirmed |
@@ -69,10 +66,7 @@ nvim/
 3. **Plover unicode fix: terminal side done.** st and tmux now pass
    Ctrl+Shift+U to Neovim (tested). Not yet confirmed with Plover itself;
    if digits still appear, check that st and tmux were rebuilt/reloaded.
-4. **Claude proofreading accuracy.** After the prompt was tightened, it
-   has not been re-tested. `:ClaudeLog` shows the raw answer; ask the
-   user to paste it if marks look wrong.
-5. **init.lua itself has not been run by Claude** (only the Ctrl+Shift+U
+4. **init.lua itself has not been run by Claude** (only the Ctrl+Shift+U
    key test, on an older Neovim). The user's reports confirm the rest.
    Ask for `:messages` output if anything errors on start.
 
@@ -82,7 +76,7 @@ nvim/
 - Keep everything that must work without plugins above the plugin
   section in init.lua: the file `return`s early if zen-mode or pencil
   fail to download.
-- Leader is Space. Taken: w, p, s, g, f, G, t, T, Space, /, b, h.
+- Leader is Space. Taken: w, p, s, t, T, Space, /, b, h.
 - No Tree-sitter plugin and no Harper (dropped 2026-11-15 at the user's
   request): Vim's built-in syntax is enough, and Harper needed Rust. The
   user does not want LSP completion or error checking for code (asked
@@ -90,9 +84,8 @@ nvim/
   Declined for now: gitsigns, vim-fugitive, language servers.
   vim-tmux-navigator was tried and removed at the user's request (2026-11-12).
 - Keep the plover-vim-tutor line.
-- Keep `claude` locked down: no tools, `--strict-mcp-config`, empty cwd,
-  `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` removed, only the current
-  buffer on stdin. The user asked for exactly this.
+- No Claude (or other AI) grammar check or proofreading: removed
+  2026-11-16 at the user's request.
 - Say plainly what was and wasn't tested. Commit and push changes to
   main in the dotfiles repo.
 

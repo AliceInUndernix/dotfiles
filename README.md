@@ -198,8 +198,8 @@ starts a new session.
 
 ## Neovim
 
-`nvim/README.md` is the user guide (keys, prose mode, grammar check,
-Claude proofreading, Sioyek tracker) and `nvim/HANDOFF.md` records
+`nvim/README.md` is the user guide (keys, prose mode, book typing
+check, Sioyek tracker) and `nvim/HANDOFF.md` records
 earlier decisions and open issues. Its rules: stay close to Neovim
 defaults, no plugin manager, keep working on 0.11. Plugins download
 themselves on first start if missing; `install.sh` puts the archived

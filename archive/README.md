@@ -50,4 +50,3 @@ directory's `sha256sums.txt`. The git snapshots were made with
 - **Moonlander:** optozorax's keymap and libraries, and the notes on
   ZSA's QMK fork, are in the moonlander repo
   (https://github.com/AliceInUndernix/moonlander, its `archive/`).
-- **Claude Code**, used by the Neovim proofreading key.
