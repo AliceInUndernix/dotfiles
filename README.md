@@ -14,7 +14,7 @@ script puts the whole configuration back after a fresh install.
 | `dmenu/` | dmenu 5.4 source (launcher), `dmenu_apps` and its list `apps` | `~/.system/bin/dmenu`, `dmenu_apps`, `~/.config/dmenu/apps` |
 | `slock/` | slock 1.7 source (screen locker; Mod+Shift+l locks, Mod+Ctrl+Shift+z suspends) | `~/.system/bin/slock` |
 | `webarchiver/` | WebArchiver, our own C program: archives whole websites with wget for offline reading, keeps them updated with version history (`webarchiver/README`) | `~/.system/bin/webarchiver` |
-| `clean/` | clean, our own C program: takes metadata out of pictures, PDFs, video and audio, in place, with a backup (`clean/README`) | `~/.system/bin/clean` |
+| `clean/` | clean, our own C program: takes metadata out of pictures, documents, video and audio, in place, with a backup (`clean/README`) | `~/.system/bin/clean` |
 | `nvim/` | Neovim config (0.11+, no plugin manager) | `~/.config/nvim` (symlink), `~/.system/bin/vim` -> nvim (first in PATH) |
 | `tmux/` | tmux config | `~/.config/tmux/tmux.conf` (symlink) |
 | `ksh/` | Korn shell: `profile` (PATH, EDITOR), `kshrc` (prompt, emacs keys, aliases) and `termcheck` (finds why a new terminal shows no prompt) | `~/.profile`, `~/.kshrc` (symlinks); ksh becomes the login shell of the user and root |

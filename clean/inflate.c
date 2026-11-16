@@ -1,7 +1,7 @@
 /* inflate: undoes zlib's deflate (RFC 1950/1951 describe it), for the
- * packed objects inside PDF files. Written from the description, in
- * the way of Mark Adler's puff.c: slow and small. Stops at max bytes,
- * so a zip bomb can't fill the memory. */
+ * packed objects inside PDF files and the parts of zip files. Written
+ * from the description, in the way of Mark Adler's puff.c: slow and
+ * small. Stops at max bytes, so a zip bomb can't fill the memory. */
 #include <string.h>
 
 #include "clean.h"
@@ -268,20 +268,16 @@ static int dynamic(struct inf *s)
     return codes(s, &lencode, &distcode);
 }
 
-int inflate_zlib(const unsigned char *in, long n, struct buf *out, long max)
+static int run(const unsigned char *in, long n, long pos, struct buf *out,
+    long max)
 {
     struct inf s;
     int last, type, r;
 
-    if (n < 2 || (in[0] & 0x0f) != 8 || (get16be(in) % 31) != 0 ||
-        (in[1] & 0x20))
-    {
-        return -1;
-    }
     memset(&s, 0, sizeof s);
     s.in = in;
     s.n = n;
-    s.pos = 2;
+    s.pos = pos;
     s.out = out;
     s.max = max;
     do {
@@ -301,4 +297,19 @@ int inflate_zlib(const unsigned char *in, long n, struct buf *out, long max)
             return -1;
     } while (!last);
     return 0;
+}
+
+int inflate_zlib(const unsigned char *in, long n, struct buf *out, long max)
+{
+    if (n < 2 || (in[0] & 0x0f) != 8 || (get16be(in) % 31) != 0 ||
+        (in[1] & 0x20))
+    {
+        return -1;
+    }
+    return run(in, n, 2, out, max);
+}
+
+int inflate_raw(const unsigned char *in, long n, struct buf *out, long max)
+{
+    return run(in, n, 0, out, max);
 }

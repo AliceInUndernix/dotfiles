@@ -575,6 +575,7 @@ static long id3_size(const unsigned char *h)
 
 static int kind_of(int fd, long long size)
 {
+    static unsigned char x[4096];
     int rc;
     unsigned char h[64], f[4];
     long n;
@@ -633,12 +634,32 @@ static int kind_of(int fd, long long size)
     {
         return k_mp4;
     }
-    if (is_word(h, "PK\003\004"))
-        why = "zip files (office documents, EPUB) are not supported yet";
-    else if (is_word(h, "II*") || is_word(h, "MM\000*"))
-        why = "TIFF and camera raw files are not supported yet";
-    else
-        why = "not a kind of file clean knows";
+    if (is_word(h, "FORM") &&
+        (is_word(h + 8, "AIFF") || is_word(h + 8, "AIFC")))
+    {
+        return k_aiff;
+    }
+    if (!memcmp(h, "\060\046\262\165\216\146\317\021", 8))
+        return k_asf;
+    /* TIFF; ORF (Olympus) is IIRO, IIRS or MMOR, RW2 (Panasonic) IIU */
+    if (is_word(h, "II*") || !memcmp(h, "MM\000*", 4) || is_word(h, "IIRO") ||
+        is_word(h, "IIRS") || is_word(h, "MMOR") || is_word(h, "IIU"))
+    {
+        return k_tiff;
+    }
+    if (h[0] == 'B' && h[1] == 'M' && (get32le(h + 14) == 40 ||
+        get32le(h + 14) == 52 || get32le(h + 14) == 56 ||
+        get32le(h + 14) == 108 || get32le(h + 14) == 124))
+    {
+        return k_bmp;
+    }
+    n = size < (long long)sizeof x ? (long)size : (long)sizeof x;
+    rc = at_read(fd, 0, x, n);
+    if (rc == 0 && is_svg(x, n))
+        return k_svg;
+    if (is_word(h, "PK\003\004") || is_word(h, "PK\005\006"))
+        return k_zip;
+    why = "not a kind of file clean knows";
     return k_unknown;
 }
 
@@ -651,6 +672,9 @@ static int run_in_memory(int kind, struct buf *in, struct buf *out)
     case k_png: return clean_png(in->p, in->n, out);
     case k_gif: return clean_gif(in->p, in->n, out);
     case k_webp: return clean_webp(in->p, in->n, out);
+    case k_svg: return clean_svg(in->p, in->n, out);
+    case k_bmp: return clean_bmp(in->p, in->n, out);
+    case k_zip: return clean_zip(in->p, in->n, out);
     default: return clean_pdf(in->p, in->n, out);
     }
 }
@@ -714,6 +738,9 @@ static int run_in_place(int fd, long long size, int kind)
     case k_flac: return clean_flac(fd, size);
     case k_heif: return clean_heif(fd, size);
     case k_ogg: return clean_ogg(fd, size);
+    case k_aiff: return clean_aiff(fd, size);
+    case k_asf: return clean_asf(fd, size);
+    case k_tiff: return clean_tiff(fd, size);
     default: return clean_riff(fd, size);
     }
 }
@@ -805,7 +832,7 @@ static int clean_file(const char *path)
         r = -1;
     else if (kind == k_mp4 || kind == k_mkv || kind == k_mp3 ||
         kind == k_flac || kind == k_riff || kind == k_heif ||
-        kind == k_ogg)
+        kind == k_ogg || kind == k_aiff || kind == k_asf || kind == k_tiff)
     {
         r = clean_in_place(path, abs, fd, &st, kind);
     } else {
@@ -898,9 +925,12 @@ static void usage(void)
     fprintf(stderr,
         "usage: clean [-n] [-k] [-q] [-r] FILE...\n"
         "       clean -u FILE...\n"
-        "Takes the metadata out of each file, in place: JPEG, PNG, GIF,\n"
-        "WebP, HEIF/AVIF, PDF, MP4/MOV/M4A, MKV/WebM, MP3, FLAC, Ogg\n"
-        "(Vorbis, Opus, Theora), WAV, AVI.\n");
+        "Takes the metadata out of each file, in place.\n"
+        "Pictures: JPEG, PNG, GIF, WebP, HEIF/AVIF, TIFF, camera raw,\n"
+        "SVG, BMP. Documents: PDF, DOCX/XLSX/PPTX, ODT/ODS/ODP, EPUB,\n"
+        "zip. Video and audio: MP4/MOV/M4A, MKV/WebM, AVI, WMV/WMA,\n");
+    fprintf(stderr,
+        "MP3, AAC, FLAC, Ogg (Vorbis, Opus, Theora), WAV, AIFF.\n");
     fprintf(stderr,
         "The original goes to ~/.system/state/clean first.\n"
         "  -n  only say what would go; change nothing\n"

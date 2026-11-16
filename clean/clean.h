@@ -9,7 +9,8 @@ struct buf {
 
 enum {
     k_unknown, k_jpeg, k_png, k_gif, k_webp, k_pdf,
-    k_mp4, k_mkv, k_mp3, k_flac, k_riff, k_heif, k_ogg
+    k_mp4, k_mkv, k_mp3, k_flac, k_riff, k_heif, k_ogg, k_aiff, k_asf,
+    k_tiff, k_svg, k_bmp, k_zip
 };
 
 /* clean.c */
@@ -43,6 +44,15 @@ int clean_png(const unsigned char *in, long n, struct buf *out);
 int clean_gif(const unsigned char *in, long n, struct buf *out);
 int clean_webp(const unsigned char *in, long n, struct buf *out);
 int clean_pdf(const unsigned char *in, long n, struct buf *out);
+int clean_svg(const unsigned char *in, long n, struct buf *out);
+int clean_bmp(const unsigned char *in, long n, struct buf *out);
+int clean_zip(const unsigned char *in, long n, struct buf *out);
+int rand_zip(const unsigned char *in, long n, struct buf *out);
+
+/* svg.c: 1 when the file starts like an SVG drawing; bmp_end: where a
+ * BMP's last part ends (-1 when it is broken) */
+int is_svg(const unsigned char *p, long n);
+long bmp_end(const unsigned char *p, long n);
 
 /* Cleaners that change the file where it is, without moving anything
  * (big files: video, audio). With dry_run set they only look. 0 when
@@ -55,6 +65,12 @@ int clean_riff(int fd, long long size);
 int clean_heif(int fd, long long size);
 int clean_ogg(int fd, long long size);
 int rand_ogg(int fd, long long size);
+int clean_aiff(int fd, long long size);
+int rand_aiff(int fd, long long size);
+int clean_asf(int fd, long long size);
+int rand_asf(int fd, long long size);
+int clean_tiff(int fd, long long size);
+int rand_tiff(int fd, long long size);
 
 /* img.c: notes what EXIF (from its TIFF header) holds; orient: its
  * orientation, when not 0 */
@@ -76,6 +92,29 @@ int rand_mem(int kind, struct buf *b);
 int rand_place(int kind, int fd, long long size);
 void rand_bytes(unsigned char *p, long n);
 
+/* xml.c: edits XML by rules. what: x_elem the element goes (when value
+ * is set, only one holding it), x_text its text becomes value, x_attr
+ * the attribute goes, x_aval its value becomes value, x_target a file:
+ * address keeps only its last part, x_comments comments go (name "").
+ * A name ending in '*' takes every name it starts. The rules end with
+ * what 0. note: what clean says went. */
+enum { x_end, x_elem, x_text, x_attr, x_aval, x_target, x_comments };
+
+struct xrule {
+    int what;
+    const char *name;
+    const char *value;
+    const char *note;
+};
+
+int xml_edit(const struct xrule *rules, const unsigned char *p, long n,
+    struct buf *out);
+long xml_find(const unsigned char *p, long n, long i, const char *w);
+
 /* inflate.c: zlib data in, at most max bytes out; -1 when broken or
  * bigger than max (a zip bomb stops there) */
 int inflate_zlib(const unsigned char *in, long n, struct buf *out, long max);
+int inflate_raw(const unsigned char *in, long n, struct buf *out, long max);
+
+/* deflate.c: packs n bytes (raw deflate, as in zip files) */
+void deflate_raw(const unsigned char *in, long n, struct buf *out);

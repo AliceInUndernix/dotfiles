@@ -166,7 +166,7 @@ static int rand_gif(struct buf *in, struct buf *out)
     }
     k = 0;
     while (k < d.n) {
-        s = 128 + rnd(128);
+        s = 1 + rnd(d.n - k < 255 ? d.n - k : 255);
         if (s > d.n - k)
             s = d.n - k;
         buf_byte(out, (int)s);
@@ -267,6 +267,45 @@ static int rand_webp(struct buf *in, struct buf *out)
     return 0;
 }
 
+/* SVG: 32 random spaces, tabs and line ends after the drawing, where
+ * XML allows any; what was there before goes first */
+static int rand_svg(struct buf *in, struct buf *out)
+{
+    static const char white[3] = { ' ', '\t', '\n' };
+    long n, k;
+
+    n = in->n;
+    while (n > 0 && (in->p[n - 1] == ' ' || in->p[n - 1] == '\t' ||
+        in->p[n - 1] == '\n' || in->p[n - 1] == '\r'))
+    {
+        n--;
+    }
+    if (n == 0)
+        return -1;
+    buf_put(out, in->p, n);
+    buf_byte(out, '\n');
+    for (k = 0; k < 32; k++)
+        buf_byte(out, white[rnd(3)]);
+    buf_byte(out, '\n');
+    return 0;
+}
+
+/* BMP: 32 random bytes after the picture (the old ones go first) */
+static int rand_bmp(struct buf *in, struct buf *out)
+{
+    unsigned char b[32];
+    long end;
+
+    end = bmp_end(in->p, in->n);
+    if (end < 0)
+        return -1;
+    buf_put(out, in->p, end);
+    rand_bytes(b, 32);
+    buf_put(out, b, 32);
+    put32le(out->p + 2, out->n);
+    return 0;
+}
+
 int rand_mem(int kind, struct buf *b)
 {
     struct buf out;
@@ -279,6 +318,9 @@ int rand_mem(int kind, struct buf *b)
     case k_gif: r = rand_gif(b, &out); break;
     case k_pdf: r = rand_pdf(b, &out); break;
     case k_webp: r = rand_webp(b, &out); break;
+    case k_svg: r = rand_svg(b, &out); break;
+    case k_bmp: r = rand_bmp(b, &out); break;
+    case k_zip: r = rand_zip(b->p, b->n, &out); break;
     default: r = -1; break;
     }
     if (r < 0) {
@@ -457,7 +499,7 @@ static int rand_mp3(int fd, long long size)
     unsigned char h[10];
     long long off;
     long len;
-    int n, done, r;
+    int n, done, r, adts, mask;
 
     off = 0;
     r = at_read(fd, 0, h, 10);
@@ -471,11 +513,22 @@ static int rand_mp3(int fd, long long size)
         r = at_read(fd, off, h, 4);
         if (r < 0)
             return 0;
-        len = mp3_frame(h);
-        if (len < 4 || off + len > size)
+        adts = h[0] == 0xff && (h[1] & 0xf6) == 0xf0;
+        if (adts) {
+            r = at_read(fd, off, h, 6);
+            if (r < 0)
+                return 0;
+            len = (long)(h[3] & 3) << 11 | (long)h[4] << 3 | h[5] >> 5;
+        } else {
+            len = mp3_frame(h);
+        }
+        if (len < 7 || off + len > size)
             break;
+        /* AAC (ADTS) has a private bit too, 0x02; a CRC covers it when
+         * the "no CRC" bit is not set */
         if (n > 0 && (h[1] & 1)) {
-            h[2] = (unsigned char)((h[2] & 0xfe) | (rand_byte() & 1));
+            mask = adts ? 2 : 1;
+            h[2] = (unsigned char)((h[2] & ~mask) | (rand_byte() & mask));
             r = at_write(fd, off + 2, h + 2, 1);
             if (r < 0)
                 return -1;
@@ -498,6 +551,9 @@ int rand_place(int kind, int fd, long long size)
     case k_riff: r = rand_riff(fd, size); break;
     case k_ogg: r = rand_ogg(fd, size); break;
     case k_mp3: r = rand_mp3(fd, size); break;
+    case k_aiff: r = rand_aiff(fd, size); break;
+    case k_asf: r = rand_asf(fd, size); break;
+    case k_tiff: r = rand_tiff(fd, size); break;
     default: r = 0; break;
     }
     if (r == 1)

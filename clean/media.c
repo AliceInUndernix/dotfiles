@@ -708,6 +708,12 @@ int clean_mp3(int fd, long long size)
      * become "LAME": players read the gap at each end from the tag
      * only when it starts with a name they know. (LAME's name in the
      * other frames stays: those bytes are read as sound.) */
+    /* AAC in ADTS frames: FFmpeg puts its name into the first one */
+    r = -1;
+    if (total + 2 <= size)
+        r = at_read(fd, total, f, 2);
+    if (r == 0 && f[0] == 0xff && (f[1] & 0xf6) == 0xf0)
+        return encoder_text(fd, size);
     tag = lame_tag(fd, total, size, f, &ok);
     if (tag < 0 || !memcmp(f + tag, "LAME     ", 9))
         return 0;

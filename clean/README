@@ -1,7 +1,7 @@
 clean - takes metadata out of files
 ===================================
 
-Pictures, PDFs, video and audio carry more than you see: the camera
+Pictures, documents, video and audio carry more than you see: the camera
 and its serial number, where a photo was taken, who wrote a document
 and with which program, dates, earlier versions, comments. clean takes
 it out, in place: the file is replaced by its clean version, and the
@@ -43,6 +43,20 @@ PNG        text (author, program, comments), date, EXIF, pixel size,
            program chunks, anything after the picture
 GIF        comments, XMP, program data (the loop setting stays)
 WebP       EXIF (rotation kept), XMP
+TIFF       camera, program, dates, author, computer name, copyright,
+           description, XMP, IPTC/Photoshop (and its layers), GPS,
+           EXIF, Windows' tags, rating, unique ID
+camera raw DNG, NEF, CR2, ARW, ORF, RW2, PEF (all built on TIFF): the
+           same, but what raw programs need to show the picture stays:
+           the camera's make and model, the EXIF exposure data and the
+           maker notes. Out of EXIF go the dates, serial numbers,
+           owner's name, comment and unique ID; out of DNG the camera's
+           serial number and the original raw file and its name.
+SVG        comments, metadata (author, title, licence), the editor's
+           settings, file names and directories Inkscape writes into it
+           (where it was exported to), the program's name,
+           Illustrator's private copy of the drawing
+BMP        a colour profile's file name (a path on the computer)
 HEIF, AVIF EXIF (camera, GPS, dates) and XMP, blanked where they are
            (the rotation is not in EXIF in these files)
 PDF        document information (author, title, program, dates), XMP
@@ -60,8 +74,35 @@ MP3        ID3v2 and ID3v1 tags (titles, pictures, comments, program),
            the encoder's name and version in its tag (it becomes
            "LAME", which players need to find the gaps at each end)
 Ogg        tags of Vorbis, Opus and Theora (titles, comments, program)
+AAC        the encoder's name (ID3 tags, as in MP3)
 FLAC       tags, pictures, program data
 WAV, AVI   INFO tags, ID3, recorder data (bext), XMP
+AIFF       name, author, copyright, notes, comments, ID3, XMP, program
+           data
+WMA, WMV   tags (title, author, copyright, description, program,
+           encoder settings, more tags), branding, the creation date,
+           the file ID (it gets new random bytes: it names this file)
+DOCX,      the document information (author, last editor, company,
+XLSX, PPTX manager, dates, editing time, revision count, template,
+           program, title, keywords, custom properties), the thumbnail
+           (it can show an earlier version), names, initials, user IDs
+           (e-mail addresses) and dates of comments and tracked
+           changes, Word's editing session IDs (rsid: they tie
+           documents edited in the same session together), paths on
+           the computer (Excel keeps where it was saved, Word where
+           its template is)
+ODT, ODS,  the same in LibreOffice's files: meta.xml (author, program,
+ODP        dates, editing time, template), the thumbnail, names and
+           dates of comments and tracked changes, the printer's name
+           and its settings
+EPUB       the program's tags (calibre, Sigil) and the change date
+           (which EPUB 3 needs: it becomes 2000-01-01). The book's own
+           author, title and ID stay: they are the book.
+zip        and inside all of the above: file times, owner IDs, the
+           system it was made on, comments, anything after it. Every
+           picture inside is cleaned as a picture. The words stay
+           exactly the same; only the parts that changed are packed
+           again.
 video      the settings text x264, x265 and FFmpeg put into the
            first picture (its bytes become spaces)
 
@@ -95,7 +136,16 @@ WebP       32 random bytes in a chunk of their own at the end (a
            simple WebP gets the extended header that allows one)
 MP3        a random "private" bit in the headers of the first 1024
            sound frames (decoders don't read it)
-WAV, AVI   32 random bytes in a JUNK chunk at the end
+WAV, AVI,  32 random bytes in a JUNK chunk at the end
+AIFF
+AAC        a random "private" bit in the frame headers, as in MP3
+WMA, WMV   a new random file ID
+TIFF, raw  32 random bytes at the end, which nothing points to
+SVG        32 random spaces, tabs and line ends after the drawing
+BMP        32 random bytes after the picture
+DOCX, ODT, 32 random spaces, tabs and line ends after the document
+EPUB...    information (or the book's description); in a plain zip,
+           a comment of them
 
 Nothing of it says "clean". clean -r does it again, so each copy you
 share gets its own hash. The picture and the sound stay exactly the
@@ -111,8 +161,15 @@ What it leaves
 
 - Encrypted PDFs, and signed ones (cleaning breaks the signature, and
   the signature itself names the signer).
-- Not yet: TIFF and camera raw files, office documents and EPUB
-  (zip), and PDFs packed in ways other than Flate.
+- Not yet: BigTIFF, zip64 (zip files over 4 GB), Canon's CR3, the
+  older office files (DOC, XLS, PPT), and PDFs packed in ways other
+  than Flate.
+- Encrypted zip files.
+- In raw files: the maker notes (raw programs need them for the
+  colours; some cameras put the serial number in them too), and the
+  previews inside, as the camera made them.
+- What is written in a document: names in the text, in headers and
+  footers, or a title page.
 - In MP3, the "LAME3.100" LAME writes into unused bits of the sound
   frames: they turned out not to be unused by every decoder, so
   changing them could change the sound.
@@ -147,8 +204,9 @@ By hand (the build makes clean-bin, since "make clean" removes it):
     make PREFIX=$HOME/.system install
 
 Files: clean.c (the command, backups), img.c (JPEG, PNG, GIF, WebP),
-media.c (video, audio, HEIF), ogg.c (Ogg), pdf.c (PDF), rand.c (the
-random bytes),
-inflate.c (unpacks the
-compressed parts of PDFs, and stops at 64 MB, so a zip bomb can't fill
-the memory).
+media.c (video, audio, HEIF), ogg.c (Ogg), more.c (AIFF, WMA/WMV,
+TIFF, raw), svg.c (SVG, BMP), zip.c (zip, office documents, EPUB),
+xml.c (edits XML parts), deflate.c (packs the changed parts of zip
+files), pdf.c (PDF), rand.c (the random bytes), inflate.c (unpacks
+the compressed parts of PDFs and zip files; it stops at a size limit,
+so a zip bomb can't fill the memory).
