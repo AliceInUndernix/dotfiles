@@ -206,3 +206,10 @@ void scr_close(void)
 {
     scr_put_raw("\033[0m\033[?25h\033[?1049l");
 }
+
+/* the terminal reports the mouse buttons (the wheel) as keys, or not;
+ * Shift still selects text in st and xterm while it is on */
+void scr_mouse(int on)
+{
+    scr_put_raw(on ? "\033[?1000h\033[?1006h" : "\033[?1006l\033[?1000l");
+}

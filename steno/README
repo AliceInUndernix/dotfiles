@@ -210,8 +210,8 @@ written:
     TK  RA U    draw    ->    TK  RA U
                               HR EU B G   hydraulic
 
-An undone stroke and its * are dim, and what it had cleared comes
-back. The suggestions: the words you typed, and under each every
+An undone stroke and its * are dim (or gone, with u), and what it
+had cleared comes back. The suggestions: the words you typed, and under each every
 outline that writes them, shortest first; each words once (typed
 again, they move to the bottom). The newest is at the bottom in both.
 
@@ -223,6 +223,10 @@ again, they move to the bottom). The newest is at the bottom in both.
     Ctrl+D Ctrl+U,     half a screen
     PageDown PageUp
     G g, End Home      the newest (follow again), the oldest
+    mouse wheel        scrolls the box under it, 3 lines
+    m                  the mouse on or off (on: Shift selects text)
+    u                  an undone stroke and its * dim (as Plover), or
+                       both gone from the tape
     Tab                with both: which one scrolls (its title is lit)
     l, /               look up a word or outline: type it, Enter; the
                        box shows each outline and why (steno -l); Esc

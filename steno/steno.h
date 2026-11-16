@@ -171,6 +171,7 @@ void scr_begin(void);
 void scr_end(void);
 void scr_open(void);
 void scr_close(void);
+void scr_mouse(int on);
 
 /* --- utilities --------------------------------------------------- */
 
