@@ -51,6 +51,8 @@ _hs_key() {
 	case ${.sh.edchar} in
 	$'\e[A'|$'\eOA') dir=up ;;
 	$'\e[B'|$'\eOB') dir=down ;;
+	# Enter: update the VPN marker in the prompt (see _vpn_set below)
+	$'\r'|$'\n') _hs_on= ; _vpn_set ; return ;;
 	*) _hs_on= ; return ;;
 	esac
 	# a new search, unless the last key was an arrow (any other key ends
@@ -91,11 +93,50 @@ EOF
 
 # Prompt: directory (~ for home), then $ for you or # for root,
 # e.g. "~/dotfiles $ " and "/etc # ".
-if [ "$(id -u)" -eq 0 ]; then
-    PS1='${PWD/#$HOME/\~} # '
-else
-    PS1='${PWD/#$HOME/\~} $ '
-fi
+_pwd() {
+	case $PWD in
+	"$HOME") printf '~' ;;
+	"$HOME"/*) printf '~%s' "${PWD#"$HOME"}" ;;
+	*) printf '%s' "$PWD" ;;
+	esac
+}
+# Before it, when vpn (net/) is installed: VPN when something is wrong
+# with it or it isn't up yet (vpn status says what), OFF at level -1,
+# else the level when it isn't the usual 2 ("tor dns"): L0 (bare), L1 (vpn),
+# L3 (tor) or SANDBOX.
+# _vpn_set puts it in _vm (only shell builtins, no programs or output);
+# _vpn prints it.
+_vpn_set() {
+	_vm=
+	[ -e /etc/init.d/vpn ] || return 0
+	if [ -e /etc/vpn/off ]; then _vm='OFF '; return 0; fi
+	_s= _l=
+	[ -r /run/vpn/state ] && read -r _s _l < /run/vpn/state
+	if [ -e /run/vpn/fw-off ] || [ "$_s" != ok ]; then
+		_vm='VPN '
+	else
+		case $_l in
+		2) ;;
+		sandbox) _vm='SANDBOX ' ;;
+		*) _vm="L$_l " ;;
+		esac
+	fi
+}
+_vpn() { _vpn_set; printf '%s' "$_vm"; }
+if [ "$(id -u)" -eq 0 ]; then _ps_end='#'; else _ps_end='$'; fi
+PS1='$(_vpn)$(_pwd) '$_ps_end' '
+# ksh93: a prompt that runs code, $(...) or a PS1.get function, gets
+# garbled by its line editor when a new window is resized (dwm resizes
+# every new window): st stayed blank until Ctrl+C or clear. So in ksh93
+# PS1 runs nothing and only uses variables: the directory comes from $PWD,
+# and the VPN marker from _vm, which is set here and again each time
+# you press Enter (in _hs_key above). It shows the state from when your
+# last command started; it still reads only the local files above.
+case ${KSH_VERSION:-} in *93*)
+	_vpn_set
+	PS1='${_vm}${PWD/#"$HOME"/\~} '$_ps_end' '
+	;;
+esac
 
 alias ls='ls -F'          # / after directories, * after programs, @ after links; no colours
 alias ll='ls -lh'
