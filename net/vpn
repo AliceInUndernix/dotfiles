@@ -1453,6 +1453,28 @@ st_not() {
     if [ $? -ne 0 ]; then st_res 0 "$1"; else st_res 1 "$1"; fi
 }
 
+# st_clock: the clock agrees (within 60 s) with two mirrors' Date,
+# asked through Tor as vpn does at boot; says what each one answered
+st_clock() {
+    ca=$(tor_epoch 1)
+    cb=$(tor_epoch 2)
+    cn=$(date -u +%s)
+    ST_CMD="curl -sI --socks5-hostname 127.0.0.1:$TOR_CLOCK (mirrors 1, 2)"
+    {
+        say "mirror 1 $(mirror_url 1): ${ca:-no answer}"
+        say "mirror 2 $(mirror_url 2): ${cb:-no answer}"
+        say "this clock: $cn"
+    } > "$RUN/st.out"
+    r=1
+    if [ -n "$ca" ] && [ -n "$cb" ]; then
+        d1=$((ca - cn)); [ $d1 -ge 0 ] || d1=$((-d1))
+        d2=$((cb - cn)); [ $d2 -ge 0 ] || d2=$((-d2))
+        [ $d1 -gt 60 ] || [ $d2 -gt 60 ] || r=0
+        say "off by $d1 s and $d2 s" >> "$RUN/st.out"
+    fi
+    st_res $r "the clock is right (two mirrors through Tor agree)"
+}
+
 as_nobody() { printf "su -s /bin/sh nobody -c %s" "'$1'"; }
 
 # wait_ok <seconds>: until vpn says ok (or a problem, or time is up)
@@ -1558,6 +1580,7 @@ cmd_selftest() {
     st "Tor's program port 9200 is Tor" \
         "curl -s -m 40 --socks5-hostname 127.0.0.1:9200 $TOR_CHECK |
         grep -q '\"IsTor\":true'"
+    st_clock
     st "proxychains goes through Tor" \
         "$(as_nobody "proxychains -q curl -s -m 40 $TOR_CHECK") |
         grep -q '\"IsTor\":true'"
