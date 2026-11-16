@@ -441,6 +441,21 @@ local function preview(words, b, n)
   return table.concat(out, " ")
 end
 
+-- Spaces other than the plain one (no-break, thin, ...) are spaces, and
+-- soft hyphens and zero-width characters are nothing. A paragraph
+-- holding only a no-break space (EPUBs put one after a scene-break
+-- picture) was a "word" you could not see but had to type, so the next
+-- letter you typed was red (reported 2026-11-16).
+local SPACES = { "\194\160", "\226\128[\128-\138]", "\226\128\175",
+  "\226\129\159", "\227\128\128" }
+local NOTHING = { "\194\173", "\226\128[\139-\141]", "\226\129\160",
+  "\239\187\191" }
+local function book_text(s)
+  for _, c in ipairs(SPACES) do s = s:gsub(c, " ") end
+  for _, c in ipairs(NOTHING) do s = s:gsub(c, "") end
+  return s
+end
+
 local books = {}   -- path -> { words =, chapters = }
 local function load_book(path)
   if books[path] then return books[path] end
@@ -451,7 +466,7 @@ local function load_book(path)
 
   local words, by_file = {}, {}
   for _, p in ipairs(parts) do
-    local ws = words_of((p.text:gsub("\194\173", "")))   -- soft hyphens
+    local ws = words_of(book_text(p.text))
     if ws[1] then ws[1].para = true end
     p.first, p.count = #words + 1, #ws
     for _, w in ipairs(ws) do words[#words + 1] = w end
@@ -470,7 +485,7 @@ local function load_book(path)
         local at = p.html:find('id%s*=%s*["\']' .. vim.pesc(e.frag) .. '["\']')
         local tag = at and p.html:sub(1, at):match(".*()<")
         if tag then
-          b = p.first + #words_of((html_to_text(p.html:sub(1, tag - 1)):gsub("\194\173", "")))
+          b = p.first + #words_of(book_text(html_to_text(p.html:sub(1, tag - 1))))
         end
       end
       if b <= p.first + p.count - 1 and not seen[b] then
