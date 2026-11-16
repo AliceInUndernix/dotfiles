@@ -23,8 +23,9 @@
 --   1. The book's text is read by Neovim itself (EPUB: unzip the chapters
 --      in spine order and strip the HTML; PDF: pdftotext, page by page)
 --      and split into words. Pictures are skipped, except headings drawn
---      as pictures and drop caps, which are typed as their alt text. The EPUB table of contents gives the
---      chapter list for :TypeChapter (PDF: one entry per page).
+--      as pictures and drop caps, which are typed as their alt text.
+--      The EPUB table of contents gives the chapter list for
+--      :TypeChapter (PDF: one entry per page).
 --   2. On every change, the buffer's words are lined up with the book
 --      from the chosen start: align() walks along word by word; where a
 --      word does not match it weighs "typo", "skipped book words" and
