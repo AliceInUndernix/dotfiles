@@ -33,11 +33,21 @@ about 0.06 s and uses about 13 MB, where Plover takes about 0.7 s and
 What Plover's plugins did for Dotterel is built in:
 
     Gemini PR, reconnecting by itself when the keyboard comes back
-    plover-modal-dictionary (Dotterel's movement, as a .mode file)
-    dotterel-modifiers.py (KHR, SH, THRA, KPW and the rest, as a
-        .mods file)
+    plover-modal-dictionary (.mode files)
     plover-stitching, plover-last-translation ({*+}, {*!} ...)
-    Dotterel's raw mode (RA*U) and UK/US switch (#SU)
+    Dotterel's UK/US switch (#SU)
+
+and so are three of Dotterel's dictionaries, which are more program
+than words: their data is C (dotterel.c), so nothing is read or
+parsed for them. A dict line names them without an extension:
+
+    dotterel-movement   movement mode (dotterel-movement.modal)
+    dotterel-modifiers  KHR, SH, THRA, KPW and the rest
+                        (dotterel-modifiers.py); the keys come from
+                        dotterel-punctuation, -commands,
+                        -fingerspelling, -numbers and -movement, as
+                        in the list (or their .dict files)
+    dotterel-raw        raw mode, RA*U (dotterel-raw.json)
 
 The dictionaries are its own: ./install.sh steno clones the dotterel
 repo into ~/.system/share/steno/dotterel and updates it every run.
@@ -113,8 +123,8 @@ OPTIONS
               another (empty outline: done). To stroke the outline,
               turn on raw mode (RA*U) and back off for the text.
     -C D F..  make steno's files in directory D from Plover's: .json
-              -> .dict, .modal -> .mode, dotterel-modifiers.py -> .mods,
-              uk_to_us.json -> uk_to_us.txt
+              -> .dict, .modal -> .mode, uk_to_us.json -> uk_to_us.txt
+              (the three built-in ones are skipped)
     -t        test mode: one stroke or outline a line on stdin; prints
               B n (backspaces), S text, K combo
     -q        no status screen, even in a terminal
@@ -130,8 +140,8 @@ One a line, # for comments (see config, which install.sh links to
     dictionaries DIR         where dict names are looked for
     user FILE [off]          a dictionary, and where -a and -A write;
                              made empty when it isn't there
-    dict NAME [off]          a dictionary (.dict, .mode or .mods,
-                             below); the first wins
+    dict NAME [off]          a dictionary (.dict or .mode, below,
+                             or a built-in one); the first wins
     data DIR                 Dotterel's data (uk_to_us.txt); default
                              DIR/../data of dictionaries
     undo N                   strokes * can undo (100)
@@ -163,10 +173,6 @@ skipped. When an outline is on two lines, the last one wins.
                     exit_on_match|ignore_folding <tab> yes|no
                 entry|dict|exit <tab> TEXT <tab> OUTLINES
                 (plover-modal-dictionary's tables and switches)
-    NAME.mods   modifier <tab> control[+alt+shift+super] <tab> OUTLINE
-                keys <tab> FILE
-                (a stroke of a modifier, then a stroke that presses one
-                key in FILE: that key with the modifiers)
 
 Dotterel's are in its repo, in steno/ (made from the JSON by its
 steno/make.sh, which runs steno -C). ./install.sh steno links them
@@ -227,6 +233,7 @@ FILES
 
     main.c       settings, commands, the serial port, the main loop
     dict.c       strokes, dictionaries, modal and modifier dictionaries
+    dotterel.c   Dotterel's movement, modifiers and raw mode, as data
     translate.c  Plover's translator: longest match, undo, macros
     format.c     Plover's formatter: spacing, case, metas
     ortho.c      orthography: a small regex engine and Plover's rules

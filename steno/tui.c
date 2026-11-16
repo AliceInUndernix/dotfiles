@@ -435,8 +435,9 @@ int tui_key(void)
         } else if (c == 'd' && dict_count() > 1) {
             asking = 'd';
             input[0] = 0;
-            sprintf(m, "remove %.200s from the list? (the file stays)",
-                dict_name(sel, &user));
+            sprintf(m, "remove %.200s from the list? %s",
+                dict_name(sel, &user), dict_is_builtin(dict_path(sel)) ?
+                "(a again to bring it back)" : "(the file stays)");
             tui_log(m);
         } else if (c == 'r') {
             dict_reload();

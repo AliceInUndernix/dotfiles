@@ -188,3 +188,18 @@ int low_ascii(int c);
 char *read_file(const char *path, long *size);
 const char *config_path(const char *name);   /* ~ expanded, static */
 const char *dotterel_data(const char *name); /* next to dictionaries */
+const char *dict_dir_file(const char *name); /* in dictionaries */
+int dict_is_builtin(const char *name);   /* dotterel-movement ... */
+
+/* dotterel.c: Dotterel's built-in dictionaries, as data */
+struct builtin_line {
+    int kind;              /* 'e' entry, 'd' dict */
+    const char *text;
+    const char *outlines;
+};
+extern const struct builtin_line dotterel_movement[];
+extern const char *const dotterel_mod_strokes[];
+extern const int dotterel_mod_bits[];
+extern const char *const dotterel_mod_keys[];
+extern const char dotterel_raw_text[];
+extern const char dotterel_raw_outline[];

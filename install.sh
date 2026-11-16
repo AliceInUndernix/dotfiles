@@ -541,9 +541,9 @@ steno_dictionaries() {
 	plover=$src/plover-dotterel/plover_dotterel
 	tmp=$STENO_DIR/new
 	rm -rf "$tmp"
+	# (dotterel-raw, -movement and -modifiers are built into steno)
 	"$steno" -C "$tmp/dictionaries" "$plover"/dictionaries/*.json \
-		"$plover"/dictionaries/*.modal \
-		"$plover"/dictionaries/dotterel-modifiers.py >/dev/null ||
+		"$plover"/dictionaries/*.modal >/dev/null ||
 		die "steno could not read Dotterel's dictionaries in $plover"
 	"$steno" -C "$tmp/data" "$plover/data/uk_to_us.json" >/dev/null ||
 		die "steno could not read $plover/data/uk_to_us.json"

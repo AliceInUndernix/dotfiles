@@ -342,6 +342,18 @@ const char *config_path(const char *name)
     return p[w];
 }
 
+/* NAME in the dictionaries directory (a path as it is), static */
+const char *dict_dir_file(const char *name)
+{
+    static char p[2048];
+
+    if (name[0] == '/' || name[0] == '~' || !dict_dir[0])
+        scopy(p, config_path(name), sizeof(p));
+    else
+        sprintf(p, "%.1000s/%.1000s", dict_dir, name);
+    return p;
+}
+
 const char *dotterel_data(const char *name)
 {
     static char p[1100];
@@ -478,8 +490,10 @@ static int convert_files(char **files, int n)
             r = dict_convert(files[i], files[0], made, sizeof(made));
         if (r < 0)
             bad = 1;
-        else
+        else if (r == 0)
             printf("%s -> %s\n", files[i], made);
+        else
+            printf("%s: built into steno, nothing made\n", files[i]);
     }
     return bad;
 }
@@ -589,10 +603,10 @@ int add_dict_line(const char *val, int user)
     }
     if (!name[0])
         return -1;
-    if (name[0] == '/' || name[0] == '~' || !dict_dir[0])
-        scopy(p, config_path(name), sizeof(p));
+    if (!user && dict_is_builtin(name))
+        scopy(p, name, sizeof(p));
     else
-        sprintf(p, "%.1000s/%.1000s", dict_dir, name);
+        scopy(p, dict_dir_file(name), sizeof(p));
     for (i = 0; i < dict_count(); i++) {
         if (!strcmp(dict_path(i), p)) {
             say("already in the list: %s", p);

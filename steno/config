@@ -21,9 +21,10 @@ dict dotterel-punctuation.dict
 dict dotterel-commands.dict
 dict dotterel-fingerspelling.dict
 dict dotterel-numbers.dict
-dict dotterel-raw.dict
-dict dotterel-movement.mode
-dict dotterel-modifiers.mods
+# built into steno (no file): raw mode, movement, modifiers
+dict dotterel-raw
+dict dotterel-movement
+dict dotterel-modifiers
 
 # uk_to_us.txt, Dotterel's UK/US list (default: ../data next to the
 # dictionaries)

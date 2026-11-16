@@ -1,11 +1,12 @@
-/* Dictionaries: Plover's own files, read as they are.
+/* Dictionaries: steno's plain files, and Dotterel's built-in ones.
  *
- *   NAME.json    outline -> translation (what Plover writes)
- *   NAME.modal   plover-modal-dictionary: "entry", "dict" and "exit"
+ *   NAME.dict    text -> outlines
+ *   NAME.mode    plover-modal-dictionary: "entry", "dict" and "exit"
  *                tables and four switches
- *   NAME.py      only Dotterel's modifier dictionary
- *                (dotterel-modifiers.py), which is built in here
+ *   dotterel-movement, dotterel-modifiers, dotterel-raw
+ *                built in (their data is in dotterel.c)
  *
+ * Plover's JSON is read only to convert it (steno -C).
  * The first dictionary given has the highest priority, as in Plover's
  * list. Every outline becomes strokes (key sets) when it is read, so a
  * lookup compares numbers, not text. */
@@ -59,7 +60,8 @@ struct dict {
     char path[1024];
     int kind;
     int enabled;
-    int raw;               /* dotterel-raw.json */
+    int raw;               /* dotterel-raw */
+    int builtin;           /* from dotterel.c, no file */
     int longest;
     struct table t;
     struct modal *m;
@@ -73,6 +75,7 @@ static struct dict dicts[DICT_MAX];
 static int ndicts;
 static int raw_on;
 static int raw_saved[DICT_MAX];
+static int mods_stale;     /* the modifiers' keys must be found again */
 
 /* --- strokes ------------------------------------------------------ */
 
@@ -649,25 +652,11 @@ static void modal_stroked(struct modal *m, int longest)
     m->to_deactivate = 0;
 }
 
-/* --- dotterel-modifiers.py, built in ------------------------------- *
+/* --- dotterel-modifiers, built in ----------------------------------- *
  * A modifier stroke (KHR Ctrl, SH Shift, THRA Alt, KPW Super, and the
  * chords for several), then a stroke that presses one key or types one
- * character: that key with the modifiers. The keys come from the
- * dictionaries next to the .py file, as the .py file reads them. */
-
-static const char *const mod_strokes[] = {
-    "KHR", "SH", "THRA", "KPW", "SKHR", "TKHRA", "STHRA", "STKHRA",
-    "KPWHR", "SKPWHR"
-};
-/* What dotterel-modifiers.py does, for steno -C to write as a .mods
- * file. bits: 1 control, 2 alt, 4 shift, 8 super */
-static const int mod_bits[] = { 1, 4, 2, 8, 5, 3, 6, 7, 9, 12 };
-
-static const char *const mod_sources[] = {
-    "dotterel-punctuation.json", "dotterel-commands.json",
-    "dotterel-fingerspelling.json", "dotterel-numbers.json",
-    "dotterel-movement.modal"
-};
+ * character: that key with the modifiers. The strokes and where the
+ * keys come from are in dotterel.c. */
 
 static int mod_of(struct mods *x, long st)
 {
@@ -927,8 +916,6 @@ static void dict_free(struct dict *d)
  *   NAME.dict   TEXT <tab> OUTLINE [OUTLINE...]
  *   NAME.mode   option <tab> NAME <tab> yes|no
  *               entry|dict|exit <tab> TEXT <tab> OUTLINE [OUTLINE...]
- *   NAME.mods   modifier <tab> control[+alt+shift+super] <tab> OUTLINE
- *               keys <tab> FILE   (its one-key strokes get modifiers)
  *
  * Outlines are separated by spaces. In TEXT, \t is a tab, \n a newline,
  * \r a carriage return and \\ a backslash. Empty lines are skipped. */
@@ -1109,15 +1096,44 @@ static int load_mode_file(struct dict *d, char *buf)
 }
 
 static int load_into(struct dict *d, const char *path);
+static int dict_find(const char *name);
 
-static int load_mods_file(struct dict *d, char *buf)
+/* the outlines of a built-in line, into t */
+static void put_builtin(struct table *t, const char *text,
+    const char *outlines)
 {
-    static const char *const names[] = { "control", "alt", "shift",
-        "super" };
-    char *p, *l, *f[3], *k, *e, dir[1024], other[1100];
+    char o[256];
+
+    scopy(o, outlines, sizeof(o));
+    put_outlines(t, o, text, "dotterel.c", 0);
+}
+
+static int load_movement(struct dict *d)
+{
+    struct modal *m;
+    const struct builtin_line *b;
+
+    m = malloc(sizeof(*m));
+    if (!m)
+        return -1;
+    memset(m, 0, sizeof(*m));
+    m->exit_on_mismatch = 1;
+    m->ignore_folding = 1;
+    m->new_stroke = 1;
+    d->m = m;
+    for (b = dotterel_movement; b->kind; b++)
+        put_builtin(b->kind == 'e' ? &m->entry : &m->dict, b->text,
+            b->outlines);
+    d->longest = m->entry.longest;
+    if (m->dict.longest > d->longest)
+        d->longest = m->dict.longest;
+    return 0;
+}
+
+static int load_modifiers(struct dict *d)
+{
     struct mods *x;
-    struct dict tmp;
-    int ln, n, b, bits, end, r;
+    int i;
 
     x = malloc(sizeof(*x));
     if (!x)
@@ -1125,53 +1141,82 @@ static int load_mods_file(struct dict *d, char *buf)
     memset(x, 0, sizeof(*x));
     d->x = x;
     d->longest = 4;
-    scopy(dir, d->path, sizeof(dir));
-    k = strrchr(dir, '/');
-    if (k)
-        k[1] = 0;
-    else
-        dir[0] = 0;
-    p = buf;
-    ln = 0;
-    while ((l = next_line(&p)) != 0) {
-        ln++;
-        if (!l[0])
-            continue;
-        n = split_tabs(l, f, 3);
-        if (n == 3 && !strcmp(f[0], "modifier") && x->nmod < MODS_MAX) {
-            bits = 0;
-            for (k = f[1]; *k; k = end ? e : e + 1) {
-                e = k;
-                while (*e && *e != '+')
-                    e++;
-                end = !*e;
-                *e = 0;
-                for (b = 0; b < 4; b++)
-                    if (!strcmp(k, names[b]))
-                        bits |= 1 << b;
-            }
-            x->mst[x->nmod] = stroke_parse(f[2], strlen(f[2]));
-            x->mbits[x->nmod] = bits;
-            if (!bits || x->mst[x->nmod] < 0) {
-                bad_line(d->path, ln, "modifier NAMES OUTLINE?");
-                continue;
-            }
-            x->nmod++;
-        } else if (n == 2 && !strcmp(f[0], "keys")) {
-            sprintf(other, "%.1000s%.90s", f[1][0] == '/' ? "" : dir, f[1]);
-            r = load_into(&tmp, other);
+    for (i = 0; i < MODS_MAX && dotterel_mod_strokes[i]; i++) {
+        x->mst[i] = stroke_parse(dotterel_mod_strokes[i],
+            strlen(dotterel_mod_strokes[i]));
+        x->mbits[i] = dotterel_mod_bits[i];
+    }
+    x->nmod = i;
+    mods_stale = 1;
+    return 0;
+}
+
+/* The keys of the modifiers, from the dictionaries dotterel.c names:
+ * the ones in the list, or else their files. */
+static void mods_find_keys(struct mods *x)
+{
+    static struct dict tmp;
+    char file[300];
+    int i, j, r;
+    struct dict *d;
+
+    x->nkeys = 0;
+    for (i = 0; dotterel_mod_keys[i]; i++) {
+        j = dict_find(dotterel_mod_keys[i]);
+        d = j >= 0 ? &dicts[j] : 0;
+        if (!d) {
+            sprintf(file, "%.200s.dict", dotterel_mod_keys[i]);
+            if (dict_is_builtin(dotterel_mod_keys[i]))
+                scopy(file, dotterel_mod_keys[i], sizeof(file));
+            r = load_into(&tmp, dict_dir_file(file));
             if (r < 0)
                 continue;
-            /* the file's order: the first key of a stroke stays */
-            if (tmp.kind == dk_json)
-                mods_read_table(x, &tmp.t);
-            else if (tmp.kind == dk_modal)
-                mods_read_table(x, &tmp.m->entry);
-            dict_free(&tmp);
-        } else {
-            bad_line(d->path, ln, "modifier or keys?");
+            d = &tmp;
         }
+        if (d->kind == dk_json)
+            mods_read_table(x, &d->t);
+        else if (d->kind == dk_modal)
+            mods_read_table(x, &d->m->entry);
+        if (d == &tmp)
+            dict_free(&tmp);
     }
+}
+
+static void mods_refresh(void)
+{
+    int i;
+
+    if (!mods_stale)
+        return;
+    mods_stale = 0;
+    for (i = 0; i < ndicts; i++)
+        if (dicts[i].kind == dk_mods)
+            mods_find_keys(dicts[i].x);
+}
+
+int dict_is_builtin(const char *name)
+{
+    return !strcmp(name, "dotterel-movement") ||
+        !strcmp(name, "dotterel-modifiers") ||
+        !strcmp(name, "dotterel-raw");
+}
+
+static int load_builtin(struct dict *d, const char *name)
+{
+    d->builtin = 1;
+    d->mtime = d->size = -1;
+    if (!strcmp(name, "dotterel-movement")) {
+        d->kind = dk_modal;
+        return load_movement(d);
+    }
+    if (!strcmp(name, "dotterel-modifiers")) {
+        d->kind = dk_mods;
+        return load_modifiers(d);
+    }
+    d->kind = dk_json;
+    d->raw = 1;
+    put_builtin(&d->t, dotterel_raw_text, dotterel_raw_outline);
+    d->longest = d->t.longest;
     return 0;
 }
 
@@ -1221,19 +1266,26 @@ static int load_into(struct dict *d, const char *path)
     memset(d, 0, sizeof(*d));
     scopy(d->path, path, sizeof(d->path));
     d->enabled = 1;
+    if (dict_is_builtin(path)) {
+        r = load_builtin(d, path);
+        if (r < 0)
+            dict_free(d);
+        return r;
+    }
     d->raw = base_is(path, "dotterel-raw.");
     file_stamp(path, &d->mtime, &d->size);
-    if (ends_with(path, ".json") || ends_with(path, ".modal") ||
-        ends_with(path, ".py"))
-    {
+    if (ends_with(path, ".mods") || ends_with(path, ".py")) {
+        say("%s: the modifiers are built in now (dict "
+            "dotterel-modifiers)", path);
+        return -1;
+    }
+    if (ends_with(path, ".json") || ends_with(path, ".modal")) {
         say("%s is in Plover's format: steno -C DIR FILE converts it",
             path);
         return -1;
     }
-    if (!ends_with(path, ".dict") && !ends_with(path, ".mode") &&
-        !ends_with(path, ".mods"))
-    {
-        say("not a .dict, .mode or .mods file: %s", path);
+    if (!ends_with(path, ".dict") && !ends_with(path, ".mode")) {
+        say("not a .dict or .mode file, nor built in: %s", path);
         return -1;
     }
     buf = read_file(path, &size);
@@ -1244,9 +1296,6 @@ static int load_into(struct dict *d, const char *path)
     if (ends_with(path, ".mode")) {
         d->kind = dk_modal;
         r = load_mode_file(d, buf);
-    } else if (ends_with(path, ".mods")) {
-        d->kind = dk_mods;
-        r = load_mods_file(d, buf);
     } else {
         d->kind = dk_json;
         r = load_dict_file(d, buf);
@@ -1358,37 +1407,8 @@ static int write_table(FILE *f, struct table *t, const char *prefix)
     return 0;
 }
 
-static void write_mods(FILE *f)
-{
-    static const char *const names[] = { "control", "alt", "shift",
-        "super" };
-    char src[128], *dot;
-    unsigned i;
-    int b, first;
-
-    for (i = 0; i < sizeof(mod_strokes) / sizeof(mod_strokes[0]); i++) {
-        fputs("modifier\t", f);
-        first = 1;
-        for (b = 0; b < 4; b++) {
-            if (mod_bits[i] & (1 << b)) {
-                if (!first)
-                    fputc('+', f);
-                fputs(names[b], f);
-                first = 0;
-            }
-        }
-        fprintf(f, "\t%s\n", mod_strokes[i]);
-    }
-    for (i = 0; i < sizeof(mod_sources) / sizeof(mod_sources[0]); i++) {
-        scopy(src, mod_sources[i], sizeof(src) - 8);
-        dot = strrchr(src, '.');
-        if (dot)
-            strcpy(dot, ends_with(src, ".modal") ? ".mode" : ".dict");
-        fprintf(f, "keys\t%s\n", src);
-    }
-}
-
-/* in (Plover's) -> outdir/name (steno's); 0 ok */
+/* in (Plover's) -> outdir/name (steno's); 0 ok, 1 nothing to make
+ * (built in) */
 int dict_convert(const char *in, const char *outdir, char *made, int size)
 {
     struct dict d;
@@ -1402,31 +1422,27 @@ int dict_convert(const char *in, const char *outdir, char *made, int size)
     scopy(base, b, sizeof(base) - 8);
     dot = strrchr(base, '.');
     if (!dot) {
-        say("what is %s? (.json, .modal or dotterel-modifiers.py)", in);
+        say("what is %s? (.json or .modal)", in);
         return -1;
     }
+    *dot = 0;
+    if (dict_is_builtin(base))
+        return 1;
+    *dot = '.';
     memset(&d, 0, sizeof(d));
     scopy(d.path, in, sizeof(d.path));
-    if (!strcmp(dot, ".py")) {
-        if (strcmp(base, "dotterel-modifiers.py")) {
-            say("only dotterel-modifiers.py is known: %s", in);
-            return -1;
-        }
-        strcpy(dot, ".mods");
-    } else if (!strcmp(dot, ".modal")) {
+    if (!strcmp(dot, ".modal")) {
         strcpy(dot, ".mode");
     } else if (!strcmp(dot, ".json")) {
         strcpy(dot, ".dict");
     } else {
-        say("what is %s? (.json, .modal or dotterel-modifiers.py)", in);
+        say("what is %s? (.json or .modal)", in);
         return -1;
     }
-    if (strcmp(dot, ".mods")) {
-        r = load_plover(&d, in);
-        if (r < 0) {
-            dict_free(&d);
-            return -1;
-        }
+    r = load_plover(&d, in);
+    if (r < 0) {
+        dict_free(&d);
+        return -1;
     }
     scopy(made, outdir, size - 256);
     scat(made, "/", size);
@@ -1439,9 +1455,7 @@ int dict_convert(const char *in, const char *outdir, char *made, int size)
         return -1;
     }
     r = 0;
-    if (!strcmp(dot, ".mods")) {
-        write_mods(f);
-    } else if (d.kind == dk_modal) {
+    if (d.kind == dk_modal) {
         fprintf(f, "option\texclude_entry\t%s\n",
             d.m->exclude_entry ? "yes" : "no");
         fprintf(f, "option\texit_on_mismatch\t%s\n",
@@ -1485,6 +1499,7 @@ int dict_add(const char *path)
     res = load_into(&dicts[ndicts], path);
     if (res < 0)
         return -1;
+    mods_stale = 1;
     if (raw_on) {
         /* in raw mode: on when it ends */
         raw_saved[ndicts] = 1;
@@ -1504,7 +1519,7 @@ void dict_reload(void)
     int i, enabled;
 
     for (i = 0; i < ndicts; i++) {
-        if (dicts[i].kind == dk_mods)
+        if (dicts[i].builtin)
             continue;
         file_stamp(dicts[i].path, &mtime, &size);
         if (mtime == dicts[i].mtime && size == dicts[i].size)
@@ -1519,6 +1534,7 @@ void dict_reload(void)
         dict_free(&dicts[i]);
         dicts[i] = tmp;
         dicts[i].enabled = enabled;
+        mods_stale = 1;
         if (verbose)
             say("read again: %s", dicts[i].path);
     }
@@ -1707,8 +1723,10 @@ const char *dict_lookup(const long *st, int n)
             v = get(&d->t, st, n);
         else if (d->kind == dk_modal)
             v = modal_lookup(d->m, st, n);
-        else
+        else {
+            mods_refresh();
             v = mods_lookup(d->x, st, n);
+        }
         if (v)
             return is_deleted(v) ? 0 : v;
     }
@@ -1724,7 +1742,7 @@ void dict_stroked(void)
             modal_stroked(dicts[i].m, dicts[i].longest);
 }
 
-/* RA*U: every dictionary off but dotterel-raw.json, and back. */
+/* RA*U: every dictionary off but dotterel-raw, and back. */
 int dict_raw_toggle(void)
 {
     int i, have;
@@ -1827,8 +1845,10 @@ const char *dict_kind(int i)
     if (dicts[i].kind == dk_mods)
         return "built in";
     if (dicts[i].kind == dk_modal)
-        return "modal";
-    return dicts[i].raw ? "raw mode" : "dict";
+        return dicts[i].builtin ? "modal, built in" : "modal";
+    if (dicts[i].raw)
+        return dicts[i].builtin ? "raw mode, built in" : "raw mode";
+    return "dict";
 }
 
 long dict_size(int i)
@@ -1838,6 +1858,7 @@ long dict_size(int i)
     if (dicts[i].kind == dk_modal)
         return dicts[i].m->entry.nent + dicts[i].m->dict.nent +
             dicts[i].m->exit.nent;
+    mods_refresh();
     return dicts[i].x ? dicts[i].x->nkeys : 0;
 }
 
@@ -1865,10 +1886,30 @@ void dict_remove(int i)
     if (i < 0 || i >= ndicts)
         return;
     dict_free(&dicts[i]);
+    mods_stale = 1;
     for (; i + 1 < ndicts; i++) {
         dicts[i] = dicts[i + 1];
         raw_saved[i] = raw_saved[i + 1];
     }
     ndicts--;
     memset(&dicts[ndicts], 0, sizeof(dicts[0]));
+}
+
+/* the dictionary in the list that NAME (no extension) is, or -1 */
+static int dict_find(const char *name)
+{
+    const char *b, *dot;
+    int i, n;
+
+    n = strlen(name);
+    for (i = 0; i < ndicts; i++) {
+        b = strrchr(dicts[i].path, '/');
+        b = b ? b + 1 : dicts[i].path;
+        dot = strrchr(b, '.');
+        if (dicts[i].builtin)
+            dot = b + strlen(b);
+        if (dot && dot - b == n && !strncmp(b, name, n))
+            return i;
+    }
+    return -1;
 }
