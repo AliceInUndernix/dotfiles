@@ -52,6 +52,7 @@ nvim/
 | System clipboard | `clipboard=unnamedplus`; xclip and xsel installed by `install.sh --deps` | not confirmed |
 | Mark typed words green/red in Sioyek | lua/typetrack.lua, `:TypeTrack`, `Space t` | Neovim side tested; never run against Sioyek; Sioyek part now off (crashed) |
 | Skipped words were never flagged; ghost mode (grey book text to type over, wrong letters red) and check mode (no ghosts); letter-by-letter and word-by-word; skip front matter (2026-11-14) | typetrack.lua rewritten around align() + char_diff(); `:TypeGhost`/`Space T`, `:TypeTrack`/`Space t`, `:TypeChapter` (TOC picker) | tested headless on Neovim 0.9.5 only; inline ghosts not seen in a real terminal. Her request ended at "skip chapters if": asked what she meant |
+| Retyper faster; ghost text shows the whole paragraph, then the whole next one (2026-11-17) | typetrack.lua: one unzip per book, cheaper HTML and word splitting, changed lines only (on_change), align() stops where it rejoins the last run, banded edit distance; show_ghost + make_room | book load 1.4 s to 0.6 s, fixing a word far up 56 ms to 1-3 ms (250k-word test book, 0.9.5); fuzz-tested against a full re-check; ghost paragraph seen in tmux on 0.9.5 (eol, not inline) |
 
 ## Open issues (pick these up first)
 

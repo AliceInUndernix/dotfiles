@@ -20,8 +20,9 @@
 -- needed unless opts.sioyek_marks is turned on (see below).
 --
 -- How it works:
---   1. The book's text is read by Neovim itself (EPUB: unzip the chapters
---      in spine order and strip the HTML; PDF: pdftotext, page by page)
+--   1. The book's text is read by Neovim itself (EPUB: one unzip of the
+--      chapters into a temporary directory, read in spine order and the
+--      HTML stripped; PDF: pdftotext, page by page)
 --      and split into words. Pictures are skipped, except headings drawn
 --      as pictures and drop caps, which are typed as their alt text.
 --      The EPUB table of contents gives the chapter list for
@@ -30,27 +31,33 @@
 --      from the chosen start: align() walks along word by word; where a
 --      word does not match it weighs "typo", "skipped book words" and
 --      "extra typed word" by how well the next few words agree. Only
---      the part from the first changed line on is read, lined up and
---      drawn again (process()), so a key costs the same on page 300 as
---      on page 1.
+--      the changed lines are read again (on_change()), and lining up
+--      starts again at the line before the change and stops as soon as
+--      it is back where the last run was (process()), so a key costs
+--      the same on page 300 as on page 1, and fixing a word far up does
+--      not check everything below it again.
 --   3. Each typed word is compared letter by letter with its book word
 --      (char_diff): wrong or extra letters are red, missing letters are
 --      shown crossed out in red. The word you are still typing is
 --      compared letter by letter as far as you have got.
---   4. Ghost mode puts the rest of the current book word and the next
---      words as grey virtual text at the end of the file, wrapped at
---      'textwidth' (80), with a few more lines below.
+--   4. Ghost mode puts the rest of the current book word and the rest of
+--      its paragraph as grey virtual text at the end of the file,
+--      wrapped at 'textwidth' (80). A finished paragraph is followed by
+--      the whole next one. The window scrolls to fit it.
 --   5. Book, mode and start are saved per text file in
 --      stdpath("state")/typetrack.json, so it carries on next time.
 --   6. Optional (opts.sioyek_marks): runs of right/wrong book words are
 --      highlighted in Sioyek with `sioyek --execute-command`. Off since
 --      Sioyek's development version crashed doing it (2026-11-12).
 --
--- Testing status (2026-11-14): steps 1-5 were run headless on Neovim
--- 0.9.5 with a test EPUB (no 0.11 was available to the author). Inline
--- ghost text needs Neovim 0.10+; on 0.9 it falls back to the end of the
--- line. How the inline ghosts look while typing in a real terminal was
--- NOT seen. Step 6 has never run against a real Sioyek.
+-- Testing status (2026-11-17): steps 1-5 were run on Neovim 0.9.5
+-- (no 0.11 was available to the author) with a 250,000-word test EPUB:
+-- headless, and ghost mode also in a real terminal (tmux), where the
+-- whole paragraph showed and the window scrolled for it. Fixing words
+-- far up was checked against a full re-check after thousands of random
+-- edits. Inline ghost text needs Neovim 0.10+; on 0.9 it falls back to
+-- the end of the line, so the inline look was not seen. Step 6 has
+-- never run against a real Sioyek.
 --
 -- M._internal at the bottom exposes the pieces for headless tests.
 
@@ -62,14 +69,16 @@ M.opts = {
   strict = true,         -- capitals and punctuation must match too
   pause_ms = 1500,       -- check mode: after this long without typing,
                          -- the last word counts as finished
-  ghost_lines = 4,       -- ghost mode: lines of book text shown below
-                         -- the line you are typing on
+  ghost_lines = nil,     -- ghost mode: most lines of book text shown
+                         -- below the line you type on; nil = the rest
+                         -- of the paragraph, as far as the window goes
   width = nil,           -- ghost line width; nil = 'textwidth' or 80
   sioyek = "sioyek",     -- the sioyek program
   sioyek_marks = false,  -- colour the words in Sioyek too
   good = "g",            -- Sioyek highlight type for right words (green)
   bad = "r",             -- ...and for wrong or skipped words (red)
   max_run = 12,          -- longest single Sioyek highlight, in words
+  max_book_mb = 200,     -- refuse an EPUB that unpacks to more than this
 }
 
 local ns = vim.api.nvim_create_namespace("typetrack")
@@ -100,9 +109,17 @@ local SAME = {
   ["\194\171"] = '"', ["\194\187"] = '"',      -- left and right guillemet
   ["\226\128\166"] = "...",                    -- ellipsis
 }
+-- One pass over the non-ASCII characters only (was one pass per entry
+-- of SAME for every word of the book).
 local function normalise(s)
-  for from, to in pairs(SAME) do s = s:gsub(from, to) end
-  return s
+  if not s:find("[\128-\255]") then return s end
+  return (s:gsub("[\192-\255][\128-\191]*", SAME))
+end
+
+-- Number of characters (UTF-8), without a call into Vimscript.
+local function nchars(s)
+  local _, n = s:gsub("[^\128-\191]", "")
+  return n
 end
 
 -- The characters of a string (UTF-8), each with its byte offset.
@@ -118,21 +135,30 @@ end
 -- replaced by the same number of spaces so byte positions in a line stay
 -- correct.
 local function blank_dashes(s)
+  if not s:find("[\226%-]") then return s end
   s = s:gsub("\226\128\148", "   ")   -- em dash
   s = s:gsub("\226\128\147", "   ")   -- en dash
   s = s:gsub("%-%-+", function(d) return (" "):rep(#d) end)
   return s
 end
 
--- One word: what it looks like, a loose key for lining words up, and its
--- letter groups ("don't" -> don, t) for finding it in Sioyek.
+-- One word: what it looks like and a loose key for lining words up.
 local function make_word(raw)
+  if not raw:find("%W") then                 -- most words: letters only
+    return { raw = raw, norm = raw, key = raw:lower() }
+  end
   local n = normalise(raw)
-  local key = n:gsub("[^%w\128-\255]", ""):lower()
+  local key = n
+  if n:find("[^%w\128-\255]") then key = n:gsub("[^%w\128-\255]", "") end
   if key == "" then return nil end           -- only punctuation
+  return { raw = raw, norm = n, key = key:lower() }
+end
+
+-- Its letter groups ("don't" -> don, t), for finding it in Sioyek.
+local function parts_of(w)
   local parts = {}
-  for p in n:gmatch("[%w\128-\255]+") do parts[#parts + 1] = p end
-  return { raw = raw, norm = n, key = key, parts = parts }
+  for p in w.norm:gmatch("[%w\128-\255]+") do parts[#parts + 1] = p end
+  return parts
 end
 
 -- Words of a text. Each also keeps what came before it (`gap`: a space,
@@ -144,8 +170,12 @@ local function words_of(text)
     local w = make_word(text:sub(s, e - 1))
     if w then
       local gap = text:sub(prev, s - 1)
-      w.para = gap:find("\n[ \t\r]*\n") ~= nil
-      w.gap = gap:gsub("%s+", " ")
+      if gap == " " then
+        w.para, w.gap = false, gap
+      else
+        w.para = gap:find("\n[ \t\r]*\n") ~= nil
+        w.gap = gap:gsub("%s+", " ")
+      end
       list[#list + 1] = w
       prev = e
     end
@@ -249,11 +279,53 @@ local function same(a, b)
 end
 
 -- Close enough to be the same word with a typo or two?
+-- Is the edit distance of a and b (as distance() counts it) at most
+-- `allowed`? Three rows that are used again, and it gives up as soon as
+-- a whole row is over the limit: lining up calls this up to 40 times
+-- for every word that does not match, and it was half of the time.
+local row0, row1, row2 = {}, {}, {}
+local function within(a, b, allowed)
+  local nb = #b
+  local pp, p, c = row0, row1, row2
+  for j = 0, nb do p[j] = j end
+  for i = 1, #a do
+    c[0] = i
+    local low, ai = i, a[i]
+    for j = 1, nb do
+      local v = p[j] + 1
+      if c[j - 1] + 1 < v then v = c[j - 1] + 1 end
+      local diag = p[j - 1] + (ai == b[j] and 0 or 1)
+      if diag < v then v = diag end
+      if i > 1 and j > 1 and ai == b[j - 1] and a[i - 1] == b[j]
+          and pp[j - 2] + 1 < v then
+        v = pp[j - 2] + 1
+      end
+      c[j] = v
+      if v < low then low = v end
+    end
+    if low > allowed then return false end
+    pp, p, c = p, c, pp
+  end
+  return p[nb] <= allowed
+end
+
+-- Each word's letters are worked out once and kept on the word (the key
+-- is lowercase letters only, so it does not depend on opts.strict).
+local function key_letters(w)
+  local lt = w.lt
+  if not lt then
+    lt = letters_of(w.key)
+    w.lt = lt
+  end
+  return lt
+end
+
 local function close(a, b)
-  local la, lb = vim.fn.strchars(a.key), vim.fn.strchars(b.key)
+  local x, y = key_letters(a), key_letters(b)
+  local la, lb = #x, #y
   local allowed = math.max(1, math.floor(math.max(la, lb) / 3))
   if math.abs(la - lb) > allowed then return false end
-  return (distance(letters_of(a.key), letters_of(b.key))) <= allowed
+  return within(x, y, allowed)
 end
 
 ---------------------------------------------------------------------------
@@ -307,23 +379,63 @@ local function image_text(s, pos, attrs, after)
   return "\n\n"
 end
 
+-- What each tag becomes, by its name: block tags separate paragraphs.
+local TAG = setmetatable({}, { __index = function(t, name)
+  local n = name:lower():gsub("^.*:", "")
+  local v = n == "br" and "\n" or (BLOCK[n] and "\n\n" or "")
+  t[name] = v
+  return v
+end })
+
+-- A character by its number, as UTF-8 (was a call into Vimscript).
+local function utf8_char(n)
+  if not n or n < 0 or n > 0x10FFFF then return "" end
+  if n < 0x80 then return string.char(n) end
+  if n < 0x800 then
+    return string.char(0xC0 + math.floor(n / 0x40), 0x80 + n % 0x40)
+  end
+  if n < 0x10000 then
+    return string.char(0xE0 + math.floor(n / 0x1000),
+      0x80 + math.floor(n / 0x40) % 0x40, 0x80 + n % 0x40)
+  end
+  return string.char(0xF0 + math.floor(n / 0x40000),
+    0x80 + math.floor(n / 0x1000) % 0x40,
+    0x80 + math.floor(n / 0x40) % 0x40, 0x80 + n % 0x40)
+end
+
+-- Each step looks for its text first (a plain search is many times
+-- faster than a pattern that finds nothing in the whole chapter).
+local function has(s, ...)
+  for _, x in ipairs({ ... }) do
+    if s:find(x, 1, true) then return true end
+  end
+  return false
+end
+
 local function html_to_text(s)
-  s = s:gsub("<!%-%-.-%-%->", " ")
-  s = s:gsub("<[hH][eE][aA][dD][%s>].-</[hH][eE][aA][dD]>", " ")
-  s = s:gsub("<script.-</script>", " "):gsub("<style.-</style>", " ")
-  s = s:gsub("<[!?][^>]*>", " ")
-  local src = s
-  s = s:gsub("()<[iI][mM][gG](%s[^>]*)>()", function(pos, attrs, after)
-    return image_text(src, pos, attrs, after)
-  end)
-  s = s:gsub("<(/?)([%w:]+)[^>]*>", function(_, name)
-    name = name:lower():gsub("^.*:", "")
-    if name == "br" then return "\n" end
-    return BLOCK[name] and "\n\n" or ""
-  end)
-  s = s:gsub("&#[xX](%x+);", function(h) return vim.fn.nr2char(tonumber(h, 16)) end)
-  s = s:gsub("&#(%d+);", function(d) return vim.fn.nr2char(tonumber(d)) end)
-  s = s:gsub("&(%a+);", function(n) return ENTITIES[n] or ("&" .. n .. ";") end)
+  if has(s, "<!--") then s = s:gsub("<!%-%-.-%-%->", " ") end
+  if has(s, "<head", "<HEAD", "<Head") then
+    s = s:gsub("<[hH][eE][aA][dD][%s>].-</[hH][eE][aA][dD]>", " ")
+  end
+  if has(s, "<script") then s = s:gsub("<script.-</script>", " ") end
+  if has(s, "<style") then s = s:gsub("<style.-</style>", " ") end
+  if has(s, "<!", "<?") then s = s:gsub("<[!?][^>]*>", " ") end
+  if has(s, "<img", "<IMG", "<Img") then
+    local src = s
+    s = s:gsub("()<[iI][mM][gG](%s[^>]*)>()", function(pos, attrs, after)
+      return image_text(src, pos, attrs, after)
+    end)
+  end
+  s = s:gsub("<(/?)([%w:]+)[^>]*>", function(_, name) return TAG[name] end)
+  if has(s, "&") then
+    if has(s, "&#") then
+      s = s:gsub("&#[xX](%x+);",
+        function(h) return utf8_char(tonumber(h, 16)) end)
+      s = s:gsub("&#(%d+);", function(d) return utf8_char(tonumber(d)) end)
+    end
+    s = s:gsub("&(%a+);",
+      function(n) return ENTITIES[n] or ("&" .. n .. ";") end)
+  end
   return s
 end
 
@@ -353,8 +465,8 @@ local function one_line(s)
   return (html_to_text(s):gsub("%s+", " "):gsub("^ ", ""):gsub(" $", ""))
 end
 
--- The table of contents: { {file =, frag =, title =}, ... } in order.
-local function epub_toc(path, opf_xml, dir)
+-- The files holding the table of contents (EPUB 3 nav, EPUB 2 ncx).
+local function toc_files(opf_xml, dir)
   local nav, ncx
   for tag in opf_xml:gmatch("<[%w:]*item%s[^>]*>") do
     local href = tag:match('href%s*=%s*"([^"]+)"')
@@ -364,6 +476,12 @@ local function epub_toc(path, opf_xml, dir)
       if tag:find("application/x%-dtbncx%+xml") then ncx = join(dir, url_decode(href)) end
     end
   end
+  return nav, ncx
+end
+
+-- The table of contents: { {file =, frag =, title =}, ... } in order.
+-- read(name) gives a file of the EPUB.
+local function epub_toc(read, nav, ncx)
   local toc = {}
   local function add(base, href, label)
     local file, frag = href:match("^([^#]*)#?(.*)$")
@@ -373,7 +491,7 @@ local function epub_toc(path, opf_xml, dir)
                         frag = frag ~= "" and frag or nil, title = title }
     end
   end
-  local xml = nav and run({ "unzip", "-p", path, nav })
+  local xml = nav and read(nav)
   if xml then
     local part = xml:match("<nav[^>]-toc.-</nav>") or xml
     for href, label in part:gmatch('<a%s[^>]-href%s*=%s*"([^"]*)"[^>]*>(.-)</a>') do
@@ -381,7 +499,7 @@ local function epub_toc(path, opf_xml, dir)
     end
   end
   if #toc == 0 and ncx then
-    xml = run({ "unzip", "-p", path, ncx })
+    xml = read(ncx)
     for label, src in (xml or ""):gmatch(
         "<navLabel>%s*<text>(.-)</text>%s*</navLabel>%s*<content[^>]-src%s*=%s*\"([^\"]+)\"") do
       add(ncx, src, label)
@@ -407,19 +525,55 @@ local function epub_parts(path)
     local id, href = tag:match('%sid%s*=%s*"([^"]+)"'), tag:match('href%s*=%s*"([^"]+)"')
     if id and href then href_of[id] = url_decode(href:gsub("#.*$", "")) end
   end
-  local parts = {}
+  local spine, want = {}, {}
   for tag in opf_xml:gmatch("<[%w:]*itemref%s[^>]*>") do
     local href = href_of[tag:match('idref%s*=%s*"([^"]+)"') or ""]
     if href then
-      local file = join(dir, href)
-      local html = run({ "unzip", "-p", path, file })
-      if html then
-        parts[#parts + 1] = { file = file, html = html, text = html_to_text(html) }
-      end
+      spine[#spine + 1] = join(dir, href)
+      want[#want + 1] = spine[#spine]
     end
   end
+  local nav, ncx = toc_files(opf_xml, dir)
+  want[#want + 1] = nav
+  want[#want + 1] = ncx
+
+  -- A zip bomb (a small file that unpacks to gigabytes) is refused
+  -- before anything is unpacked.
+  local list = run({ "unzip", "-l", path }) or ""
+  local total = tonumber(list:match("\n%s*(%d+)%s+%d+%s+files?%s*$") or "0")
+  if total > M.opts.max_book_mb * 1024 * 1024 then
+    return nil, ("the EPUB unpacks to %d MB, more than opts.max_book_mb (%d)")
+      :format(math.floor(total / 1048576), M.opts.max_book_mb)
+  end
+
+  -- All chapters are unpacked with one unzip into Neovim's own temporary
+  -- directory (only you can read it) and deleted right after; one unzip
+  -- per chapter took most of the loading time.
+  local tmp = vim.fn.tempname()
+  local cmd = { "unzip", "-qq", "-o", path }
+  for _, f in ipairs(want) do cmd[#cmd + 1] = f end
+  cmd[#cmd + 1] = "-d"
+  cmd[#cmd + 1] = tmp
+  vim.fn.system(cmd)
+  local function read(name)
+    local f = io.open(tmp .. "/" .. name, "rb")
+    if not f then return nil end
+    local data = f:read("*a")
+    f:close()
+    return data
+  end
+  local parts = {}
+  for _, file in ipairs(spine) do
+    local html = read(file)
+    if html then
+      parts[#parts + 1] =
+        { file = file, html = html, text = html_to_text(html) }
+    end
+  end
+  local toc = epub_toc(read, nav, ncx)
+  vim.fn.delete(tmp, "rf")
   if #parts == 0 then return nil, "found no chapters in the EPUB" end
-  return parts, epub_toc(path, opf_xml, dir)
+  return parts, toc
 end
 
 local function pdf_parts(path)
@@ -543,6 +697,9 @@ end
 -- missed are keep's, and every time it reaches the first word of a line
 -- it notes where it is in keep.ck_t, ck_b and ck_m (typed word, book
 -- word, number of missed), so a later run can start from there.
+-- With keep.join it stops at the first line start, after the lines that
+-- changed, where the earlier run stood on the same book word: from there
+-- on everything comes out as it did then (keep.joined says where).
 local function align(book, typed, b, t, done, keep)
   local match, missed = keep and keep.match or {}, keep and keep.missed or {}
   local ck_t = keep and keep.ck_t
@@ -565,6 +722,14 @@ local function align(book, typed, b, t, done, keep)
   while t <= done and b <= #book do
     if ck_t and ck_t[#ck_t] ~= t
         and (t == 1 or typed[t].lnum ~= typed[t - 1].lnum) then
+      local j = keep.join
+      if j and typed[t].lnum > j.line then
+        local k = j.at[t - j.delta]
+        if k and j.ck_b[k] == b then
+          keep.joined = { t = t, k = k }
+          return match, missed
+        end
+      end
       local n = #ck_t + 1
       ck_t[n], keep.ck_b[n], keep.ck_m[n] = t, b, #missed
     end
@@ -680,7 +845,7 @@ end
 -- first..last, followed by enough of the next words to be the only
 -- such place in the book. A drop cap may be split from its word.
 local function word_rx(w)
-  local parts = { unpack(w.parts) }
+  local parts = parts_of(w)
   local first = parts[1]
   if first:match("^%w") and #first > 1 then
     parts[1] = first:sub(1, 1) .. "\\s*" .. first:sub(2)
@@ -704,7 +869,7 @@ local function pattern(book, first, last)
   local rx = {}
   for b = first, last do rx[#rx + 1] = word_rx(book[b]) end
   local p = table.concat(rx, "\\W+")
-  if book[first].parts[1]:match("^%w") then p = "\\b" .. p end
+  if book[first].norm:match("^[^%w\128-\255]*%w") then p = "\\b" .. p end
   local n = last - first + 1
   local ctx = {}
   while last + #ctx < #book and #ctx < 12 do
@@ -713,7 +878,7 @@ local function pattern(book, first, last)
   end
   if #ctx > 0 then
     p = p .. "(?=\\W+" .. table.concat(ctx, "\\W+") .. ")"
-  elseif book[last].parts[#book[last].parts]:match("%w$") then
+  elseif book[last].norm:match("%w[^%w\128-\255]*$") then
     p = p .. "\\b"
   end
   return p
@@ -800,8 +965,49 @@ local function show_word(buf, w, bw, in_progress)
   end
 end
 
--- Ghost text: the rest of the word being typed, then the next book
--- words, laid out like the book (paragraphs) and wrapped at the width.
+-- Scrolls the window so that `need` screen lines fit below the line
+-- you type on (the last one), as far as the window allows; returns how
+-- many fit. A window that is not the current one is left alone. Screen
+-- lines are counted here (a long line wrapped takes several), as
+-- winline() is only right after a redraw.
+local function make_room(buf, need)
+  local win = vim.api.nvim_get_current_win()
+  local height = vim.api.nvim_win_get_height(win)
+  local last = vim.api.nvim_buf_line_count(buf)
+  if vim.api.nvim_win_get_buf(win) ~= buf
+      or vim.api.nvim_win_get_cursor(win)[1] ~= last then
+    return height - 1
+  end
+  local info = vim.fn.getwininfo(win)[1]
+  local cols = math.max(1, info.width - info.textoff)
+  local wrap = vim.wo[win].wrap
+  local top = info.topline
+  local lines = vim.api.nvim_buf_get_lines(buf, top - 1, last, false)
+  local h, used = {}, 0
+  for i, l in ipairs(lines) do
+    local n = 1
+    if wrap and #l > cols then
+      n = math.max(1, math.ceil(vim.fn.strdisplaywidth(l) / cols))
+    end
+    h[i] = n
+    used = used + n
+  end
+  local k = 1
+  while height - used < need and top < last do
+    used = used - h[k]
+    k, top = k + 1, top + 1
+  end
+  if top ~= info.topline then vim.fn.winrestview({ topline = top }) end
+  return height - used
+end
+
+-- Ghost text: the rest of the word being typed, then the book words
+-- after it to the end of their paragraph, laid out like the book and
+-- wrapped at the width. Once a paragraph is typed to its last letter,
+-- the next one is shown whole. The window scrolls up to make room for
+-- it, as far as it can while the line you type on stays in view; what
+-- still does not fit is left out. (Before 2026-11-17 it was the next
+-- 4 lines only.)
 local function show_ghost(buf, tr, typed, cur_b, next_b)
   local book = tr.book
   local last = vim.api.nvim_buf_line_count(buf) - 1
@@ -811,46 +1017,54 @@ local function show_ghost(buf, tr, typed, cur_b, next_b)
     local tw = vim.bo[buf].textwidth
     width = tw > 0 and tw or 80
   end
-  local dw = vim.fn.strdisplaywidth
-  local rows = { { text = "", base = dw(line) } }
+  local first = ""
   if cur_b then
-    local typed_n = vim.fn.strchars(typed[#typed].raw)
-    rows[1].text = vim.fn.strcharpart(book[cur_b].raw, typed_n)
+    first = vim.fn.strcharpart(book[cur_b].raw, nchars(typed[#typed].raw))
   end
-  local function used(r) return r.base + dw(r.text) end
+  local rows = { first }
+  local used = vim.fn.strdisplaywidth(line) + nchars(first)
+  local blank_end = first == "" and line:match("%s$") ~= nil
+  -- The next paragraph only once this one is typed to the end.
+  local open_para = cur_b == nil or first == ""
+  local most = M.opts.ghost_lines or 1000
   local b = next_b
   while book[b] do
-    local w, r = book[b], rows[#rows]
+    local w = book[b]
+    if w.para and not (open_para and b == next_b) then break end
     local gap = w.gap
-    local at_start = used(r) == 0 or (r.text == "" and line:match("%s$"))
-    if w.para and used(r) > 0 then
-      rows[#rows + 1] = { text = "", base = 0 }    -- blank line, then
-      rows[#rows + 1] = { text = "", base = 0 }    -- the new paragraph
-      gap = ""
-    elseif at_start then
+    if w.para and used > 0 then
+      rows[#rows + 1] = ""                       -- blank line, then
+      rows[#rows + 1] = ""                       -- the new paragraph
+      used, gap = 0, ""
+    elseif used == 0 or (#rows == 1 and blank_end) then
       gap = gap:gsub("^%s+", "")
-    elseif used(r) + dw(gap .. w.raw) > width then
-      rows[#rows + 1] = { text = "", base = 0 }
-      gap = gap:gsub("^%s+", "")
+    elseif used + nchars(gap) + nchars(w.raw) > width then
+      rows[#rows + 1] = ""
+      used, gap = 0, gap:gsub("^%s+", "")
     end
-    if #rows > M.opts.ghost_lines + 1 then break end
-    r = rows[#rows]
-    r.text = r.text .. gap .. w.raw
+    if #rows > most + 1 then break end
+    rows[#rows] = rows[#rows] .. gap .. w.raw
+    used = used + nchars(gap) + nchars(w.raw)
+    blank_end = false
     b = b + 1
   end
-  while #rows > M.opts.ghost_lines + 1 do table.remove(rows) end
+  while #rows > most + 1 do table.remove(rows) end
+  if #rows > 1 then
+    local room = math.max(0, make_room(buf, #rows - 1))
+    while #rows > room + 1 do table.remove(rows) end
+  end
   -- right_gravity = true: Neovim draws inline text of such a mark after
   -- the cursor standing on its column (with false the cursor ended up
   -- after the ghost text, reported 2026-11-14).
   local opts = { right_gravity = true }
-  if rows[1].text ~= "" then
-    opts.virt_text = { { rows[1].text, "TypeTrackGhost" } }
+  if rows[1] ~= "" then
+    opts.virt_text = { { rows[1], "TypeTrackGhost" } }
     opts.virt_text_pos = INLINE and "inline" or "eol"
   end
   if #rows > 1 then
     opts.virt_lines = {}
     for k = 2, #rows do
-      opts.virt_lines[#opts.virt_lines + 1] = { { rows[k].text, "TypeTrackGhost" } }
+      opts.virt_lines[k - 1] = { { rows[k], "TypeTrackGhost" } }
     end
   end
   if opts.virt_text or opts.virt_lines then
@@ -862,33 +1076,82 @@ end
 -- Following a buffer
 ---------------------------------------------------------------------------
 
--- The typed words. With the buffer attached (start() does that), only
--- the lines from the first changed one on are read again: tr.dirty is
--- that line (nil: nothing changed), tr.count[i] the number of words
--- before line i. Returns the words and how many of them are as before.
-local function typed_words(buf, tr)
-  if not tr.attached or not tr.typed then
-    tr.typed, tr.count, tr.dirty = {}, { 0 }, 0
+-- The typed words, kept up to date as you type: Neovim reports each
+-- change (first line, old end, new end) and on_change() reads only the
+-- lines it touched; the words after them are moved along, not read
+-- again. tr.count[i + 1] is the number of words before line i (from 0).
+-- tr.same is how many words at the start are unchanged since the last
+-- process(), tr.chg the last line whose marks may have to be drawn
+-- again.
+local function read_all(buf, tr)
+  local typed, count = {}, { 0 }
+  for i, line in ipairs(vim.api.nvim_buf_get_lines(buf, 0, -1, false)) do
+    line_words(typed, line, i - 1)
+    count[i + 1] = #typed
   end
+  tr.typed, tr.count, tr.same, tr.chg = typed, count, 0, math.huge
+end
+
+local function on_change(buf, tr, first, last, new_last)
   local typed, count = tr.typed, tr.count
-  local from = tr.dirty
-  if not from then return typed, #typed end
-  tr.dirty = nil
-  if from > #count - 1 then from = #count - 1 end
-  local same_words = count[from + 1]
-  for i = #typed, same_words + 1, -1 do typed[i] = nil end
-  for i = #count, from + 2, -1 do count[i] = nil end
-  for i, line in ipairs(vim.api.nvim_buf_get_lines(buf, from, -1, false)) do
-    line_words(typed, line, from + i - 1)
-    count[from + i + 1] = #typed
+  if not typed then return end
+  if last > #count - 1 or first > last or first > new_last then
+    tr.typed = nil                        -- out of step: read it all again
+    return
   end
-  return typed, same_words
+  local w0, w1 = count[first + 1], count[last + 1]
+  local new, ncount = {}, {}
+  local lines = vim.api.nvim_buf_get_lines(buf, first, new_last, false)
+  for i, line in ipairs(lines) do
+    line_words(new, line, first + i - 1)
+    ncount[i] = #new
+  end
+  local dl, dw = new_last - last, #new - (w1 - w0)
+  local n, nc = #typed, #count
+  if dw > 0 then
+    for i = n, w1 + 1, -1 do typed[i + dw] = typed[i] end
+  elseif dw < 0 then
+    for i = w1 + 1, n do typed[i + dw] = typed[i] end
+    for i = n + dw + 1, n do typed[i] = nil end
+  end
+  if dl ~= 0 then
+    for i = w0 + #new + 1, n + dw do
+      local w = typed[i]
+      w.lnum = w.lnum + dl
+    end
+  end
+  for i = 1, #new do typed[w0 + i] = new[i] end
+  if dl > 0 then
+    for i = nc, last + 2, -1 do count[i + dl] = count[i] + dw end
+  elseif dl < 0 then
+    for i = last + 2, nc do count[i + dl] = count[i] + dw end
+    for i = nc + dl + 1, nc do count[i] = nil end
+  elseif dw ~= 0 then
+    for i = last + 2, nc do count[i] = count[i] + dw end
+  end
+  for i = 1, new_last - first do count[first + 1 + i] = w0 + ncount[i] end
+  if w0 < tr.same then tr.same = w0 end
+  local chg = tr.chg
+  if chg >= last then chg = chg + dl elseif chg >= first then chg = -1 end
+  -- The line after the change counts too: a mark at its very start
+  -- (a skipped word in front of its first word) can be pulled up into
+  -- the change.
+  tr.chg = math.max(chg, new_last)
+end
+
+-- Returns the words, how many at the start are as before, and the last
+-- line that changed.
+local function typed_words(buf, tr)
+  if not tr.attached or not tr.typed then read_all(buf, tr) end
+  local typed, same_words, chg = tr.typed, tr.same, tr.chg
+  tr.same, tr.chg = #typed, -1
+  return typed, math.min(same_words, #typed), chg
 end
 
 local function process(buf, flush)
   local tr = tracked[buf]
-  if not tr or not vim.api.nvim_buf_is_valid(buf) then return end
-  local typed, same_words = typed_words(buf, tr)
+  if not tr or not vim.api.nvim_buf_is_loaded(buf) then return end
+  local typed, same_words, chg = typed_words(buf, tr)
   local book = tr.book
 
   if not tr.start then
@@ -932,28 +1195,74 @@ local function process(buf, flush)
            done = -1, ntyped = 0 }
     tr.al = al
   end
+  --
+  -- After a change further up (a fix on page 3 of 300), the lines below
+  -- it come out as before as soon as the lining up is back on the same
+  -- book word: align() stops there (keep.join), the rest of the last
+  -- run is moved along by the number of words added or taken away, and
+  -- the marks below stay as they are (Neovim moves them with the text).
   local limit = math.min(same_words, al.done, done)
   local n = #al.ck_t
   while n > 0 and al.ck_t[n] + 6 > limit do n = n - 1 end
   local b, t, first_missed = s.b, t0, 1
   if n > 0 then b, t, first_missed = al.ck_b[n], al.ck_t[n], al.ck_m[n] + 1 end
+  local delta = #typed - al.ntyped
+  local join
+  if n > 0 and al.done >= 0 and done == al.done + delta then
+    join = { line = chg, delta = delta, at = {}, ck_t = {}, ck_b = {},
+             ck_m = {}, match = {}, missed = {}, nmissed = #al.missed }
+    for i = n, #al.ck_t do
+      local k = #join.ck_t + 1
+      join.ck_t[k], join.ck_b[k] = al.ck_t[i], al.ck_b[i]
+      join.ck_m[k] = al.ck_m[i]
+      join.at[al.ck_t[i]] = k
+    end
+    for i = t, al.ntyped do join.match[i] = al.match[i] end
+    for i = first_missed, #al.missed do join.missed[i] = al.missed[i] end
+  end
   for i = #al.ck_t, math.max(n, 1), -1 do
     al.ck_t[i], al.ck_b[i], al.ck_m[i] = nil, nil, nil
   end
   for i = #al.missed, first_missed, -1 do al.missed[i] = nil end
   for i = al.ntyped, #typed + 1, -1 do al.match[i] = nil end
-  vim.api.nvim_buf_clear_namespace(buf, ns, n > 0 and typed[t].lnum or 0, -1)
 
+  al.join, al.joined = join, nil
   local match, missed, cur_b, next_b = align(book, typed, b, t, done, al)
-  al.done, al.ntyped = done, #typed
+  local joined, upto = al.joined, #typed
+  al.join, al.joined = nil, nil
+  if joined then
+    -- The rest as the last run found it, moved along by delta words.
+    local k, m = joined.k, #missed
+    local old_t = join.ck_t[k]
+    for q = old_t, al.ntyped do match[q + delta] = join.match[q] end
+    for i = join.ck_m[k] + 1, join.nmissed do
+      local e = join.missed[i]
+      if e then
+        e.t = e.t + delta
+        missed[#missed + 1] = e
+      end
+    end
+    for i = k, #join.ck_t do
+      local c = #al.ck_t + 1
+      al.ck_t[c], al.ck_b[c] = join.ck_t[i] + delta, join.ck_b[i]
+      al.ck_m[c] = join.ck_m[i] - join.ck_m[k] + m
+    end
+    cur_b, next_b = al.cur_b, al.next_b
+    upto = joined.t - 1
+  end
+  al.done, al.ntyped, al.cur_b, al.next_b = done, #typed, cur_b, next_b
 
-  for q = t, #typed do
+  -- Marks from the restart line on are drawn again (with a join: only
+  -- down to the line where it joined).
+  vim.api.nvim_buf_clear_namespace(buf, ns, n > 0 and typed[t].lnum or 0,
+    joined and typed[joined.t].lnum or -1)
+  for q = t, upto do
     local bi = match[q]
     show_word(buf, typed[q], bi and book[bi] or nil, q > done)
   end
   -- Skipped book words, crossed out, where they should have been.
   local k = first_missed
-  while missed[k] do
+  while missed[k] and missed[k].t <= upto do
     local at, words = missed[k].t, {}
     while missed[k] and missed[k].t == at do
       words[#words + 1] = book[missed[k].b].raw
@@ -962,7 +1271,7 @@ local function process(buf, flush)
     virtual(buf, typed[at].lnum, typed[at].col, table.concat(words, " ") .. " ",
       "TypeTrackMissing")
   end
-  if tr.ghost then show_ghost(buf, tr, typed, cur_b, next_b) end
+  if tr.ghost and not joined then show_ghost(buf, tr, typed, cur_b, next_b) end
 
   if not M.opts.sioyek_marks then return end
 
@@ -1099,13 +1408,12 @@ function M.start(book_path, all, mode)
   -- Neovim reports the first line of every change, so process() reads
   -- and checks again only from there (typed_words). If the buffer is
   -- reloaded or the report stops, everything is read again as before.
-  tr.dirty = 0
   tr.attached = vim.api.nvim_buf_attach(buf, false, {
-    on_lines = function(_, _, _, first)
+    on_lines = function(_, _, _, first, last, new_last)
       if tracked[buf] ~= tr then return true end
-      if not tr.dirty or first < tr.dirty then tr.dirty = first end
+      on_change(buf, tr, first, last, new_last)
     end,
-    on_reload = function() tr.dirty = 0 end,
+    on_reload = function() tr.typed = nil end,
     on_detach = function() tr.attached = false end,
   })
 
@@ -1148,6 +1456,7 @@ M._internal = { words_of = words_of, load_book = load_book, align = align,
   find_start = find_start, pattern = pattern, quote = quote,
   char_diff = char_diff, prefix_diff = prefix_diff, set_start = set_start,
   buffer_words = buffer_words, process = process, tracked = tracked, ns = ns,
-  books = books }
+  books = books, html_to_text = html_to_text, within = within,
+  distance = distance }
 
 return M

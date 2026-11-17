@@ -151,9 +151,13 @@ for the checking.
 Two modes:
 
 - **Ghost mode** (`:TypeGhost ~/books/book.epub`, then `Space T`): the
-  book's next words are shown in grey after your cursor, with a few more
-  lines below. They are not in your file and cannot be edited; you type
-  over them. Paragraph breaks in the book show as a blank line.
+  rest of the book's paragraph is shown in grey after your cursor, to
+  its end. Once you have typed its last letter, the whole next
+  paragraph appears; the window scrolls up to make room, as far as it
+  can. The grey text is not in your file and cannot be edited; you type
+  over it. Paragraph breaks in the book show as a blank line. To show
+  at most N lines below the one you type on, add
+  `require("typetrack").opts.ghost_lines = N` to init.lua.
 - **Check mode** (`:TypeTrack ~/books/book.epub`, then `Space t`): the
   same checks, no grey text.
 
