@@ -224,7 +224,7 @@ static int is_spelled(struct trans *t)
 }
 
 /* after each stroke; top is the newest translation before it */
-void tape_stroke(long st, struct trans *top)
+void tape_stroke(long st, struct trans *top, int was_strokes)
 {
     char line[TAPE_LINE + 64], o[TEXT_MAX];
     struct trans *t;
@@ -257,7 +257,11 @@ void tape_stroke(long st, struct trans *top)
         n = strlen(line);
         k = stroke_result(st, top, line + n, TAPE_LINE - n);
         n = strlen(line);
-        sprintf(line + n, "\t%d\n", k);
+        if (k)
+            sprintf(line + n, "\t%d\n", k);
+        else    /* * : how many strokes it took back (as the engine
+                 * does: no-text ones such as KPA go with the word) */
+            sprintf(line + n, "\t0\t%d\n", was_strokes - history_strokes());
         feed_write(&tape_fd, line);
     }
     if (tape_fd >= 0 && spelling && spell_n && spell_word[0] &&

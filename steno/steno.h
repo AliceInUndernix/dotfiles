@@ -49,6 +49,7 @@ void translate(long st);
 void translate_reset(void);
 int history_count(void);
 struct trans *history_at(int i);
+int history_strokes(void);
 
 /* --- formatter --------------------------------------------------- */
 
@@ -111,7 +112,7 @@ int atoi_small(const char *s);         /* -1: not a number */
 /* --- terminal tools (tools.c) --------------------------------- */
 
 extern char user_dict[1024];
-void tape_stroke(long st, struct trans *top);
+void tape_stroke(long st, struct trans *top, int was_strokes);
 int stroke_result(long st, struct trans *top, char *out, int size);
 int view_main(int tape, int sugg, const char *cfg);   /* view.c */
 void open_viewer(const char *flag);     /* -T, -S, -TS in a terminal */

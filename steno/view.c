@@ -10,7 +10,9 @@
  * The suggestions keep each words once: typed again, they move to the
  * bottom. Both scroll (j k, arrows, Ctrl+U Ctrl+D, g G, the mouse
  * wheel), Tab choosing which. u: undone strokes and their * are gone
- * (the start), or a * shows as a line and dims the stroke it undid.
+ * (the start), or a * shows as a line and dims the strokes it undid
+ * (as many as steno took back: KPA and other strokes that write
+ * nothing go with the word before).
  * l or /
  * looks a word or outline up (steno -l), in a box that is there only
  * while it is used.
@@ -141,20 +143,22 @@ static void keep(struct box *b, const char *s)
  * n - 1 live strokes before it are part of it, so their text goes; a
  * stroke that is * undoes the newest live one, and what that one had
  * cleared comes back. */
-static void tape_merge(struct box *b, int i, int n)
+static void tape_merge(struct box *b, int i, int n, int undone)
 {
     int j, k;
 
     if (b->undo[i]) {
-        for (j = i - 1; j >= 0; j--)
-            if (!b->undo[j] && !b->dead[j])
-                break;
-        if (j < 0)
-            return;
-        b->dead[j] = 1;
-        for (k = 0; k < j; k++)
-            if (b->by[k] == b->seq[j])
-                b->by[k] = 0;
+        if (undone < 1)
+            undone = 1;
+        for (j = i - 1; j >= 0 && undone > 0; j--) {
+            if (b->undo[j] || b->dead[j])
+                continue;
+            b->dead[j] = 1;
+            for (k = 0; k < j; k++)
+                if (b->by[k] == b->seq[j])
+                    b->by[k] = 0;
+            undone--;
+        }
         return;
     }
     for (j = i - 1; j >= 0 && n > 1; j--) {
@@ -198,9 +202,9 @@ static void tape_spelled(struct box *b, const char *word, int n)
  * translation, with tabs between */
 static void got_tape(char *line)
 {
-    char cell[CELL_MAX], *tr, *nst;
+    char cell[CELL_MAX], *tr, *nst, *und;
     long st;
-    int i, n;
+    int i, n, undone;
 
     tr = strchr(line, '\t');
     if (tr) {
@@ -210,8 +214,14 @@ static void got_tape(char *line)
         tr = "";
     }
     nst = strchr(tr, '\t');
+    undone = 1;
     if (nst) {
         *nst = 0;
+        und = strchr(nst + 1, '\t');    /* a *: strokes it took back */
+        if (und) {
+            *und = 0;
+            undone = atoi_small(und + 1);
+        }
         n = atoi_small(nst + 1);
     } else {
         n = !(tr[0] == '*' && !tr[1]);    /* an engine before N */
@@ -237,7 +247,7 @@ static void got_tape(char *line)
     keep(&boxes[0], cell);
     i = boxes[0].nlines - 1;
     boxes[0].undo[i] = n == 0;
-    tape_merge(&boxes[0], i, n);
+    tape_merge(&boxes[0], i, n, undone);
     /* hidden, the * and its stroke take no line: what you scrolled
      * to stays */
     if (hide_undone && n == 0 && boxes[0].scroll) {

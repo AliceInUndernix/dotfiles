@@ -714,6 +714,16 @@ int history_count(void)
     return nhist;
 }
 
+int history_strokes(void)
+{
+    int i, n;
+
+    n = 0;
+    for (i = 0; i < nhist; i++)
+        n += hist[i]->nst;
+    return n;
+}
+
 struct trans *history_at(int i)
 {
     return hist[i];
