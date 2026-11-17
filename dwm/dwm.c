@@ -99,6 +99,7 @@ struct Client {
 	int ispinned; /* floats, skipped by Mod+j/k and by focus changes */
 	int issticky; /* pinned and on every tag of its monitor */
 	int noborder; /* the X window has no border now (see solitary) */
+	int takefocus, candelete; /* its WM_PROTOCOLS, see updateprotocols */
 	long stackpos; /* restart: place in the focus history (see scan) */
 	Client *next;
 	Client *snext;
@@ -218,6 +219,7 @@ static int snapto(Client *c, int vert, int a, int b, int lo, int hi, int *d);
 static void run(void);
 static void scan(void);
 static int sendevent(Client *c, Atom proto);
+static void updateprotocols(Client *c);
 static void sendmon(Client *c, Monitor *m);
 static void setclientstate(Client *c, long state);
 static void setfocus(Client *c);
@@ -1253,6 +1255,7 @@ manage(Window w, XWindowAttributes *wa)
 	c->oldbw = wa->border_width;
 
 	updatetitle(c);
+	updateprotocols(c);
 	if (XGetTransientForHint(dpy, w, &trans) && (t = wintoclient(trans))) {
 		c->mon = t->mon;
 		c->tags = t->tags;
@@ -1511,6 +1514,8 @@ propertynotify(XEvent *e)
 			drawbars();
 			break;
 		}
+		if (ev->atom == wmatom[WMProtocols])
+			updateprotocols(c);
 		if (ev->atom == XA_WM_NAME || ev->atom == netatom[NetWMName]) {
 			updatetitle(c);
 			if (c == c->mon->sel)
@@ -1807,7 +1812,8 @@ resizeclient(Client *c, int x, int y, int w, int h)
 	}
 	XConfigureWindow(dpy, c->win, CWX|CWY|CWWidth|CWHeight|CWBorderWidth, &wc);
 	configure(c);
-	XSync(dpy, False);
+	/* no XSync here: one per arrange (in restack) is enough, instead of
+	 * one wait for the X server per window */
 }
 
 void
@@ -2041,19 +2047,34 @@ setclientstate(Client *c, long state)
 		PropModeReplace, (unsigned char *)data, 2);
 }
 
-int
-sendevent(Client *c, Atom proto)
+/* WM_PROTOCOLS is read when the window comes and when it changes, not
+ * at every focus change: asking the X server each time is a wait */
+void
+updateprotocols(Client *c)
 {
 	int n;
 	Atom *protocols;
-	int exists = 0;
-	XEvent ev;
 
+	c->takefocus = c->candelete = 0;
 	if (XGetWMProtocols(dpy, c->win, &protocols, &n)) {
-		while (!exists && n--)
-			exists = protocols[n] == proto;
+		while (n--) {
+			if (protocols[n] == wmatom[WMTakeFocus])
+				c->takefocus = 1;
+			else if (protocols[n] == wmatom[WMDelete])
+				c->candelete = 1;
+		}
 		XFree(protocols);
 	}
+}
+
+int
+sendevent(Client *c, Atom proto)
+{
+	XEvent ev;
+	int exists;
+
+	exists = proto == wmatom[WMTakeFocus] ? c->takefocus
+		: proto == wmatom[WMDelete] ? c->candelete : 0;
 	if (exists) {
 		ev.type = ClientMessage;
 		ev.xclient.window = c->win;
@@ -2381,6 +2402,8 @@ void
 togglebar(const Arg *arg)
 {
 	selmon->showbar = !selmon->showbar;
+	if (selmon->showbar)
+		updatestatus();
 	updatebarpos(selmon);
 	XMoveResizeWindow(dpy, selmon->barwin, selmon->wx, selmon->by, selmon->ww, bh);
 	arrange(selmon);
@@ -2786,6 +2809,10 @@ updatesizehints(Client *c)
 void
 updatestatus(void)
 {
+	/* hidden bar: nothing reads the status; togglebar() reads it when
+	 * the bar is shown */
+	if (!selmon->showbar)
+		return;
 	if (!gettextprop(root, XA_WM_NAME, stext, sizeof(stext)))
 		strcpy(stext, "dwm-"VERSION);
 	drawbar(selmon);

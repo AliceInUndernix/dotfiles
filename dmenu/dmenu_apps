@@ -21,12 +21,15 @@ if [ ! -r "$list" ]; then
 fi
 
 hist=${XDG_CACHE_HOME:-$HOME/.cache}/dmenu_apps.hist
-mkdir -p "${hist%/*}"
+# test first: mkdir is a separate program, the test is built into sh
+[ -d "${hist%/*}" ] || mkdir -p "${hist%/*}"
 
-entries() { grep -v '^[[:space:]]*\(#\|$\)' "$list"; }
-
-name=$(entries | cut -f1 | dmenu -i -P -H "$hist" "$@") || exit 0
+# One awk each way instead of grep | cut: fewer programs to start
+# before dmenu shows up. Lines that are empty or start with # are skipped.
+name=$(awk -F '\t' '!/^[ \t]*(#|$)/ { print $1 }' "$list" |
+	dmenu -i -P -H "$hist" "$@") || exit 0
 [ -n "$name" ] || exit 0
 
-cmd=$(entries | awk -F '\t' -v n="$name" '$1 == n { print (NF > 1 ? $2 : $1); exit }')
+cmd=$(awk -F '\t' -v n="$name" '!/^[ \t]*(#|$)/ && $1 == n {
+	print (NF > 1 ? $2 : $1); exit }' "$list")
 exec ${SHELL:-/bin/sh} -c "${cmd:-$name}"
