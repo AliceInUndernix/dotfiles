@@ -299,6 +299,11 @@ install_nvim() {
 		rm -rf "$pack/$name"
 		say "delete  $pack/$name (no longer used)"
 	done
+	# Left over from the removed Claude proofreading check (its last answer)
+	if [ -e "$STATE/nvim/claude-check.log" ]; then
+		rm -f "$STATE/nvim/claude-check.log"
+		say "delete  $STATE/nvim/claude-check.log (no longer used)"
+	fi
 	for tarball in "$DOTFILES"/archive/nvim-plugins/*.tar.gz; do
 		[ -e "$tarball" ] || continue
 		name=$(basename "$tarball" .tar.gz)

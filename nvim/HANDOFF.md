@@ -86,6 +86,13 @@ nvim/
 - Keep the plover-vim-tutor line.
 - No Claude (or other AI) grammar check or proofreading: removed
   2026-11-16 at the user's request.
+- Keep startup light (2026-11-17, measured with `nvim --startuptime`):
+  options are set with `vim.o`, not `vim.opt`; zen-mode is set up at the
+  first `Space p` and typetrack.lua is loaded at the first `:Type*` or
+  `Space t`/`T`, not at start. init.lua went from about 5.0 to 3.1 ms.
+  The biggest remaining cost is Vim's own markdown syntax, which pulls in
+  HTML, CSS, JavaScript and VBScript highlighting (about 6 ms per .md
+  file opened); left as it is.
 - Say plainly what was and wasn't tested. Commit and push changes to
   main in the dotfiles repo.
 

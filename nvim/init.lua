@@ -6,7 +6,8 @@
 -- Files in this config:
 --   init.lua            this file (options, keys, Plover unicode fix,
 --                       plugins, prose mode)
---   lua/typetrack.lua   optional: type a book over grey ghost text, mistakes red
+--   lua/typetrack.lua   optional: type a book over grey ghost text,
+--                       mistakes red
 -- See README.md for the user guide and HANDOFF.md for history, decisions
 -- and open issues (read HANDOFF.md first if you are picking this work up).
 --
@@ -50,7 +51,9 @@ vim.g.mapleader = " "          -- Space is the leader key
 ---------------------------------------------------------------------------
 -- Everyday options (code mode is simply "the defaults")
 ---------------------------------------------------------------------------
-local o = vim.opt
+-- vim.o, not vim.opt: a plain value is set directly, without building
+-- an option object first (about 1 ms less at every start).
+local o = vim.o
 
 o.number = true                -- show the real number on the current line
 o.relativenumber = true        -- other lines show distance (easy 5j, 12k)
@@ -84,13 +87,17 @@ o.list = true
 local listchars = "tab:\226\134\146 ,trail:\194\183,nbsp:\226\144\163,"
   .. "extends:\226\128\186,precedes:\226\128\185"
 o.listchars = listchars
+local listchars_typing = listchars:gsub("trail:[^,]*,", "")
+local function set_listchars(value)
+  vim.api.nvim_set_option_value("listchars", value, { scope = "local" })
+end
 vim.api.nvim_create_autocmd("InsertEnter", {
   callback = function()
-    if vim.wo.list then vim.opt_local.listchars:remove("trail") end
+    if vim.wo.list then set_listchars(listchars_typing) end
   end,
 })
 vim.api.nvim_create_autocmd("InsertLeave", {
-  callback = function() vim.opt_local.listchars = listchars end,
+  callback = function() set_listchars(listchars) end,
 })
 
 o.inccommand = "split"         -- :s/old/new shows the changes while you
@@ -110,7 +117,6 @@ o.mouse = "a"
 o.clipboard = "unnamedplus"    -- yank/paste uses the system clipboard
                                -- (needs xclip or xsel; install.sh --deps
                                -- installs both)
-o.updatetime = 300
 
 -- Persistent history. Neovim keeps these in its own state directory
 -- (~/.system/state/nvim/) so your project directories stay clean.
@@ -155,8 +161,9 @@ local map = vim.keymap.set
 map("n", "<Esc>", "<cmd>nohlsearch<CR>", { desc = "Clear search highlight" })
 map("n", "<leader>w", "<cmd>write<CR>", { desc = "Save" })
 
--- Symbols from steno (em and en dash, curly quotes, ellipsis). On Linux, Plover types a symbol the way
--- GTK apps expect: Ctrl+Shift+U, its hex code (2014), then Space/Enter.
+-- Symbols from steno (em and en dash, curly quotes, ellipsis). On Linux,
+-- Plover types a symbol the way GTK apps expect: Ctrl+Shift+U, its hex
+-- code (2014), then Space/Enter.
 -- Terminals ignore that shortcut, so only "2014" arrived. This catches
 -- the sequence in insert mode and puts in the real character instead.
 -- Up to 6 hex digits are read; Space or Enter ends the code and is
@@ -195,13 +202,14 @@ vim.api.nvim_create_autocmd("BufReadPost", {
 
 -- Spelling comes from steno, so spell check is off; <Space>s toggles it.
 o.spelllang = "en"
-map("n", "<leader>s", "<cmd>setlocal spell!<CR>", { desc = "Toggle spell check" })
+map("n", "<leader>s", "<cmd>setlocal spell!<CR>",
+  { desc = "Toggle spell check" })
 
 -- In prose files, wrap at 80 even outside prose mode (for gq and typing).
 vim.api.nvim_create_autocmd("FileType", {
   pattern = { "markdown", "text", "gitcommit" },
   callback = function()
-    vim.opt_local.textwidth = 80
+    vim.bo.textwidth = 80
   end,
 })
 
@@ -220,8 +228,14 @@ vim.api.nvim_create_autocmd("FileType", {
 --   and the rest of the config works as usual. Needs unzip (EPUB) or
 --   pdftotext (PDF).
 ---------------------------------------------------------------------------
-local has_typetrack, typetrack = pcall(require, "typetrack")
+-- typetrack.lua is loaded at the first use of one of these, not at
+-- every start.
+local has_typetrack = vim.uv.fs_stat(vim.fn.stdpath("config")
+  .. "/lua/typetrack.lua") ~= nil
 if has_typetrack then
+  local typetrack = setmetatable({}, {
+    __index = function(_, key) return require("typetrack")[key] end,
+  })
   vim.api.nvim_create_user_command("TypeTrack", function(a)
     typetrack.start(a.args, a.bang, "check")
   end, { nargs = "?", bang = true, complete = "file" })
@@ -236,11 +250,17 @@ if has_typetrack then
   end, {})
   local function toggle(mode)
     return function()
-      if typetrack.mode() == mode then typetrack.stop() else typetrack.start(nil, false, mode) end
+      if typetrack.mode() == mode then
+        typetrack.stop()
+      else
+        typetrack.start(nil, false, mode)
+      end
     end
   end
-  map("n", "<leader>t", toggle("check"), { desc = "Check typing against the book" })
-  map("n", "<leader>T", toggle("ghost"), { desc = "Type over the book's ghost text" })
+  map("n", "<leader>t", toggle("check"),
+    { desc = "Check typing against the book" })
+  map("n", "<leader>T", toggle("ghost"),
+    { desc = "Type over the book's ghost text" })
 end
 
 ---------------------------------------------------------------------------
@@ -354,8 +374,10 @@ vim.g["pencil#conceallevel"] = 0
 -- after editing the middle of a paragraph, gqip re-wraps it.
 vim.g["pencil#autoformat"] = 0
 
+-- zen-mode is set up at the first Space p, not at every start.
 local prose_buf = nil
-require("zen-mode").setup({
+local zen_ready = false
+local zen_opts = {
   window = {
     width = 82,                 -- 80 characters plus a little breathing room
     backdrop = 1,
@@ -403,9 +425,16 @@ require("zen-mode").setup({
     pcall(vim.keymap.del, "i", "<Down>", { buffer = b })
     pcall(vim.keymap.del, "i", "<Up>", { buffer = b })
   end,
-})
+}
 
-local function toggle_prose() require("zen-mode").toggle() end
+local function toggle_prose()
+  local zen = require("zen-mode")
+  if not zen_ready then
+    zen.setup(zen_opts)
+    zen_ready = true
+  end
+  zen.toggle()
+end
 vim.api.nvim_create_user_command("Prose", toggle_prose, {})
 map("n", "<leader>p", toggle_prose, { desc = "Toggle prose mode" })
 
@@ -413,6 +442,7 @@ map("n", "<leader>p", toggle_prose, { desc = "Toggle prose mode" })
 -- On their own they only closed the prose window and left the file open.
 vim.api.nvim_create_autocmd("QuitPre", {
   callback = function()
+    if not zen_ready then return end   -- prose mode never opened
     local view = require("zen-mode.view")
     if not view.is_open() then return end
     -- the ! of :q! or :wq! (the last command line typed)
