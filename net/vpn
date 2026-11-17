@@ -91,10 +91,17 @@ S_STATE=starting S_LEVEL=2 S_PROBLEM= S_NOTE= S_ZONE= S_CC= S_LOC= S_IP=
 S_SPEED= S_SINCE= S_CLOCK= S_CERT= S_TOR= S_TESTS= S_STEP= S_ZONES=
 S_PROG=
 
+# One date and no chmod (the umask gives the modes): put runs often
+# while a server is picked, and each program it starts costs time on a
+# slow machine.
 put() {
     S_STATE=$1
     S_PROBLEM=${2:-}
-    mkdir -p "$RUN"
+    [ -d "$RUN" ] || mkdir -p "$RUN"
+    pt=$(date -u '+%s %H:%M:%S')
+    [ "$S_STEP" != new ] || S_STEP=${pt%% *}
+    pt=${pt#* }
+    umask 077
     {
         say "state=$S_STATE"
         say "level=$S_LEVEL"
@@ -113,13 +120,12 @@ put() {
         say "step=$S_STEP"
         say "zones=$S_ZONES"
         say "progress=$S_PROG"
-        say "updated=$(date -u +%H:%M:%S)"
+        say "updated=$pt"
     } > "$RUN/status.new"
+    umask 022
     printf 'state=%s\nlevel=%s\nproblem=%s\nupdated=%s\n' "$S_STATE" \
-        "$S_LEVEL" "$S_PROBLEM" "$(date -u +%H:%M:%S)" > "$RUN/public.new"
+        "$S_LEVEL" "$S_PROBLEM" "$pt" > "$RUN/public.new"
     say "$S_STATE $S_LEVEL" > "$RUN/state.new"
-    chmod 600 "$RUN/status.new"
-    chmod 644 "$RUN/public.new" "$RUN/state.new"
     mv -f "$RUN/status.new" "$RUN/status"
     mv -f "$RUN/public.new" "$RUN/public"
     mv -f "$RUN/state.new" "$RUN/state"
@@ -127,19 +133,24 @@ put() {
 
 now_utc() { date -u '+%Y-%m-%d %H:%M UTC'; }
 
-# note <text>: what is being done now; the screen counts the seconds.
+# note <text>: what is being done now; the screen counts the seconds
+# (from the time the next put writes it down).
 note() {
     S_NOTE=$*
-    S_STEP=$(date +%s)
+    S_STEP=new
 }
 
 # ev <text>: one line in /run/vpn/events (root only), what happened
 # and why, newest last; vpn log shows it, the screen its last lines.
+# The lines are counted only every 25th time (and the first).
 EVENTS_MAX=300
+EV_CALLS=0
 ev() {
-    mkdir -p "$RUN"
+    [ -d "$RUN" ] || mkdir -p "$RUN"
     [ -e "$RUN/events" ] || { : > "$RUN/events"; chmod 600 "$RUN/events"; }
     printf '%s %s\n' "$(date -u +%H:%M:%S)" "$*" >> "$RUN/events"
+    EV_CALLS=$((EV_CALLS % 25 + 1))
+    [ $EV_CALLS -eq 1 ] || return 0
     n=$(wc -l < "$RUN/events")
     if [ "$n" -gt $((EVENTS_MAX + 50)) ]; then
         tail -n $EVENTS_MAX "$RUN/events" > "$RUN/events.new"
@@ -423,13 +434,16 @@ fetch() {
 
 # dnscurl <dns ip> <curl args>: curl that sees "nameserver <dns ip>" as
 # /etc/resolv.conf (in its own mount namespace: nothing else does).
+# DNSCURL_ID tells two at the same time apart ($$ is the same in both).
+DNSCURL_ID=0
 dnscurl() {
-    printf 'nameserver %s\n' "$1" > "$RUN/resolv.$$"
+    r=$RUN/resolv.$$.$DNSCURL_ID
+    printf 'nameserver %s\n' "$1" > "$r"
     shift
     unshare -m sh -c 'mount --bind "$0" /etc/resolv.conf && exec curl "$@"' \
-        "$RUN/resolv.$$" "$@"
+        "$r" "$@"
     rc=$?
-    rm -f "$RUN/resolv.$$"
+    rm -f "$r"
     return $rc
 }
 
@@ -496,25 +510,26 @@ mkconf() {
     chmod 600 "$1"
 }
 
-# start_ovpn <conf>: start OpenVPN, wait until its up-hook ran. On
+# start_ovpn <conf>: start OpenVPN, wait until its up-hook ran (looked
+# at 5 times a second: each connection is ready that much sooner). On
 # failure OVPN_WHY says why (OpenVPN's last words, or the time).
 OVPN_WHY=
 start_ovpn() {
     rm -f "$RUN/up"
     OVPN_WHY=
-    l0=$(cat "$RUN/openvpn.log" 2>/dev/null | wc -l)
+    l0=$(wc -l 2>/dev/null < "$RUN/openvpn.log") || l0=0
     openvpn --config "$1" --log-append "$RUN/openvpn.log" \
         </dev/null >/dev/null 2>&1 &
     OVPN_PID=$!
     say "$OVPN_PID" > "$RUN/openvpn.pid"
     n=0
-    while [ $n -lt $UP_SECS ]; do
+    while [ $n -lt $((UP_SECS * 5)) ]; do
         [ -f "$RUN/up" ] && return 0
         if ! kill -0 "$OVPN_PID" 2>/dev/null; then
             OVPN_WHY="OpenVPN quit: $(ovpn_last "$l0")"
             break
         fi
-        sleep 1
+        sleep 0.2
         n=$((n + 1))
     done
     [ -n "$OVPN_WHY" ] ||
@@ -608,11 +623,14 @@ speed_test() {
     return 1
 }
 
-# test_gateway <list line>: connect, measure, disconnect. TG_SPEED is
-# the speed, or empty and TG_WHY says what went wrong.
+# test_gateway <list line>: connect, measure. The tunnel stays up after
+# a good test (pick keeps it when this one is the fastest: one
+# connection less); the one before it is closed first. TG_SPEED is the
+# speed, or empty and TG_WHY says what went wrong.
 TG_SPEED= TG_WHY=
 test_gateway() {
     TG_SPEED= TG_WHY=
+    [ -z "$OVPN_PID" ] || stop_ovpn
     set -- $1
     mkconf "$RUN/test.conf" "$1" "$5"
     if ! start_ovpn "$RUN/test.conf"; then
@@ -627,9 +645,9 @@ test_gateway() {
     note "$TG_ZONE: speed test through $3 $2, $TEST_SECS s at most"
     put testing
     s=$(speed_test) || s=
-    stop_ovpn
     case $s in
     ''|*[!0-9]*)
+        stop_ovpn
         TG_WHY="tunnel ok, but no mirror sent 1 MB in $TEST_SECS s"
         return 1 ;;
     esac
@@ -649,7 +667,7 @@ candidates() {
     }' "$ETC/countries" "$ETC/gateways" | sort -n | cut -d ' ' -f 2-
 }
 
-CHOSEN= CHOSEN_ZONE= CHOSEN_SPEED=
+CHOSEN= CHOSEN_ZONE= CHOSEN_SPEED= CHOSEN_UP=
 
 # pick: zones beat speed. The first zone (white, gray, black) with any
 # working server wins; in it, the fastest of up to 3 random ones. Each
@@ -663,7 +681,7 @@ pick() {
         return 1
     fi
     firewall pick
-    S_TESTS=
+    S_TESTS= CHOSEN_UP=
     all=$(awk 'NF >= 5' "$ETC/gateways" | wc -l)
     counts= S_ZONES=
     for zone in white gray black; do
@@ -685,7 +703,7 @@ pick() {
         fi
         [ "$zone" != black ] ||
             ev "black: used only because no white or gray server works"
-        best= bspeed=-1 tested=0 tried=0 failed=0
+        best= bspeed=-1 tested=0 tried=0 failed=0 last=
         while IFS= read -r line; do
             [ $tested -lt $TESTS ] || break
             set -- $line
@@ -694,7 +712,9 @@ pick() {
             note "$zone: connecting to $3 $2, server $tried of $total," \
                 "speed-tested $tested of $TESTS"
             put testing
+            last=
             if test_gateway "$line"; then
+                last=$line
                 tested=$((tested + 1))
                 S_TESTS="$S_TESTS$3|$2|$1|$((TG_SPEED / 1024))|;"
                 put testing
@@ -710,6 +730,14 @@ pick() {
             fi
         done < "$RUN/candidates.$zone"
         rm -f "$RUN/candidates.$zone"
+        # the fastest was the last one tested: its tunnel is still up
+        if [ -n "$best" ] && [ "$best" = "$last" ] && [ -n "$OVPN_PID" ] &&
+            [ -f "$RUN/up" ] && kill -0 "$OVPN_PID" 2>/dev/null
+        then
+            CHOSEN_UP=1
+        else
+            [ -z "$OVPN_PID" ] || stop_ovpn
+        fi
         if [ -n "$best" ]; then
             set -- $best
             ev "$zone: chose $3 $2, the fastest of $tested tested" \
@@ -723,6 +751,7 @@ pick() {
         why="${why:+$why; }$zone: $tried tried, all failed"
     done
     rm -f "$RUN"/candidates.*
+    [ -z "$OVPN_PID" ] || stop_ovpn
     ev "no zone has a working server ($why)"
     S_PROG="none"
     PICK_WHY=$why
@@ -756,10 +785,19 @@ tor_epoch() {
         "$(mirror_url "$1")" </dev/null | date_epoch
 }
 
-# clock_from <how> <epoch function>: 1 when there was no answer
+# clock_from <how> <epoch function>: 1 when there was no answer. Both
+# mirrors are asked at the same time (each still on its own circuit):
+# half the wait, and the two answers are from the same moment.
 clock_from() {
-    a=$($2 1)
-    b=$($2 2)
+    rm -f "$RUN/clock.1" "$RUN/clock.2"
+    (DNSCURL_ID=1; $2 1 > "$RUN/clock.1") &
+    cp1=$!
+    (DNSCURL_ID=2; $2 2 > "$RUN/clock.2") &
+    wait "$cp1" "$!"
+    a= b=
+    [ ! -s "$RUN/clock.1" ] || read -r a < "$RUN/clock.1"
+    [ ! -s "$RUN/clock.2" ] || read -r b < "$RUN/clock.2"
+    rm -f "$RUN/clock.1" "$RUN/clock.2"
     if [ -z "$a" ] || [ -z "$b" ]; then
         S_CLOCK="not checked: no answer $1"
         return 1
@@ -897,11 +935,20 @@ connect_final() {
     note "connecting to $3 ($2), try $((fails + 1)) of 3"
     put connecting
     mkconf "$RUN/riseup.conf" "$1" "$5"
-    if ! start_ovpn "$RUN/riseup.conf"; then
-        ev "connect to $3 failed (try $((fails + 1)) of 3): $OVPN_WHY"
-        return 1
+    if [ -n "$CHOSEN_UP" ] && [ -n "$OVPN_PID" ] && [ -f "$RUN/up" ] &&
+        kill -0 "$OVPN_PID" 2>/dev/null
+    then
+        CHOSEN_UP=
+        ev "connected to $3 ($2) $1 (the tunnel of its speed test)"
+    else
+        CHOSEN_UP=
+        [ -z "$OVPN_PID" ] || stop_ovpn
+        if ! start_ovpn "$RUN/riseup.conf"; then
+            ev "connect to $3 failed (try $((fails + 1)) of 3): $OVPN_WHY"
+            return 1
+        fi
+        ev "connected to $3 ($2) $1"
     fi
-    ev "connected to $3 ($2) $1"
     # the certificate or list is getting old: renew through the tunnel
     if ! openssl x509 -checkend 1209600 -noout -in "$ETC/client.crt" \
         >/dev/null 2>&1 || [ -n "$(find "$ETC/gateways" -mtime +7)" ]
@@ -1030,9 +1077,10 @@ daemon() {
     # made-up MAC addresses get none, try again with the cards' own
     note "waiting for an address from DHCP (dhcpcd), up to 60 s"
     put starting
+    # (looked at twice a second; n counts half seconds)
     n=0
-    while [ $n -lt 60 ] && ! has_net; do
-        if [ $n -eq 30 ] && [ -s "$RUN/macs" ]; then
+    while [ $n -lt 120 ] && ! has_net; do
+        if [ $n -eq 60 ] && [ -s "$RUN/macs" ]; then
             ev "no address from DHCP in 30 s with made-up MAC addresses:" \
                 "back to the cards' own (vpn log; touch $ETC/keep-mac)"
             restore_macs
@@ -1040,11 +1088,11 @@ daemon() {
             note "waiting for DHCP again, with the cards' own MAC addresses"
             put starting
         fi
-        sleep 1
+        sleep 0.5
         n=$((n + 1))
     done
     if has_net; then
-        ev "network up after $n s"
+        ev "network up after $((n / 2)) s"
     else
         ev "no address from DHCP after 60 s: is a cable or Wi-Fi" \
             "connected? (ip -br addr: 169.254.x.x means DHCP gave none)"

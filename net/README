@@ -19,14 +19,15 @@ What happens at boot
    are in /etc/vpn/countries (white, then gray, then black). In the
    first zone with any working server, up to 3 random servers are
    speed-tested through the tunnel (5 MB or 6 seconds each, from the
-   mirrors in /etc/vpn/mirrors), and the fastest one is used. Nothing
-   depends on where you are.
+   mirrors in /etc/vpn/mirrors), and the fastest one is used (when it
+   was the last one tested, its tunnel stays up: one connection less).
+   Nothing depends on where you are.
 3. OpenVPN connects to that server. If the certificate expires
    within 14 days or the server list is a week old, both are renewed,
    through the tunnel.
 4. Tor starts, after OpenVPN, so it goes out through the VPN. The
    clock is set from two mirrors' answers through Tor (each on its own
-   circuit), when they agree; never NTP. Only if Tor can't get going
+   circuit, both asked at once), when they agree; never NTP. Only if Tor can't get going
    (a clock far off stops it) is it set through the tunnel once, and
    Tor started again. In level 0 and the sandbox it is set through
    Tor too.
@@ -164,8 +165,10 @@ borders, as in btop, the key itself in blue; nothing needs Enter:
     t selftest                e the whole log (j k space b g G, q back)
     ? help                    q quit (Ctrl+C too)
 
-It redraws twice a second, only what changed, and uses the whole
-window (at least 70x20).
+It redraws once a second, on the second, and at once when the vpn
+service writes something new (inotify on /run/vpn); only what changed
+goes to the terminal, and the log is read again only when it grew. It
+uses the whole window (at least 70x20).
 
 "vpn watch" shows the same screen to anyone, without the details and
 keys. Without vpntop (or without a terminal) vpn shows a plain screen.
