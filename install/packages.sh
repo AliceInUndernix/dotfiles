@@ -20,8 +20,8 @@ GENTOO_TOOLS="app-shells/ksh dev-vcs/git net-misc/curl net-misc/wget
 GENTOO_MEDIA="media-video/mpv net-misc/yt-dlp media-gfx/feh
 	media-gfx/flameshot media-sound/wiremix"
 GENTOO_ARCHIVES="app-arch/zip app-arch/unzip app-arch/7zip"
-# not free software: each needs its licence accepted (below)
-GENTOO_NONFREE="app-arch/rar app-arch/unrar"
+# not free software: its licence is accepted below
+GENTOO_NONFREE="app-arch/unrar"
 GENTOO_NET="net-vpn/openvpn net-vpn/tor"
 
 install_packages() (
@@ -31,7 +31,7 @@ install_packages() (
 	case $id in
 	*gentoo*) gentoo_packages ;;
 	*debian*|*ubuntu*)
-		# rar and unrar are in Debian's non-free section
+		# unrar is in Debian's non-free section
 		apt-get install build-essential pkg-config libx11-dev \
 			libxft-dev libxinerama-dev libxrandr-dev libxext-dev \
 			libfontconfig-dev libfreetype-dev xserver-xorg xinit \
@@ -82,7 +82,6 @@ gentoo_packages() {
 	keyword app-text/sioyek '**'
 	# Tor with seccomp, for "Sandbox 1" in net/torrc
 	portage use net-vpn/tor seccomp
-	portage license app-arch/rar RAR
 	portage license app-arch/unrar unRAR
 	# PipeWire first, on its own: wiremix needs its libpipewire-0.3 to
 	# build, but its ebuild doesn't say so, so emerge may build wiremix
@@ -91,10 +90,10 @@ gentoo_packages() {
 		media-video/wireplumber
 	emerge $EMERGE_OPTS --noreplace --changed-use $GENTOO_X $GENTOO_TOOLS \
 		$GENTOO_MEDIA $GENTOO_ARCHIVES $GENTOO_NET
-	# On their own, so a licence or fetch problem with them doesn't stop
+	# On its own, so a licence or fetch problem with it doesn't stop
 	# the rest
 	emerge $EMERGE_OPTS --noreplace $GENTOO_NONFREE ||
-		warn "rar and unrar did not install (see emerge's messages above)"
+		warn "unrar did not install (see emerge's messages above)"
 	gentoo_sioyek
 }
 
