@@ -223,6 +223,22 @@ static int is_spelled(struct trans *t)
     return t && t->has_english && strstr(t->english, "{&") != 0;
 }
 
+/* {^ed}, {^ing}: letters only, put on the word before */
+static int is_suffix(struct trans *t)
+{
+    const char *e;
+    int i;
+
+    if (!t || !t->has_english)
+        return 0;
+    e = t->english;
+    if (e[0] != '{' || e[1] != '^')
+        return 0;
+    for (i = 2; (e[i] >= 'a' && e[i] <= 'z') || e[i] == '\''; i++)
+        ;
+    return i > 2 && e[i] == '}' && !e[i + 1];
+}
+
 /* after each stroke; top is the newest translation before it */
 void tape_stroke(long st, struct trans *top, int was_strokes)
 {
@@ -272,6 +288,22 @@ void tape_stroke(long st, struct trans *top, int was_strokes)
         n = strlen(line);
         sprintf(line + n, "\t%d\n", spell_n);
         feed_write(&tape_fd, line);
+    }
+    /* a suffix (-D: {^ed}) put on the word before: the tape shows the
+     * word it made (prescribed), not just the ending */
+    if (tape_fd >= 0 && made && !spelling && is_suffix(t) &&
+        history_count() > 1)
+    {
+        last_words(1, spell_word, sizeof(spell_word));
+        trim(spell_word);
+        if (spell_word[0]) {
+            scopy(line, "=\t", sizeof(line));
+            put_escaped(line, TAPE_LINE, spell_word);
+            n = strlen(line);
+            sprintf(line + n, "\t%d\n",
+                t->nst + history_at(history_count() - 2)->nst);
+            feed_write(&tape_fd, line);
+        }
     }
     was = sugg_fd >= 0;
     if (!output_on)
