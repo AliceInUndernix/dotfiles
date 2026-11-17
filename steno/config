@@ -5,9 +5,9 @@
 # answers, and again whenever it is unplugged.
 port auto
 
-# Dotterel's dictionaries in steno's plain format: the steno/ part of
-# steno's own clone of the dotterel repo (./install.sh steno updates
-# it and links them here), apart from Plover's.
+# Dotterel's dictionaries in steno's plain format: the dictionaries/
+# of steno's clone of the dotterel repo (./install.sh steno updates it
+# and links them here).
 dictionaries ~/.system/share/steno/dictionaries
 
 # The first dictionary wins, as at the top of Plover's list. user is

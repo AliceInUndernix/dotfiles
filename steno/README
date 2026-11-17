@@ -50,15 +50,13 @@ parsed for them. A dict line names them without an extension:
                         in the list (or their .dict files)
     dotterel-raw        raw mode, RA*U (dotterel-raw.json)
 
-The dictionaries are its own: ./install.sh steno clones the dotterel
-repo into ~/.system/share/steno/dotterel and updates it every run.
-steno never reads Plover's files, and the two don't depend on each
-other.
-
-Dotterel's other tools (Builder, Practice, Stats ...) are not, on
-purpose: they stay in Plover.
-
-Run only one of Plover and steno: both would read the same keyboard.
+The dictionaries are Dotterel's, in steno's own plain format:
+./install.sh steno clones the dotterel repo into
+~/.system/share/steno/dotterel and updates it every run. steno needs
+nothing of Plover's: to use Plover dictionaries of your own, turn them
+into steno's format once with steno -C. (Dotterel's Plover tools, the
+Builder, Practice and Stats, stay in Plover, in the dotterel repo's
+plover/ archive.)
 
     steno            in a terminal: types, and shows the status screen
     steno &          in the background: types, and says nothing but

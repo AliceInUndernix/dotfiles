@@ -17,7 +17,6 @@ edited) live in the app directories at the top of the repo.
 | `tmux/tmux-3.8.tar.gz` | tmux release (if a distro ever lacks it) | https://github.com/tmux/tmux/releases | 3.8 |
 | `nvim-plugins/zen-mode.nvim.tar.gz` | prose mode view | https://github.com/folke/zen-mode.nvim | `8564ce6` (2025-10-28) |
 | `nvim-plugins/vim-pencil.tar.gz` | prose wrapping | https://github.com/preservim/vim-pencil | `6d70438` (2023-04-03) |
-| `nvim-plugins/plover-vim-tutor.tar.gz` | plover-vim help pages | https://github.com/Josiah-tan/plover-vim-tutor | `8015ae4` (2026-07-07) |
 | `nvim-plugins/mini.pick.tar.gz` | fuzzy finder | https://github.com/nvim-mini/mini.pick | `f1216d7` (2026-11-07) |
 | `nvim-plugins/mini.surround.tar.gz` | surround quotes/brackets | https://github.com/nvim-mini/mini.surround | `5357f00` (2026-10-27) |
 | `nvim-plugins/which-key.nvim.tar.gz` | key hints | https://github.com/folke/which-key.nvim | `3aab214` (2025-10-28) |
@@ -26,7 +25,6 @@ Full commits:
 
 - zen-mode.nvim `8564ce6d29ec7554eb9df578efa882d33b3c23a7`
 - vim-pencil `6d70438a8886eaf933c38a7a43a61adb0a7815ed`
-- plover-vim-tutor `8015ae48fd3cc39ea3682b9094874a688d9f63d9`
 - mini.pick `f1216d764d0c2772e88d4e1a0cef3082f5b498e1`
 - mini.surround `5357f00aca51a3b43e7775901b1ad9699f8c2678`
 - which-key.nvim `3aab2147e74890957785941f0c1ad87d0a44c15a`
@@ -40,8 +38,7 @@ directory's `sha256sums.txt`. The git snapshots were made with
 
 - **Neovim plugins:** `./install.sh nvim` unpacks any missing plugin from
   here into `~/.system/share/nvim/site/pack/plugins/opt/`, so Neovim works
-  on first start without internet. Delete that directory to download
-  fresh copies instead.
+  on first start without internet (Neovim itself downloads nothing).
 - **suckless:** `tar xf suckless/dwm-6.8.tar.gz` gives the pristine
   source, to compare with `../dwm/` or start over from.
 

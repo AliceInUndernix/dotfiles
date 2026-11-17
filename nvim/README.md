@@ -14,18 +14,13 @@ In the dotfiles repo, `./install.sh nvim` links this directory to
 `~/.config/nvim`; the steps below are the manual way. Paths below that
 mention `nvim-config/nvim` now mean this `nvim/` directory.
 
-1. You need Neovim **0.11 or newer** (`nvim --version`) and `git`.
+1. You need Neovim **0.11 or newer** (`nvim --version`).
 2. Back up any old config: `mv ~/.config/nvim ~/.config/nvim.bak`
-3. Copy the files from Downloads:
-
-       mkdir -p ~/.config/nvim/lua
-       cp ~/Downloads/init.lua ~/.config/nvim/init.lua
-       cp ~/Downloads/typetrack.lua ~/.config/nvim/lua/typetrack.lua
-
-   From the archive instead: unpack it and copy its `nvim` directory to
-   `~/.config/nvim` (`cp -r nvim-config/nvim/. ~/.config/nvim/`).
-4. Start `nvim` while online. On first start it downloads its 6 plugins (`./install.sh nvim`
-   unpacks them from `archive/` instead).
+3. Link this directory: `ln -s ~/dotfiles/nvim ~/.config/nvim`
+4. Unpack the 5 plugins from the repo's `archive/nvim-plugins/` into
+   `~/.system/share/nvim/site/pack/plugins/opt/` (one directory each).
+   Neovim never downloads them itself: a missing one is reported and
+   left out.
 
 ## Keys
 
@@ -67,12 +62,9 @@ dictionary.
 
 ## Symbols from steno (— – “ ” …)
 
-On Linux, Plover types symbols as Ctrl+Shift+U, a hex code, then Space.
-Most terminals ignore that shortcut, so you got `2014` instead of `—`.
-The config catches the sequence in insert mode and puts the real symbol
-in. st (`st/config.h`) sends Ctrl+Shift+U as its own key and tmux passes
-it on (`extended-keys`), so this works in st and in tmux inside st. By
-hand: `Ctrl-k - M` types —, `Ctrl-k - N` types –.
+steno types every symbol as the character itself (through X), so
+nothing is needed in the terminal or here. By hand: `Ctrl-k - M` types
+—, `Ctrl-k - N` types –.
 
 ## Plugins
 
@@ -80,13 +72,14 @@ hand: `Ctrl-k - M` types —, `Ctrl-k - N` types –.
 |---|---|
 | zen-mode.nvim | The distraction-free centred view |
 | vim-pencil | Proper hard wrapping at 80 for prose |
-| plover-vim-tutor | Help pages for plover-vim (see below) |
 | mini.pick | Fuzzy finder for files, text, buffers, help |
 | mini.surround | Add, delete, replace quotes and brackets |
 | which-key.nvim | Shows what keys can follow after a pause |
 
-To update them, delete `~/.system/share/nvim/site/pack/plugins/` and
-restart Neovim; they download again. Syntax colours come from Vim's
+To update one, put a newer tarball in `archive/nvim-plugins/` (see
+`archive/README.md`), delete its directory in
+`~/.system/share/nvim/site/pack/plugins/opt/` and run
+`./install.sh nvim`. Syntax colours come from Vim's
 built-in syntax files (no Tree-sitter plugin).
 
 ## Tabs and whitespace
@@ -108,8 +101,8 @@ borders, toned-down Habamax accents), and st has Habamax's full
 ## Clipboard
 
 `y` and `p` use the system clipboard (`clipboard=unnamedplus`), so text
-moves between Neovim and the browser. Neovim needs xclip or xsel for
-that; `./install.sh --deps` installs both.
+moves between Neovim and the browser. Neovim needs xclip for that;
+`./install.sh --deps` installs it.
 
 ## What Neovim remembers between sessions
 
@@ -122,23 +115,6 @@ Everything is kept in `~/.system/state/nvim/`, out of your project directories:
 Close a file, reopen it, and the cursor, folds and undo history are where
 you left them. Line breaks from wrapping at 80 are real line breaks saved
 in the file itself, so they are always in the same place. Swap files are off.
-
-## Steno Vim commands (plover-vim)
-
-The config installs plover-vim-tutor, which is only help pages: the
-lessons (`:help plover-vim-tutorial`) and a cheatsheet
-(`:help plover-vim-cheatsheet`). You're not using plover-vim for now;
-the line stays so it's ready later. The steno side lives in Plover:
-
-1. Close Plover, then install the plugins:
-   `plover -s plover_plugins install plover_vim plover-python-dictionary`
-2. Get the tutor dictionary:
-   `curl -o ~/.system/plover/vim.py https://raw.githubusercontent.com/Josiah-tan/plover-vim/main/templates/tutor/escaped_customised.py`
-3. Start Plover, add `vim.py` with **+** under Dictionaries, and tick
-   **Start attached** in Configure → Output.
-4. In Neovim run `:set scrolloff=9`, then `:help plover-vim-tutorial`.
-
-The tutor expects Emily's modifiers before its modifier lessons.
 
 ## Type a book out (optional)
 

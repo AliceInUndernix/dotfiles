@@ -16,7 +16,7 @@ script puts the whole configuration back after a fresh install.
 | `webarchiver/` | WebArchiver, our own C program: archives whole websites with wget for offline reading, keeps them updated with version history (`webarchiver/README`) | `~/.system/bin/webarchiver` |
 | `clean/` | clean, our own C program: takes metadata out of pictures, documents, video and audio, in place, with a backup (`clean/README`) | `~/.system/bin/clean` |
 | `seal/` | seal, our own C program: `seal DIR` turns a directory into one encrypted file (password, Argon2id and XChaCha20-Poly1305), `unseal FILE` gives it back, into RAM by default (`seal/README`) | `~/.system/bin/seal`, `unseal` |
-| `steno/` | steno, our own C program: Plover's typing engine for the Moonlander's Gemini PR with Dotterel's dictionaries, typing into X; `steno -T` paper tape and suggestions, `steno -a`/`-A` add strokes, `steno -l` looks up (`steno/README`) | `~/.system/bin/steno`, `~/.config/steno/config` (symlink) |
+| `steno/` | steno, our own C program: a steno engine (a port of Plover's) for the Moonlander's Gemini PR with Dotterel's dictionaries, typing into X; `steno -T` paper tape and suggestions, `steno -a`/`-A` add strokes, `steno -l` looks up (`steno/README`) | `~/.system/bin/steno`, `~/.config/steno/config` (symlink) |
 | `nvim/` | Neovim config (0.11+, no plugin manager) | `~/.config/nvim` (symlink), `~/.system/bin/vim` -> nvim (first in PATH) |
 | `tmux/` | tmux config | `~/.config/tmux/tmux.conf` (symlink) |
 | `ksh/` | Korn shell: `profile` (PATH, EDITOR), `kshrc` (prompt, emacs keys, aliases) and `termcheck` (finds why a new terminal shows no prompt) | `~/.profile`, `~/.kshrc` (symlinks); ksh becomes the login shell of the user and root |
@@ -31,7 +31,7 @@ script puts the whole configuration back after a fresh install.
 | `net/` | Riseup VPN, Tor and a kill switch (Gentoo, OpenRC): the fastest server of the best country zone at boot, DNS through Tor, levels 0-3 and a sandbox (`vpn level`), `proxychains` (`net/README`) | `/usr/local/bin/vpn`, `/etc/init.d/vpnfw` and `vpn`, `/etc/vpn` (root's, `su -c './install.sh net'`) |
 | `archive/` | Untouched copies of everything downloaded from elsewhere | |
 | `TODO.md` | Things decided but left for later | |
-| `install.sh` | Sets everything up | |
+| `install.sh`, `install/` | Sets everything up: `install/packages.sh` (system packages), `install/apps.sh` (the big browsers, by choice), `install/configs.sh` (configs and our programs) | |
 
 Every program goes into your own `~/.system` (commands in `~/.system/bin`,
 first in PATH, manuals in `~/.system/share/man`); nothing goes to
@@ -86,31 +86,42 @@ Clone and run it as yourself. Only a few things need root, and for those
 the script stops and tells you the `su -c` command (it never uses sudo
 or doas): `--deps` (system packages), `slock` (must be root's to lock
 the screen), making ksh the login shell (part `ksh`), adding you to the
-keyboard's serial port group once (part `plover` or `steno`), and `net`, `icecat`
+keyboard's serial port group once (part `steno`), and `net`, `icecat`
 and `chromium`, which go into the system. Run as root, it sets up the
-configs for the user who owns the repo directory, and
-everything it puts in that home belongs to that user, not to root.
+configs for the user who owns the repo directory, and everything it
+puts in that home belongs to that user, not to root.
+
+It works in three steps, each a file in `install/`:
+
+1. `packages.sh`: the system's packages (`./install.sh --deps`, root).
+   On Gentoo with `emerge -qv`: X, the libraries the suckless tools
+   build with, ksh, git, curl, wget, Neovim, tmux, xclip, btop, mpv,
+   yt-dlp, feh, Flameshot, wiremix, Sioyek, zip, unzip, 7zip, rar,
+   unrar, OpenVPN, Tor and dfu-util. apt, pacman, dnf and xbps are
+   known too (not tested).
+2. `apps.sh`: IceCat and ungoogled-chromium, only the ones you name
+   (`./install.sh icecat chromium`, root, Gentoo). They build from
+   source for hours, so nothing else installs them unasked.
+3. `configs.sh`: the configs and our own programs, the parts
+   (`./install.sh`, no root).
 
 ```sh
 git clone https://github.com/AliceInUndernix/dotfiles ~/dotfiles
-su -c '~user/dotfiles/install.sh --deps'    # first time: dependencies, then everything
-~/dotfiles/install.sh all                   # later: everything that doesn't need root
+su -c '~user/dotfiles/install.sh --new-pc'  # a new computer: all three steps, net and slock; asks which browsers
+~/dotfiles/install.sh                       # later: every part that needs no root
 ```
 
-`--deps` uses the system's package manager (emerge -qv on Gentoo; apt,
-pacman, dnf and xbps are also known). Add `-a` to make emerge ask first
-(-qva): `su -c '~user/dotfiles/install.sh -a --deps'`. Leave `--deps` out
-when the dependencies are already there:
+Add `-a` to make emerge ask first (-qva):
+`su -c '~user/dotfiles/install.sh -a --deps'`. Other ways to run it:
 
 ```sh
-./install.sh            # the configs, no questions (the same as: all)
-./install.sh all        # the same (all icecat: and IceCat too)
-su -c '~user/dotfiles/install.sh --new-pc'   # a new computer: --deps, all, net, slock, IceCat
-./install.sh nvim       # only some parts: ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver moonlander plover net icecat chromium clean seal steno
-su -c '~user/dotfiles/install.sh icecat'    # a browser: icecat (20) or chromium (21)
+./install.sh            # every part that needs no root (the same as: all)
+./install.sh all icecat # every part, and IceCat too
+./install.sh nvim       # only some parts: ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver clean seal steno moonlander net icecat chromium
 ./install.sh 4 12       # the same by number (0 is --deps)
 ./install.sh check      # only look: what is installed, missing, out of date
 ./install.sh update     # the newest version: git pull, all, then check
+./install.sh update steno nvim   # the same for only those parts
 ./install.sh --list     # the part names
 INSTALL_USER=user ./install.sh    # as root, if the repo directory belongs to root
 ```
@@ -120,32 +131,30 @@ What the script does:
 - **Configs** are symlinked, so `~/.config/nvim` *is* `~/dotfiles/nvim` and
   edits land in the repo. Anything already there is moved to
   `<name>.bak.<date>`, never deleted. Running it again is safe.
-- **suckless tools** are built and installed into `~/.system`, and the build
-  files are cleaned up afterwards.
-- **Log**: each run writes what it did, any errors and facts about the system (distro, kernel, which tools are installed) to `~/.system/state/install/latest.log`, yours even when root ran it. Paste it to Claude to check a run.
-- **Private home**: new files are yours alone (umask 077 in `~/.profile`, not for root), and each run of `install.sh` takes group and other permissions off everything already in your home.
-- **Login shell**: ksh becomes the shell of both the user and root (`chsh`, no password asked; root gets copies of `profile` and `kshrc`, owned by root).
-- **Browsers**: IceCat (`icecat`, 20) and ungoogled-chromium (`chromium`,
-  21) are parts of their own, built with emerge (Gentoo, as root). They
-  build from source for hours, so `all` and no arguments leave them out:
-  name or number them. Only the program is installed; their settings and
-  profiles are not touched. `./install.sh check` shows whether they are in.
+- **suckless tools** and our own programs are built and installed into
+  `~/.system`, and the build files are cleaned up afterwards.
+- **Log**: each run writes what it did, any errors and facts about the
+  system (distro, kernel, which tools are installed) to
+  `~/.system/state/install/latest.log`, yours even when root ran it.
+  It stays on your computer.
+- **Private home**: new files are yours alone (umask 077 in
+  `~/.profile`, not for root), and each run of `install.sh` takes group
+  and other permissions off everything already in your home.
+- **Login shell**: ksh becomes the shell of both the user and root
+  (`chsh`, no password asked; root gets copies of `profile` and
+  `kshrc`, owned by root).
+- **Browsers**: only the program is installed; their settings and
+  profiles are not touched. `./install.sh check` shows whether they are
+  in.
 - **Moonlander**: the layout is in its own repo (below); `moonlander`
   clones it into `~/.system/share/moonlander` and runs its `build.sh`:
   QMK, its Python environment and the ARM compiler go into
   `~/.system/share/qmk`, then it builds and flashes the firmware.
-- **Plover**: Plover and Dotterel are in the dotterel repo (below);
-  `plover` clones it into `~/.system/plover/dotterel` and runs its
-  `install.sh`: the newest Plover release (its AppImage, unpacked) goes
-  into `~/.system/plover`, with Dotterel and its dark theme. Plover runs
-  in portable mode there, so its settings, plugins and logs stay in that
-  directory too. Each run updates both.
-  To read the keyboard you must be in group `dialout`:
-  `su -c './install.sh plover'` adds you once (then log in again).
-- **steno**: our own engine (`steno/README`) has its own clone of the
-  dotterel repo, `~/.system/share/steno/dotterel`, for the dictionaries,
-  apart from Plover's; each run updates it. It needs group `dialout`
-  too (`su -c './install.sh steno'` adds you).
+- **steno**: our own steno engine (`steno/README`). `steno` builds it
+  and clones the dotterel repo (below) into
+  `~/.system/share/steno/dotterel` for the dictionaries; each run
+  updates it. To read the keyboard you must be in group `dialout`:
+  `su -c './install.sh steno'` adds you once (then log in again).
 
 On Gentoo the build needs `x11-libs/libX11`, `libXft`, `libXinerama`,
 `libXrandr`, `libXext`, `media-libs/fontconfig` and `freetype`; `--deps`
@@ -180,7 +189,7 @@ the script warns if the group is missing).
 ## Archive
 
 `archive/` keeps release tarballs of dwm, st, dmenu, slock and tmux, the
-six Neovim plugins, with source,
+five Neovim plugins, with source,
 version and checksum for each in `archive/README.md`. If an upstream
 disappears, everything can still be rebuilt from this repo. The install
 script also unpacks the Neovim plugins from here, so Neovim works on
@@ -202,9 +211,8 @@ starts a new session.
 `nvim/README.md` is the user guide (keys, prose mode, book typing
 check, Sioyek tracker) and `nvim/HANDOFF.md` records
 earlier decisions and open issues. Its rules: stay close to Neovim
-defaults, no plugin manager, keep working on 0.11. Plugins download
-themselves on first start if missing; `install.sh` puts the archived
-copies in place first, so no internet is needed.
+defaults, no plugin manager, keep working on 0.11. `install.sh` puts the
+plugins in place from `archive/`; Neovim itself never downloads code.
 
 ## Network: VPN and Tor
 
@@ -220,13 +228,12 @@ Health checks, which change nothing: `./install.sh check` (is
 everything as the repo has it?) and `vpn selftest` (every level and
 feature of the VPN, about 15 min). No network: `vpn rescue`.
 
-## Moonlander and Plover: repos of their own
+## Moonlander and Dotterel: repos of their own
 
 Everything for the keyboard is in https://github.com/AliceInUndernix/moonlander
-(the "canary" QMK layout, `layout.html`, `build.sh`), so anyone can build
-it; everything for Plover is in https://github.com/AliceInUndernix/dotterel
-(the Dotterel theory and dictionaries, and `install.sh`, which installs
-Plover and Dotterel in one go), so anyone can use the dictionaries
-without a Moonlander. Everything else is here. `./install.sh moonlander`
-and `./install.sh plover` clone them and run their own scripts; each
-run takes their newest commit.
+(the "canary" QMK layout, `layout.html`, `build.sh`), so anyone can
+build it; the Dotterel steno theory and its dictionaries are in
+https://github.com/AliceInUndernix/dotterel, so anyone can use them
+without a Moonlander (a Plover version is kept there as an archive).
+Everything else is here. `./install.sh moonlander` and
+`./install.sh steno` clone them; each run takes their newest commit.

@@ -55,8 +55,7 @@ done &
 # later, they open on the tag you are on like any other app. The vpn
 # screen asks your password for the full view; without it (Ctrl+C) it
 # shows the short one. They wait until dwm is up, so the desktop does
-# not wait for them. Plover is not started: run plover by hand, after
-# quitting steno (both would read the Moonlander).
+# not wait for them.
 (
 	i=0
 	if command -v xprop >/dev/null 2>&1; then

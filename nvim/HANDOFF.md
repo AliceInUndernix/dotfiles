@@ -25,14 +25,14 @@ nvim/
   `app-editors/neovim` and `dev-lua/luv` in
   `/etc/portage/package.accept_keywords/neovim`; whether they finished
   is unknown. The config must keep working on 0.11 (no `vim.pack`).
-- Writes fiction with stenography (Plover). Spelling comes from steno,
+- Writes fiction with stenography (steno, the engine in this repo).
+  Spelling comes from steno,
   so spell checks are off by default.
 - Terminal: st 0.9.3 (patched, see `st/UPSTREAM`), often with tmux,
   under dwm on X11. Changes go to the dotfiles repo; `~/.config/nvim` is
   a symlink to it, so nothing needs copying.
-- Uses Sioyek as EPUB/PDF reader, 2.0.0 at `~/.system/bin/sioyek`.
-- Writes short, sometimes cut-off messages (often dictated or stenoed);
-  ask what they meant when a message stops mid-sentence.
+- Uses Sioyek as EPUB/PDF reader (the development version, which
+  `install.sh --deps` builds on Gentoo).
 - Prefers plain explanations and a config that stays close to default.
 
 ## What was asked for, and how it was done
@@ -47,11 +47,10 @@ nvim/
 | Single Enter must not be pulled back into the paragraph | `pencil#autoformat = 0`; `gqip` to re-wrap | fixed after user report, not confirmed |
 | Arrows move by screen line in prose mode only | buffer-local gj/gk maps added on_open, removed on_close | not confirmed |
 | Spell check toggle | `Space s` | not confirmed |
-| plover-vim | only plover-vim-tutor help pages installed; user is NOT using plover-vim yet (doesn't want to learn Emily's modifiers) but wants the line kept | `:help plover-vim-tutorial` opened in a test |
-| Em dash etc. from Plover arrived as "2014" | insert-mode `<C-S-u>` expr map reads hex digits and inserts the character; st sends Ctrl+Shift+U as CSI u, tmux has extended-keys on | key tested reaching Neovim in st and st+tmux; real Plover symbol not confirmed |
-| System clipboard | `clipboard=unnamedplus`; xclip and xsel installed by `install.sh --deps` | not confirmed |
+| Em dash etc. from Plover arrived as "2014" | was an insert-mode `<C-S-u>` map with st and tmux passing Ctrl+Shift+U; removed 2026-11-17 with Plover: steno types symbols directly | removed |
+| System clipboard | `clipboard=unnamedplus`; xclip installed by `install.sh --deps` | not confirmed |
 | Mark typed words green/red in Sioyek | lua/typetrack.lua, `:TypeTrack`, `Space t` | Neovim side tested; never run against Sioyek; Sioyek part now off (crashed) |
-| Skipped words were never flagged; ghost mode (grey book text to type over, wrong letters red) and check mode (no ghosts); letter-by-letter and word-by-word; skip front matter (2026-11-14) | typetrack.lua rewritten around align() + char_diff(); `:TypeGhost`/`Space T`, `:TypeTrack`/`Space t`, `:TypeChapter` (TOC picker) | tested headless on Neovim 0.9.5 only; inline ghosts not seen in a real terminal. Her request ended at "skip chapters if": asked what she meant |
+| Skipped words were never flagged; ghost mode (grey book text to type over, wrong letters red) and check mode (no ghosts); letter-by-letter and word-by-word; skip front matter (2026-11-14) | typetrack.lua rewritten around align() + char_diff(); `:TypeGhost`/`Space T`, `:TypeTrack`/`Space t`, `:TypeChapter` (TOC picker) | tested headless on Neovim 0.9.5 only; inline ghosts not seen in a real terminal. The request ended at "skip chapters if": asked what was meant |
 | Retyper faster; ghost text shows the whole paragraph, then the whole next one (2026-11-17) | typetrack.lua: one unzip per book, cheaper HTML and word splitting, changed lines only (on_change), align() stops where it rejoins the last run, banded edit distance; show_ghost + make_room | book load 1.4 s to 0.6 s, fixing a word far up 56 ms to 1-3 ms (250k-word test book, 0.9.5); fuzz-tested against a full re-check; ghost paragraph seen in tmux on 0.9.5 (eol, not inline) |
 
 ## Open issues (pick these up first)
@@ -61,14 +60,9 @@ nvim/
    development Sioyek (`select_current_search_match` command), not 2.0.0
    or sioyek3-alpha0. `install.sh --deps` now builds it on Gentoo
    (GURU's `sioyek-9999`, newest commit each run, with `--update --deep`
-   for the earlier Qt slot conflict), and `install.sh sioyek` moves the
-   hand-installed `~/.system/bin/sioyek` (2.0.0) aside after backing up
-   `~/.system/share/sioyek`. Not yet run on her machine.
-3. **Plover unicode fix: terminal side done.** st and tmux now pass
-   Ctrl+Shift+U to Neovim (tested). Not yet confirmed with Plover itself;
-   if digits still appear, check that st and tmux were rebuilt/reloaded.
-4. **init.lua itself has not been run by Claude** (only the Ctrl+Shift+U
-   key test, on an older Neovim). The user's reports confirm the rest.
+   for the earlier Qt slot conflict).
+3. **init.lua itself has not been run by Claude** (only a key test, on
+   an older Neovim). The user's reports confirm the rest.
    Ask for `:messages` output if anything errors on start.
 
 ## Rules for editing
@@ -84,7 +78,7 @@ nvim/
   2026-11-12).
   Declined for now: gitsigns, vim-fugitive, language servers.
   vim-tmux-navigator was tried and removed at the user's request (2026-11-12).
-- Keep the plover-vim-tutor line.
+- plover-vim-tutor was removed with Plover (2026-11-17).
 - No Claude (or other AI) grammar check or proofreading: removed
   2026-11-16 at the user's request.
 - Keep startup light (2026-11-17, measured with `nvim --startuptime`):
@@ -99,8 +93,5 @@ nvim/
 
 ## Ideas offered but not taken
 
-- A starter Plover dictionary of ~20 Vim command strokes (Esc, save,
+- A starter steno dictionary of ~20 Vim command strokes (Esc, save,
   undo, ciw, gq...). Offered by the steno research, not requested yet.
-- Other steno-in-Vim approaches researched: Emily's modifiers,
-  plover-dict-commands (`SOLO_DICT`), plover-modal-dictionary, and toggling
-  Plover off (`PHRO*F`) for keyboard editing.

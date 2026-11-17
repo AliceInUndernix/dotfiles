@@ -85,14 +85,14 @@ char *termname = "st-256color";
 /*
  * spaces per tab
  *
- * When you are changing this value, don't forget to adapt the »it« value in
+ * When you are changing this value, don't forget to adapt the "it" value in
  * the st.info and appropriately install the st.info in the environment where
  * you use this st version.
  *
  *	it#$tabspaces,
  *
  * Secondly make sure your kernel is not expanding tabs. When running `stty
- * -a` »tab0« should appear. You can tell the terminal to not expand tabs by
+ * -a` "tab0" should appear. You can tell the terminal to not expand tabs by
  *  running following command:
  *
  *	stty tabs
@@ -143,10 +143,10 @@ static unsigned int defaultrcs = 257;
 
 /*
  * Default shape of cursor
- * 2: Block ("█")
+ * 2: Block (a full block)
  * 4: Underline ("_")
  * 6: Bar ("|")
- * 7: Snowman ("☃")
+ * 7: Snowman (U+2603)
  */
 static unsigned int cursorshape = 2;
 
@@ -257,11 +257,6 @@ static uint ignoremod = Mod2Mask|XK_SWITCH_MOD;
  */
 static Key key[] = {
 	/* keysym           mask            string      appkey appcursor */
-	/* Ctrl+Shift+U as its own key (CSI u), not Ctrl+U: Plover types a
-	 * symbol as Ctrl+Shift+U + hex code, and Neovim's init.lua turns that
-	 * into the character. Inside tmux this needs extended-keys (tmux.conf). */
-	{ XK_U,  ControlMask|ShiftMask,     "\033[117;6u",   0,    0},
-	{ XK_u,  ControlMask|ShiftMask,     "\033[117;6u",   0,    0},
 	{ XK_KP_Home,       ShiftMask,      "\033[2J",       0,   -1},
 	{ XK_KP_Home,       ShiftMask,      "\033[1;2H",     0,   +1},
 	{ XK_KP_Home,       XK_ANY_MOD,     "\033[H",        0,   -1},

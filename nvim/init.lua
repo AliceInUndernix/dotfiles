@@ -1,11 +1,10 @@
 -- ~/.config/nvim/init.lua
 -- A small, close-to-default Neovim setup with a code mode and a prose mode,
--- made for writing fiction with stenography (Plover) on Gentoo Linux.
+-- made for writing fiction with stenography (steno) on Gentoo Linux.
 -- Written for Neovim 0.11 or newer. Plugins install themselves on first start.
 --
 -- Files in this config:
---   init.lua            this file (options, keys, Plover unicode fix,
---                       plugins, prose mode)
+--   init.lua            this file (options, keys, plugins, prose mode)
 --   lua/typetrack.lua   optional: type a book over grey ghost text,
 --                       mistakes red
 -- See README.md for the user guide and HANDOFF.md for history, decisions
@@ -25,10 +24,7 @@
 -- Lives in the dotfiles repo (nvim/), linked to ~/.config/nvim by
 -- install.sh. The user runs it on Neovim 0.11.7 in st (and tmux) under
 -- dwm on X11. Problems reported and fixed: missing vim.pack on 0.11,
--- Pencil re-flowing single Enters, Plover symbols arriving as "2014".
--- st and tmux now pass Ctrl+Shift+U through (tested: it reaches Neovim
--- as <C-S-u>, in st and in st+tmux). Not yet confirmed by the user: a
--- full Plover symbol typed for real.
+-- Pencil re-flowing single Enters.
 
 -- Keep the compiled form of every Lua file Neovim loads (this file, the
 -- plugins) in ~/.system/cache/nvim/luac, so starting does not compile
@@ -115,8 +111,8 @@ o.splitright = true
 o.splitbelow = true
 o.mouse = "a"
 o.clipboard = "unnamedplus"    -- yank/paste uses the system clipboard
-                               -- (needs xclip or xsel; install.sh --deps
-                               -- installs both)
+                               -- (needs xclip; install.sh --deps
+                               -- installs it)
 
 -- Persistent history. Neovim keeps these in its own state directory
 -- (~/.system/state/nvim/) so your project directories stay clean.
@@ -160,30 +156,6 @@ vim.api.nvim_set_hl(0, "NonText", { fg = "#4e4e4e" })
 local map = vim.keymap.set
 map("n", "<Esc>", "<cmd>nohlsearch<CR>", { desc = "Clear search highlight" })
 map("n", "<leader>w", "<cmd>write<CR>", { desc = "Save" })
-
--- Symbols from steno (em and en dash, curly quotes, ellipsis). On Linux,
--- Plover types a symbol the way GTK apps expect: Ctrl+Shift+U, its hex
--- code (2014), then Space/Enter.
--- Terminals ignore that shortcut, so only "2014" arrived. This catches
--- the sequence in insert mode and puts in the real character instead.
--- Up to 6 hex digits are read; Space or Enter ends the code and is
--- dropped, any other key ends it and is typed as usual.
--- The terminal has to send Ctrl+Shift+U as its own key: st's config.h
--- maps it to CSI u (ESC [117;6u), and tmux.conf turns on extended-keys
--- so it also gets through tmux. Plain Ctrl+U is unchanged.
-map("i", "<C-S-u>", function()
-  local hex = ""
-  while true do
-    local c = vim.fn.getcharstr()
-    if c:match("^%x$") and #hex < 6 then
-      hex = hex .. c
-    else
-      local ch = #hex > 0 and vim.fn.nr2char(tonumber(hex, 16)) or ""
-      if c ~= " " and c ~= "\r" then ch = ch .. c end  -- keep other keys
-      return ch
-    end
-  end
-end, { expr = true, replace_keycodes = false, desc = "Unicode from steno" })
 
 -- Briefly highlight what you yank
 vim.api.nvim_create_autocmd("TextYankPost", {
@@ -264,30 +236,23 @@ if has_typetrack then
 end
 
 ---------------------------------------------------------------------------
--- Plugins (installed automatically on first start)
+-- Plugins (from the repo's archive/, put in place by ./install.sh nvim)
 ---------------------------------------------------------------------------
--- No plugin manager: each plugin is cloned once with git into Neovim's
--- own package directory and loaded with :packadd. Works on Neovim 0.11+.
--- (vim.pack was tried first but needs 0.12; the user is on 0.11.7.
--- To update the plugins, delete the pack_dir directory and restart.)
+-- No plugin manager: each plugin is unpacked by install.sh from the
+-- repo's archive/ into Neovim's own package directory and loaded with
+-- :packadd. Works on Neovim 0.11+. Nothing is downloaded here: code
+-- runs only once it has been installed on purpose. A missing plugin is
+-- reported and left out.
 -- Everything that must work without plugins sits ABOVE this section,
--- because the file stops at the `return` below if a download fails.
+-- because the file stops at the `return` below if one is missing.
 local pack_dir = vim.fn.stdpath("data") .. "/site/pack/plugins/opt/"
-local function plugin(repo, branch)
+local function plugin(repo)
   local name = repo:match("[^/]+$")
   local path = pack_dir .. name
   if not vim.uv.fs_stat(path) then
-    vim.notify("Installing " .. name .. "...")
-    local cmd = { "git", "clone", "--depth=1" }
-    if branch then vim.list_extend(cmd, { "--branch", branch }) end
-    vim.list_extend(cmd, { "https://github.com/" .. repo, path })
-    local out = vim.fn.system(cmd)
-    if vim.v.shell_error ~= 0 then
-      vim.notify("Could not install " .. name .. ":\n" .. out,
-        vim.log.levels.ERROR)
-      return false
-    end
-    pcall(vim.cmd, "silent! helptags " .. vim.fn.fnameescape(path .. "/doc"))
+    vim.notify(name .. " (github.com/" .. repo .. ") is not installed:"
+      .. " run ./install.sh nvim in the dotfiles repo", vim.log.levels.WARN)
+    return false
   end
   vim.cmd.packadd(name)
   return true
@@ -295,12 +260,6 @@ end
 
 local have_zen = plugin("folke/zen-mode.nvim")       -- distraction-free view
 local have_pencil = plugin("preservim/vim-pencil")   -- wrapping for prose
--- Lessons and cheatsheet for steno Vim commands (plover-vim). Help pages
--- only, it changes nothing else: :help plover-vim-tutorial to start.
--- The steno side is installed in Plover itself, not here.
--- The user is NOT using plover-vim for now (it needs Emily's modifiers,
--- which they don't want to learn yet) but asked to keep this line.
-plugin("Josiah-tan/plover-vim-tutor")
 
 -- Fuzzy finder (mini.pick): type a few letters of a name, Enter opens.
 -- Inside the list: Ctrl+n / Ctrl+p (or arrows) move, Esc closes,
