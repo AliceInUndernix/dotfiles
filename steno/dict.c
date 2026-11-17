@@ -32,6 +32,10 @@ struct table {
     long *ent_val;        /* entry -> offset in vals */
     long nent, cent, cval, nslot;
     int longest;
+    /* by text, for dict_outlines: made when first asked, after a change */
+    long *thead;          /* text hash -> first entry + 1, 0 = none */
+    long *tnext;          /* entry -> next entry with that hash + 1 */
+    long nthead;          /* 0: not made */
 };
 
 struct modal {
@@ -250,6 +254,7 @@ static void put(struct table *t, const long *st, int n, const char *v)
     unsigned long h;
 
     len = strlen(v) + 1;
+    t->nthead = 0;             /* the text index is stale */
     t->vals = grow(t->vals, &t->cvals, t->nvals + len, 1);
     memcpy(t->vals + t->nvals, v, len);
     e = find(t, st, n);
@@ -889,6 +894,8 @@ static void table_free(struct table *t)
     free(t->slot);
     free(t->ent_key);
     free(t->ent_val);
+    free(t->thead);
+    free(t->tnext);
     memset(t, 0, sizeof(*t));
 }
 
@@ -1598,6 +1605,48 @@ static int same_text(const char *a, const char *b, int fold)
 
 #define FOUND_MAX 64
 
+/* a hash of a text, the same for texts that differ only in case */
+static unsigned long fold_hash(const char *s)
+{
+    unsigned long h;
+
+    h = 2166136261UL;
+    for (; *s; s++) {
+        h ^= (unsigned long)low_ascii((unsigned char)*s);
+        h *= 16777619UL;
+        h &= 0xffffffffUL;
+    }
+    return h;
+}
+
+/* The entries of t by text: chains in entry order (the order a scan
+ * would find them in), made again only after the table changed. */
+static void text_index(struct table *t)
+{
+    long e, n, h;
+
+    if (t->nthead || !t->nent)
+        return;
+    n = 1024;
+    while (n < t->nent)
+        n *= 2;
+    free(t->thead);
+    free(t->tnext);
+    t->thead = malloc(n * sizeof(long));
+    t->tnext = malloc(t->nent * sizeof(long));
+    if (!t->thead || !t->tnext) {
+        say("out of memory", 0);
+        die(1);
+    }
+    memset(t->thead, 0, n * sizeof(long));
+    for (e = t->nent - 1; e >= 0; e--) {
+        h = (long)(fold_hash(t->vals + t->ent_val[e]) & (n - 1));
+        t->tnext[e] = t->thead[h];
+        t->thead[h] = e + 1;
+    }
+    t->nthead = n;
+}
+
 /* The outlines that write text, shortest first, as "KAT  KA*T". Only
  * ones a lookup would really reach (no higher dictionary has them).
  * When none writes it exactly, ones that differ only in case. One
@@ -1617,7 +1666,11 @@ int dict_outlines(const char *text, char *out, int size, int max)
         if (!dicts[i].enabled || dicts[i].kind != dk_json)
             continue;
         t = &dicts[i].t;
-        for (e = 0; e < t->nent && nf < FOUND_MAX; e++) {
+        text_index(t);
+        if (!t->nthead)
+            continue;
+        e = t->thead[fold_hash(text) & (t->nthead - 1)] - 1;
+        for (; e >= 0 && nf < FOUND_MAX; e = t->tnext[e] - 1) {
             v = t->vals + t->ent_val[e];
             if (!same_text(v, text, 1))
                 continue;

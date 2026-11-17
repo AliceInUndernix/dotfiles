@@ -51,6 +51,7 @@ static long blen, slen, bcap, scap;
 static long base;              /* bytes cut off the front of both */
 static long dirty;             /* buf is as typed below this */
 
+static long text_gen;          /* changes whenever buf's text does */
 static struct action last;     /* the action before the one being made */
 static struct trans *cur;      /* the translation being made */
 
@@ -364,6 +365,7 @@ static void apply(struct trans *t, struct action *a)
 
     if (!a->has_text)
         return;
+    text_gen++;
     k = u8len(a->prev_replace, strlen(a->prev_replace));
     at = blen - (long)k * 4 - 4;
     if (at < 0)
@@ -402,6 +404,7 @@ static void revert(struct trans *t)
 {
     long at;
 
+    text_gen++;
     at = t->lo - base;
     if (at < 0)
         at = 0;
@@ -501,25 +504,47 @@ static long look_start(void)
     return s;
 }
 
-int last_words(int count, char *out, int size)
-{
-    int at[64], n;
-    long s;
+/* Where the last words start (at most 64), from look_start: scanned
+ * once for each state of the text, however often it is asked for
+ * (the tape, the suggestions and their marks all ask after a stroke) */
+static int scan_at[64], scan_n;
+static long scan_s, scan_gen = -1;
 
-    out[0] = 0;
+static void scan_words(void)
+{
+    if (scan_gen == text_gen)
+        return;
+    scan_s = look_start();
+    scan_n = word_starts(buf + scan_s, (int)(blen - scan_s), scan_at, 64);
+    scan_gen = text_gen;
+}
+
+/* the offset in buf of the first of the last count words, or -1 */
+static long words_from(int count)
+{
     if (count < 1)
         count = 1;
     if (count > 64)
         count = 64;
-    s = look_start();
-    n = word_starts(buf + s, (int)(blen - s), at, count);
-    if (!n)
+    scan_words();
+    if (!scan_n)
+        return -1;
+    if (count > scan_n)
+        count = scan_n;
+    return scan_s + scan_at[scan_n - count];
+}
+
+int last_words(int count, char *out, int size)
+{
+    long from;
+
+    out[0] = 0;
+    from = words_from(count);
+    if (from < 0 || blen - from >= size)
         return 0;
-    if (blen - s - at[0] >= size)
-        return 0;
-    memcpy(out, buf + s + at[0], blen - s - at[0]);
-    out[blen - s - at[0]] = 0;
-    return (int)(blen - s - at[0]);
+    memcpy(out, buf + from, blen - from);
+    out[blen - from] = 0;
+    return (int)(blen - from);
 }
 
 /* The newest translations whose text makes the last count words (as
@@ -528,19 +553,14 @@ int last_words(int count, char *out, int size)
  * there (KPA before the word, or after it) are not part of it. */
 int word_strokes(int count, long *st, int max)
 {
-    int at[64], n, i, j, first, last, k;
-    long s, ws, hi, lo;
+    int i, j, first, last, k;
+    long ws, hi, lo;
     struct trans *t;
 
-    if (count < 1)
-        count = 1;
-    if (count > 64)
-        count = 64;
-    s = look_start();
-    n = word_starts(buf + s, (int)(blen - s), at, count);
-    if (!n)
+    ws = words_from(count);
+    if (ws < 0)
         return 0;
-    ws = base + s + at[0];
+    ws += base;
     hi = base + blen;          /* where the text of the next one starts */
     first = -1;
     last = -1;
@@ -1417,6 +1437,7 @@ static void trim(void)
     cut = blen - 32768L;
     while (cut < blen && ((unsigned char)buf[cut] & 0xc0) == 0x80)
         cut++;
+    text_gen++;
     memmove(buf, buf + cut, blen - cut);
     memmove(scr, scr + cut, slen - cut);
     blen -= cut;
@@ -1514,6 +1535,7 @@ void format_flush(struct trans **undo, int nundo, struct trans **doo,
 
 void format_reset(void)
 {
+    text_gen++;
     blen = 0;
     slen = 0;
     base = 0;
