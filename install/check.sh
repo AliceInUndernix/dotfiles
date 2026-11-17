@@ -7,7 +7,7 @@
 # The commands --deps installs, to look for ("a|b": either will do)
 TOOLS="git make cc pkg-config curl wget startx nvim tmux xclip ksh|mksh
 	mpv yt-dlp feh flameshot sioyek wiremix btop zip unzip 7zz|7z
-	unrar dfu-util fc-cache"
+	dfu-util fc-cache"
 
 # have <cmd|cmd...>: is one of them installed?
 have() {

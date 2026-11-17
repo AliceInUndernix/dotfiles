@@ -19,9 +19,8 @@ GENTOO_TOOLS="app-shells/ksh dev-vcs/git net-misc/curl net-misc/wget
 	app-mobilephone/dfu-util"
 GENTOO_MEDIA="media-video/mpv net-misc/yt-dlp media-gfx/feh
 	media-gfx/flameshot media-sound/wiremix"
+# 7zip also unpacks rar (USE rar, below), so there is no unrar
 GENTOO_ARCHIVES="app-arch/zip app-arch/unzip app-arch/7zip"
-# not free software: its licence is accepted below
-GENTOO_NONFREE="app-arch/unrar"
 GENTOO_NET="net-vpn/openvpn net-vpn/tor"
 
 install_packages() (
@@ -31,7 +30,6 @@ install_packages() (
 	case $id in
 	*gentoo*) gentoo_packages ;;
 	*debian*|*ubuntu*)
-		# unrar is in Debian's non-free section
 		apt-get install build-essential pkg-config libx11-dev \
 			libxft-dev libxinerama-dev libxrandr-dev libxext-dev \
 			libfontconfig-dev libfreetype-dev xserver-xorg xinit \
@@ -45,7 +43,7 @@ install_packages() (
 			xorg-xinit xorg-xsetroot xorg-xset xorg-xprop xss-lock xclip \
 			ttf-liberation git curl wget neovim tmux btop dfu-util mpv \
 			yt-dlp feh flameshot pipewire wireplumber wiremix zip unzip \
-			7zip unrar openvpn tor ;;
+			7zip openvpn tor ;;
 	*fedora*|*rhel*)
 		dnf install gcc make pkgconf-pkg-config libX11-devel \
 			libXft-devel libXinerama-devel libXrandr-devel libXext-devel \
@@ -82,7 +80,15 @@ gentoo_packages() {
 	keyword app-text/sioyek '**'
 	# Tor with seccomp, for "Sandbox 1" in net/torrc
 	portage use net-vpn/tor seccomp
-	portage license app-arch/unrar unRAR
+	# 7zip's rar support is under the unRAR licence. unrar itself is
+	# no longer installed: its licence line from before goes.
+	portage use app-arch/7zip rar
+	portage license app-arch/7zip unRAR
+	f=/etc/portage/package.license/zz-dotfiles
+	if grep -qs '^app-arch/\(un\)\{0,1\}rar[[:space:]]' "$f"; then
+		sed -i '/^app-arch\/\(un\)\{0,1\}rar[[:space:]]/d' "$f"
+		say "license app-arch/unrar out of $f (7zip unpacks rar)"
+	fi
 	# PipeWire first, on its own: wiremix needs its libpipewire-0.3 to
 	# build, but its ebuild doesn't say so, so emerge may build wiremix
 	# before PipeWire is in.
@@ -90,10 +96,6 @@ gentoo_packages() {
 		media-video/wireplumber
 	emerge $EMERGE_OPTS --noreplace --changed-use $GENTOO_X $GENTOO_TOOLS \
 		$GENTOO_MEDIA $GENTOO_ARCHIVES $GENTOO_NET
-	# On its own, so a licence or fetch problem with it doesn't stop
-	# the rest
-	emerge $EMERGE_OPTS --noreplace $GENTOO_NONFREE ||
-		warn "unrar did not install (see emerge's messages above)"
 	gentoo_sioyek
 }
 

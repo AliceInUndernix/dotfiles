@@ -96,8 +96,8 @@ It works in three steps, each a file in `install/`:
 1. `packages.sh`: the system's packages (`./install.sh --deps`, root).
    On Gentoo with `emerge -qv`: X, the libraries the suckless tools
    build with, ksh, git, curl, wget, Neovim, tmux, xclip, btop, mpv,
-   yt-dlp, feh, Flameshot, wiremix, Sioyek, zip, unzip, 7zip,
-   unrar, OpenVPN, Tor and dfu-util. apt, pacman, dnf and xbps are
+   yt-dlp, feh, Flameshot, wiremix, Sioyek, zip, unzip, 7zip (it
+   unpacks rar too), OpenVPN, Tor and dfu-util. apt, pacman, dnf and xbps are
    known too (not tested).
 2. `apps.sh`: IceCat and ungoogled-chromium, only the ones you name
    (`./install.sh icecat chromium`, root, Gentoo). They build from
