@@ -122,6 +122,7 @@ Add `-a` to make emerge ask first (-qva):
 ./install.sh check      # only look: what is installed, missing, out of date
 ./install.sh update     # the newest version: git pull, all, then check
 ./install.sh update steno nvim   # the same for only those parts
+su -c '~user/dotfiles/install.sh update --deps'   # the same, with the packages first (root)
 ./install.sh --list     # the part names
 INSTALL_USER=user ./install.sh    # as root, if the repo directory belongs to root
 ```

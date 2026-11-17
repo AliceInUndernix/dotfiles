@@ -31,8 +31,9 @@
 #                              build (or name them: --new-pc icecat)
 #   ./install.sh check [part]  only look: what is installed, missing or
 #                              out of date (changes nothing)
-#   ./install.sh update [part...]  the newest version: git pull, then
-#                              those parts (all when none), then check
+#   ./install.sh update [--deps] [part...]  the newest version: git
+#                              pull, then those parts (all when none),
+#                              with --deps the packages first, then check
 #   ./install.sh --list        show the parts
 #
 # The configs are for the user who owns this repo directory (or
@@ -85,8 +86,11 @@ esac
 # fix is used at once. git runs as the repo's owner, even from root.
 case ${1:-} in update|--update)
 	shift
+	# parts, and --deps (and -a) for the packages too
+	ckparts=
 	for x in "$@"; do
-		case " $PARTS " in *" $x "*) ;;
+		case $x in --deps|-a) continue ;; esac
+		case " $PARTS " in *" $x "*) ckparts="$ckparts $x" ;;
 		*) die "unknown part: $x (see --list)" ;; esac
 	done
 	say "pull    $DOTFILES"
@@ -101,7 +105,7 @@ case ${1:-} in update|--update)
 	/bin/sh "$DOTFILES/install.sh" "${@:-all}" || rc=$?
 	echo
 	say "check"
-	/bin/sh "$DOTFILES/install.sh" check "$@" || rc=$?
+	/bin/sh "$DOTFILES/install.sh" check $ckparts || rc=$?
 	exit $rc ;;
 esac
 for arg in "$@"; do
