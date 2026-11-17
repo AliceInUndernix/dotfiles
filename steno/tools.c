@@ -142,6 +142,98 @@ static void trim(char *s)
         memmove(s, s + a, n - a + 1);
 }
 
+/* The outline you just used for the text w: the strokes of the last
+ * k translations (k up to 6) that the dictionary reads as w. Gives
+ * the number of strokes and writes them as text, or gives 0. */
+static int used_outline(const char *w, char *out, int size)
+{
+    long st[64];
+    int n, k, i, j, tot;
+    const char *v;
+    struct trans *t;
+
+    n = history_count();
+    for (k = 1; k <= 6 && k <= n; k++) {
+        tot = 0;
+        for (i = n - k; i < n; i++)
+            tot += history_at(i)->nst;
+        if (tot > 64)
+            break;
+        tot = 0;
+        for (i = n - k; i < n; i++) {
+            t = history_at(i);
+            for (j = 0; j < t->nst; j++) {
+                st[tot] = t->st[j];
+                tot++;
+            }
+        }
+        v = dict_peek(st, tot);
+        if (v && !strcmp(v, w)) {
+            outline_text(st, tot, out, size);
+            return tot;
+        }
+    }
+    return 0;
+}
+
+/* strokes in an outline written as "A/B/C" */
+static int outline_strokes(const char *o, int len)
+{
+    int i, n;
+
+    n = 1;
+    for (i = 0; i < len; i++)
+        if (o[i] == '/')
+            n++;
+    return n;
+}
+
+/* o is "A  B  C" (shortest first). The outline used last gets a + in
+ * front when no listed outline has fewer strokes (the same number is
+ * as good), a ! when one has; it is added at the end if it is not in
+ * the list. */
+static void mark_used(const char *w, char *o, int size)
+{
+    char used[TEXT_MAX], tok[TEXT_MAX], res[TEXT_MAX];
+    const char *p, *q;
+    int n, best, len, done;
+
+    n = used_outline(w, used, sizeof(used));
+    if (!n || !o[0])
+        return;
+    best = 0;
+    res[0] = 0;
+    done = 0;
+    for (p = o; *p; p = q) {
+        while (*p == ' ')
+            p++;
+        if (!*p)
+            break;
+        for (q = p; *q && *q != ' '; q++)
+            ;
+        len = (int)(q - p);
+        if (len > (int)sizeof(tok) - 2)
+            len = (int)sizeof(tok) - 2;
+        memcpy(tok, p, len);
+        tok[len] = 0;
+        if (!best)
+            best = outline_strokes(tok, len);
+        if (res[0])
+            scat(res, "  ", sizeof(res));
+        if (!done && !strcmp(tok, used)) {
+            scat(res, n <= best ? "+" : "!", sizeof(res));
+            done = 1;
+        }
+        scat(res, tok, sizeof(res));
+    }
+    if (!done) {
+        scat(res, "  ", sizeof(res));
+        scat(res, n <= best ? "+" : "!", sizeof(res));
+        scat(res, used, sizeof(res));
+    }
+    scopy(o, res, size);
+}
+
 /* The last few words, longest first, and how else they are written.
  * Sent only when they change; a new viewer gets the current ones. */
 static void suggestions(int fresh)
@@ -171,6 +263,7 @@ static void suggestions(int fresh)
         res = dict_outlines(w, o, sizeof(o), SUGGEST_MAX);
         if (!res)
             continue;
+        mark_used(w, o, sizeof(o));
         if (out[0])
             scat(out, "\t", sizeof(out));
         put_escaped(out, sizeof(out) - TEXT_MAX, w);

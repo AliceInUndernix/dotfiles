@@ -227,6 +227,10 @@ The suggestions: the words you typed, and under each every outline
 that writes them, shortest first (a word being fingerspelled as it
 grows, each step in place of the one before); each words once (typed
 again, they move to the bottom). The newest is at the bottom in both.
+The outline you used last is bold: green when no outline of that
+text has fewer strokes (the same number is right too), red when one
+has (then it is added at the end of the list if it is not there).
+Only the last one is marked.
 
     q, Ctrl+C          quit
     t                  show or hide the tape

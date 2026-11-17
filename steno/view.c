@@ -260,6 +260,27 @@ static void got_tape(char *line)
 /* one line of the suggest feed: WORDS <tab> OUTLINES ..., kept as one
  * line for each WORDS <tab> OUTLINES; words already there move to the
  * bottom, so each shows once */
+/* only the outline used last has its mark (+ shortest, ! not): take
+ * the ones from the lines before away */
+static void strip_marks(char *cell)
+{
+    char *r, *w;
+
+    r = strchr(cell, '\t');
+    if (!r)
+        return;
+    for (w = r; *r; r++) {
+        if ((*r == '+' || *r == '!') && r[1] && r[1] != ' ' &&
+            (r[-1] == ' ' || r[-1] == '\t'))
+        {
+            continue;
+        }
+        *w = *r;
+        w++;
+    }
+    *w = 0;
+}
+
 static void got_suggest(char *line)
 {
     char cell[CELL_MAX], *w, *o, *next;
@@ -270,6 +291,8 @@ static void got_suggest(char *line)
     /* = ...: the fingerspelled word so far, in place of the last one
      * (undo[] marks it in this box) */
     b = &boxes[1];
+    for (i = 0; i < b->nlines; i++)
+        strip_marks(b->lines[i]);
     spell = line[0] == '=' && (!line[1] || line[1] == '\t');
     for (i = 0; i < b->nlines; i++) {
         if (b->undo[i] && spell) {
@@ -436,6 +459,44 @@ static int sugg_rows(const char *cell, int w, char out[][CELL_MAX],
     return n;
 }
 
+/* a row of outlines: the one marked + is bold green (the shortest),
+ * the one marked ! bold red; without colours the mark stays. Gives
+ * the characters written. */
+static int outline_row(const char *row, int w)
+{
+    char one[CELL_MAX];
+    const char *p, *q;
+    int n, k, mark;
+
+    n = 0;
+    for (p = row; *p && n < w; p = q) {
+        for (q = p; *q == ' '; q++)
+            ;
+        n += scr_text(p, (int)(q - p) < w - n ? (int)(q - p) : w - n);
+        p = q;
+        if (!*p)
+            break;
+        for (q = p; *q && *q != ' '; q++)
+            ;
+        k = (int)(q - p);
+        if (k > CELL_MAX - 2)
+            k = CELL_MAX - 2;
+        memcpy(one, p, k);
+        one[k] = 0;
+        mark = (one[0] == '+' || one[0] == '!') && one[1];
+        if (mark && scr_colour) {
+            scr_put("\033[1m");
+            scr_col(one[0] == '+' ? C_GREEN : C_RED);
+            n += scr_text(one + 1, w - n);
+            scr_put("\033[22m");
+            scr_col(C_BLUE);
+        } else {
+            n += scr_text(one, w - n);
+        }
+    }
+    return n;
+}
+
 static void draw_sugg(int y, int x, int w, int h)
 {
     static char rows[64][CELL_MAX];
@@ -462,7 +523,8 @@ static void draw_sugg(int y, int x, int w, int h)
         for (j = 0; j < n && row < h; j++, row++) {
             scr_move(y + row, x);
             scr_col(j ? C_BLUE : C_TEXT);
-            scr_fill(' ', w - scr_text(rows[j], w));
+            scr_fill(' ', w - (j ? outline_row(rows[j], w) :
+                scr_text(rows[j], w)));
         }
     }
     for (; row < h; row++) {
