@@ -243,14 +243,6 @@ typedef struct
 	int len;         /* current number of valid lines (<= cap) */
 	int head;        /* physical index of logical oldest (valid when len>0) */
 	uint64_t base;   /* Can overflow in the extreme */
-	/*
-	 * max_width tracks the widest line ever pushed to scrollback.
-	 * It may be conservative (stale) if that line has since been
-	 * evicted from the ring buffer, which is acceptable - it just
-	 * means we might reflow when not strictly necessary, which is
-	 * better than skipping a needed reflow.
-	 */
-	int max_width;
 	int view_offset; /* 0 means live screen */
 } Scrollback;
 
@@ -290,7 +282,6 @@ sb_init(int lines)
 		sb.buf[i] = NULL;
 
 	sb.view_offset = 0;
-	sb.max_width = 0;
 }
 
 /* Push one screen line into scrollback.
@@ -301,29 +292,28 @@ sb_push(Line line)
 {
 	Line copy;
 	int tail;
-	int width;
 
-	if (sb.cap <= 0)
+	if (sb.cap <= 0 || !line)
 		return;
 
-	copy = lineclone(line);
-
 	if (sb.len < sb.cap) {
+		copy = lineclone(line);
 		tail = sb_phys_index(sb.len);
 		sb.buf[tail] = copy;
 		sb.len++;
 	} else {
-		/* We might've just evicted the widest line... */
-		free(sb.buf[sb.head]);
-		sb.buf[sb.head] = copy;
+		/*
+		 * The oldest line's buffer is reused: history lines are
+		 * never narrower than term.col (growing reflows them all,
+		 * shrinking may leave them wider), so a full ring scrolls
+		 * without malloc and free.
+		 */
+		copy = sb.buf[sb.head];
+		memcpy(copy, line, term.col * sizeof(Glyph));
 		sb.head = (sb.head + 1) % sb.cap;
 		sb.base++;
 		selevict();
 	}
-	width = tlinelen(copy);
-	/* ...so max_width might be stale. */
-	if (width > sb.max_width)
-		sb.max_width = width;
 }
 
 static Line
@@ -333,6 +323,23 @@ sb_get(int idx)
 	if (idx < 0 || idx >= sb.len)
 		return NULL;
 	return sb.buf[sb_phys_index(idx)];
+}
+
+/*
+ * The widest text in the scrollback. Only a shrinking resize needs it,
+ * so it is found then rather than kept up on every line pushed.
+ */
+static int
+sb_maxwidth(void)
+{
+	int i, w, max = 0;
+
+	for (i = 0; i < sb.len && max < term.col; i++) {
+		w = tlinelen(sb_get(i));
+		if (w > max)
+			max = w;
+	}
+	return max;
 }
 
 static void
@@ -356,7 +363,6 @@ sb_clear(void)
 	sb.head = 0;
 	sb.base = 0;
 	sb.view_offset = 0;
-	sb.max_width = 0;
 }
 
 /*
@@ -382,11 +388,10 @@ sb_resize(int col)
 	Line *new_buf;
 	int i, j;
 	int new_len, logical_cap, logical_len, is_wrapped, cursor;
-	int copy_width, tail, current_width;
+	int copy_width, tail;
 	Line logical, line, nl;
 	uint64_t new_base = 0;
 	int new_head = 0;
-	int new_max_width = 0;
 	Glyph *g;
 
 	new_len = 0;
@@ -471,9 +476,6 @@ sb_resize(int col)
 				new_head = (new_head + 1) % sb.cap;
 				new_base++;
 			}
-			current_width = (cursor + copy_width < logical_len) ? col : copy_width;
-			if (current_width > new_max_width)
-				new_max_width = current_width;
 			cursor += copy_width;
 		}
 		logical_len = 0;
@@ -486,7 +488,6 @@ sb_resize(int col)
 	sb.head = new_head;
 	sb.base = new_base;
 	sb.view_offset = 0;
-	sb.max_width = new_max_width;
 }
 
 static void
@@ -1596,10 +1597,18 @@ tscrollup(int orig, int n)
 		 * Rotate before clearing, so clearing doesn't drop it.
 		 */
 		tsetdirt(orig, term.bot);
-		for (i = orig; i <= term.bot-n; i++) {
-			temp = term.line[i];
-			term.line[i] = term.line[i+n];
-			term.line[i+n] = temp;
+		if (n == 1) {
+			/* a newline: one memmove instead of a swap per row */
+			temp = term.line[orig];
+			memmove(&term.line[orig], &term.line[orig+1],
+			        (term.bot-orig) * sizeof(Line));
+			term.line[term.bot] = temp;
+		} else {
+			for (i = orig; i <= term.bot-n; i++) {
+				temp = term.line[i];
+				term.line[i] = term.line[i+n];
+				term.line[i+n] = temp;
+			}
 		}
 		tclearregion(0, term.bot-n+1, term.col-1, term.bot);
 		return;
@@ -1756,7 +1765,7 @@ tsetchar(Rune u, const Glyph *attr, int x, int y)
 void
 tclearregion(int x1, int y1, int x2, int y2)
 {
-	int x, y, temp;
+	int x, y, temp, chksel;
 	Glyph *gp;
 
 	if (x1 > x2)
@@ -1769,12 +1778,19 @@ tclearregion(int x1, int y1, int x2, int y2)
 	LIMIT(y1, 0, term.row-1);
 	LIMIT(y2, 0, term.row-1);
 
+	/*
+	 * Asking isselected() about every cell is most of the work of a
+	 * scroll; with no selection (or once it is cleared) skip it.
+	 */
+	chksel = sel.ob.x != -1;
 	for (y = y1; y <= y2; y++) {
 		term.dirty[y] = 1;
 		for (x = x1; x <= x2; x++) {
 			gp = &term.line[y][x];
-			if (isselected(x, sb.len + y))
+			if (chksel && isselected(x, sb.len + y)) {
 				selclear();
+				chksel = 0;
+			}
 			gp->fg = term.c.attr.fg;
 			gp->bg = term.c.attr.bg;
 			gp->mode = 0;
@@ -2709,7 +2725,8 @@ kscroll(const Arg *arg)
 		return; /* vim, tmux and less have no scrollback here */
 	sb.view_offset += arg->i;
 	LIMIT(sb.view_offset, 0, sb.len);
-	redraw();
+	/* drawn by run() within minlatency, so held keys don't queue up */
+	tfulldirt();
 }
 
 void
@@ -3117,7 +3134,11 @@ twrite(const char *buf, int buflen, int show_ctrl)
 	int n;
 
 	for (n = 0; n < buflen; n += charsize) {
-		if (IS_SET(MODE_UTF8)) {
+		if (!(buf[n] & 0x80)) {
+			/* ASCII, the same in UTF-8 and not: no decoding */
+			u = buf[n];
+			charsize = 1;
+		} else if (IS_SET(MODE_UTF8)) {
 			/* process a complete utf8 char */
 			charsize = utf8decode(buf + n, &u, buflen - n);
 			if (charsize == 0)
@@ -3203,7 +3224,7 @@ tresize(int col, int row)
 			needs_reflow = 1;
 		} else if (col < term.col) {
 			/* Shrinking: Only reflow if content is wider than new width. */
-			if (sb.max_width > col)
+			if (sb_maxwidth() > col)
 				needs_reflow = 1;
 		}
 		if (needs_reflow) {
