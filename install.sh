@@ -23,6 +23,8 @@
 #                              out of date (changes nothing)
 #   ./install.sh update        the newest version: git pull, then all,
 #                              then check (as root: the root parts too)
+#   ./install.sh update steno moonlander   the same for only the parts
+#                              named: git pull, those, then their check
 #   ./install.sh --deps        first install build dependencies with the
 #                              distro's package manager (emerge -qv)
 #   ./install.sh -a --deps     the same, but emerge asks first (-qva)
@@ -1308,7 +1310,11 @@ esac
 # pulled install.sh does the work (this one only pulls), so a new part or
 # fix is used at once. git runs as the repo's owner, even from root.
 case ${1:-} in update|--update)
-	[ $# -eq 1 ] || die "update takes no parts: ./install.sh update"
+	shift
+	for x in "$@"; do
+		case " $PARTS " in *" $x "*) ;;
+		*) die "unknown part: $x (see --list)" ;; esac
+	done
 	say "pull    $DOTFILES"
 	if [ "$AS_ROOT" = yes ]; then
 		su -s /bin/sh "$USER_NAME" -c "git -C '$DOTFILES' pull --ff-only" ||
@@ -1318,10 +1324,10 @@ case ${1:-} in update|--update)
 			die "git pull failed (changes not committed? no network?)"
 	fi
 	rc=0
-	/bin/sh "$DOTFILES/install.sh" all || rc=$?
+	/bin/sh "$DOTFILES/install.sh" "${@:-all}" || rc=$?
 	echo
 	say "check"
-	/bin/sh "$DOTFILES/install.sh" check || rc=$?
+	/bin/sh "$DOTFILES/install.sh" check "$@" || rc=$?
 	exit $rc ;;
 esac
 for arg in "$@"; do
