@@ -6,12 +6,15 @@
  * while a viewer has it open, so nothing is kept anywhere:
  *
  *   tape      one line a stroke: STROKE <tab> TRANSLATION <tab> N,
- *             N the strokes of that translation (0: the stroke undid
- *             one), so the viewer can clear the N - 1 before it; and
+ *             N - 1 the strokes it took in or replaced, whose lines
+ *             the viewer clears; a * is STROKE <tab> * <tab> 0 <tab>
+ *             K, K the translations it took back, one line each; and
  *             after a fingerspelled letter: = <tab> WORD <tab> N, the
  *             word so far and its letters, shown on the last of them
  *   suggest   one line when the last words change and have outlines:
- *             WORDS <tab> OUTLINES [<tab> WORDS <tab> OUTLINES]...;
+ *             WORDS <tab> OUTLINES [<tab> WORDS <tab> OUTLINES]...,
+ *             after ~ <tab> when they take the place of the last
+ *             line's (an outline took the word before in, or *);
  *             while fingerspelling, = [<tab> WORD <tab> OUTLINES]:
  *             the word so far, in place of the one before
  *
@@ -142,38 +145,18 @@ static void trim(char *s)
         memmove(s, s + a, n - a + 1);
 }
 
-/* The outline you just used for the text w: the strokes of the last
- * k translations (k up to 6) that the dictionary reads as w. Gives
- * the number of strokes and writes them as text, or gives 0. */
-static int used_outline(const char *w, char *out, int size)
+/* The outline you just used for the last count words: the strokes of
+ * the translations that wrote them (KAT/-S for cats, and not KPA for
+ * Cat). Gives the number of strokes and writes them as text, or 0. */
+static int used_outline(int count, char *out, int size)
 {
     long st[64];
-    int n, k, i, j, tot;
-    const char *v;
-    struct trans *t;
+    int n;
 
-    n = history_count();
-    for (k = 1; k <= 6 && k <= n; k++) {
-        tot = 0;
-        for (i = n - k; i < n; i++)
-            tot += history_at(i)->nst;
-        if (tot > 64)
-            break;
-        tot = 0;
-        for (i = n - k; i < n; i++) {
-            t = history_at(i);
-            for (j = 0; j < t->nst; j++) {
-                st[tot] = t->st[j];
-                tot++;
-            }
-        }
-        v = dict_peek(st, tot);
-        if (v && !strcmp(v, w)) {
-            outline_text(st, tot, out, size);
-            return tot;
-        }
-    }
-    return 0;
+    n = word_strokes(count, st, 64);
+    if (n > 0)
+        outline_text(st, n, out, size);
+    return n;
 }
 
 /* strokes in an outline written as "A/B/C" */
@@ -192,13 +175,13 @@ static int outline_strokes(const char *o, int len)
  * front when no listed outline has fewer strokes (the same number is
  * as good), a ! when one has; it is added at the end if it is not in
  * the list. */
-static void mark_used(const char *w, char *o, int size)
+static void mark_used(int count, char *o, int size)
 {
     char used[TEXT_MAX], tok[TEXT_MAX], res[TEXT_MAX];
     const char *p, *q;
     int n, best, len, done;
 
-    n = used_outline(w, used, sizeof(used));
+    n = used_outline(count, used, sizeof(used));
     if (!n || !o[0])
         return;
     best = 0;
@@ -236,7 +219,7 @@ static void mark_used(const char *w, char *o, int size)
 
 /* The last few words, longest first, and how else they are written.
  * Sent only when they change; a new viewer gets the current ones. */
-static void suggestions(int fresh)
+static void suggestions(int fresh, int replace)
 {
     int res;
     static char last_key[TEXT_MAX];
@@ -246,11 +229,13 @@ static void suggestions(int fresh)
 
     res = last_words(SUGGEST_WORDS, key, sizeof(key));
     if (!res)
-        return;
+        key[0] = 0;
     if (!fresh && !strcmp(key, last_key))
         return;
     scopy(last_key, key, sizeof(last_key));
-    out[0] = 0;
+    /* replace: the words before were taken in (pre, then prescribe)
+     * or undone, so what was sent for them goes */
+    scopy(out, replace && !fresh ? "~" : "", sizeof(out));
     seen[0] = 0;
     for (i = SUGGEST_WORDS; i >= 1; i--) {
         res = last_words(i, w, sizeof(w));
@@ -263,7 +248,7 @@ static void suggestions(int fresh)
         res = dict_outlines(w, o, sizeof(o), SUGGEST_MAX);
         if (!res)
             continue;
-        mark_used(w, o, sizeof(o));
+        mark_used(i, o, sizeof(o));
         if (out[0])
             scat(out, "\t", sizeof(out));
         put_escaped(out, sizeof(out) - TEXT_MAX, w);
@@ -276,11 +261,12 @@ static void suggestions(int fresh)
     feed_write(&sugg_fd, out);
 }
 
-/* What a stroke did: the text of the translation it made, its
- * strokes when they mean nothing, or * when it undid one. top is the
- * newest translation before it. Gives the translation's strokes, 0
- * for *. */
-int stroke_result(long st, struct trans *top, char *out, int size)
+/* What the last stroke did: the text of the translation it made, its
+ * strokes when they mean nothing, nothing when it changed nothing, or
+ * * when it undid. Gives 1 + the strokes of the translations it took
+ * in or replaced (the tape clears their lines: KAT/A*LG, SP-LS on
+ * cat hat, #* on KAT), 0 for *. */
+int stroke_result(char *out, int size)
 {
     char s[STROKE_MAX * 32];
     const char *g, *e;
@@ -288,26 +274,28 @@ int stroke_result(long st, struct trans *top, char *out, int size)
     int n;
 
     out[0] = 0;
-    n = history_count();
-    t = n ? history_at(n - 1) : 0;
-    if (t && t != top && t->nst && t->st[t->nst - 1] == st) {
-        g = t->has_english ? strstr(t->english, "{&") : 0;
-        e = g ? strchr(g, '}') : 0;
-        if (e && e - g - 2 < (int)sizeof(s)) {
-            /* a fingerspelled letter: just the letter */
-            memcpy(s, g + 2, e - g - 2);
-            s[e - g - 2] = 0;
-            put_escaped(out, size, s);
-        } else if (t->has_english) {
-            put_escaped(out, size, t->english);
-        } else {
-            outline_text(t->st, t->nst, s, sizeof(s));
-            put_escaped(out, size, s);
-        }
-        return t->nst;
+    if (stroke_undo) {
+        scopy(out, "*", size);
+        return 0;
     }
-    scopy(out, "*", size);        /* undone */
-    return 0;
+    n = history_count();
+    if (!stroke_added || !n)
+        return 1;              /* nothing happened: just the stroke */
+    t = history_at(n - 1);
+    g = t->has_english ? strstr(t->english, "{&") : 0;
+    e = g ? strchr(g, '}') : 0;
+    if (e && e - g - 2 < (int)sizeof(s)) {
+        /* a fingerspelled letter: just the letter */
+        memcpy(s, g + 2, e - g - 2);
+        s[e - g - 2] = 0;
+        put_escaped(out, size, s);
+    } else if (t->has_english) {
+        put_escaped(out, size, t->english);
+    } else {
+        outline_text(t->st, t->nst, s, sizeof(s));
+        put_escaped(out, size, s);
+    }
+    return 1 + stroke_removed_strokes;
 }
 
 /* A fingerspelled letter: {&s}, {>}{&s}, ... (Plover's glue) */
@@ -316,7 +304,8 @@ static int is_spelled(struct trans *t)
     return t && t->has_english && strstr(t->english, "{&") != 0;
 }
 
-/* {^ed}, {^ing}: letters only, put on the word before */
+/* {^ed}, {^ing}: letters only, put on the word before; also as the
+ * end of a stroke that has it in it (SKRAOEUBD: "scribe {^ed}") */
 static int is_suffix(struct trans *t)
 {
     const char *e;
@@ -324,7 +313,8 @@ static int is_suffix(struct trans *t)
 
     if (!t || !t->has_english)
         return 0;
-    e = t->english;
+    e = strrchr(t->english, ' ');
+    e = e ? e + 1 : t->english;
     if (e[0] != '{' || e[1] != '^')
         return 0;
     for (i = 2; (e[i] >= 'a' && e[i] <= 'z') || e[i] == '\''; i++)
@@ -332,10 +322,11 @@ static int is_suffix(struct trans *t)
     return i > 2 && e[i] == '}' && !e[i + 1];
 }
 
-/* after each stroke; top is the newest translation before it */
-void tape_stroke(long st, struct trans *top, int was_strokes)
+/* after each stroke */
+void tape_stroke(long st)
 {
     char line[TAPE_LINE + 64], o[TEXT_MAX];
+    long ws[64];
     struct trans *t;
     int n, was, open_now, k, made, spelling, res;
 
@@ -343,15 +334,17 @@ void tape_stroke(long st, struct trans *top, int was_strokes)
      * grows on the tape and in the suggestions */
     n = history_count();
     t = n ? history_at(n - 1) : 0;
-    made = t && t != top && t->nst && t->st[t->nst - 1] == st;
+    made = t && stroke_added && !stroke_undo;
     spelling = 0;
     if (made && is_spelled(t)) {
         spell_n++;
         spelling = 1;
-    } else if (!made && spell_n > 0) {
-        spell_n--;             /* a letter undone */
+    } else if (stroke_undo && spell_n > 0) {
+        spell_n -= stroke_removed;     /* letters undone */
+        if (spell_n < 0)
+            spell_n = 0;
         spelling = 1;
-    } else if (made) {
+    } else if (made || stroke_undo) {
         spell_n = 0;
     }
     spell_word[0] = 0;
@@ -364,13 +357,14 @@ void tape_stroke(long st, struct trans *top, int was_strokes)
         stroke_text(st, line);
         scat(line, "\t", sizeof(line));
         n = strlen(line);
-        k = stroke_result(st, top, line + n, TAPE_LINE - n);
+        k = stroke_result(line + n, TAPE_LINE - n);
         n = strlen(line);
         if (k)
             sprintf(line + n, "\t%d\n", k);
-        else    /* * : how many strokes it took back (as the engine
-                 * does: no-text ones such as KPA go with the word) */
-            sprintf(line + n, "\t0\t%d\n", was_strokes - history_strokes());
+        else    /* * : how many translations it took back (as the
+                 * engine does: no-text ones such as KPA go with the
+                 * word), each one line */
+            sprintf(line + n, "\t0\t%d\n", stroke_removed);
         feed_write(&tape_fd, line);
     }
     if (tape_fd >= 0 && spelling && spell_n && spell_word[0] &&
@@ -383,20 +377,25 @@ void tape_stroke(long st, struct trans *top, int was_strokes)
         feed_write(&tape_fd, line);
     }
     /* a suffix (-D: {^ed}) put on the word before: the tape shows the
-     * word it made (prescribed), not just the ending */
-    if (tape_fd >= 0 && made && !spelling && is_suffix(t) &&
-        history_count() > 1)
+     * word it made (prescribed), not just the ending, on the strokes
+     * of all that wrote it; so does SP-LS (cat hat: cathat) */
+    k = 0;
+    if (made && !spelling && (is_suffix(t) || (t->retro &&
+        strstr(t->english, "{^~|^}"))))
     {
+        k = word_strokes(1, ws, 64);
+    }
+    if (tape_fd >= 0 && k > 0) {
         last_words(1, spell_word, sizeof(spell_word));
         trim(spell_word);
         if (spell_word[0]) {
             scopy(line, "=\t", sizeof(line));
             put_escaped(line, TAPE_LINE, spell_word);
             n = strlen(line);
-            sprintf(line + n, "\t%d\n",
-                t->nst + history_at(history_count() - 2)->nst);
+            sprintf(line + n, "\t%d\n", k);
             feed_write(&tape_fd, line);
         }
+        spell_word[0] = 0;
     }
     was = sugg_fd >= 0;
     if (!output_on)
@@ -405,7 +404,8 @@ void tape_stroke(long st, struct trans *top, int was_strokes)
     if (!open_now)
         return;
     if (!spelling) {
-        suggestions(!was);
+        suggestions(!was, stroke_undo || (made && (stroke_removed ||
+            is_suffix(t))));
         return;
     }
     /* = and the word being spelled, when it has outlines: it takes
@@ -414,6 +414,7 @@ void tape_stroke(long st, struct trans *top, int was_strokes)
     res = spell_word[0] ? dict_outlines(spell_word, o, sizeof(o),
         SUGGEST_MAX) : 0;
     if (res) {
+        mark_used(1, o, sizeof(o));
         scat(line, "\t", sizeof(line));
         put_escaped(line, TAPE_LINE - TEXT_MAX, spell_word);
         scat(line, "\t", sizeof(line));
@@ -462,6 +463,28 @@ static void outline_parts(const long *st, int n, char *out, int size)
     }
 }
 
+/* What steno types for an outline that is not in the dictionaries as
+ * a whole (KAT/-S: cats, SKRAOEUBD: scribed): its strokes through the
+ * translator, from nothing, with output off (no keys, no commands).
+ * Empty when it types nothing. */
+static void outline_typed(const long *st, int n, char *out, int size)
+{
+    char t[TEXT_MAX];
+    int i;
+
+    output_on = 0;
+    for (i = 0; i < n; i++) {
+        translate(st[i]);
+        dict_stroked();
+    }
+    last_chars(TEXT_MAX / 4 - 1, t, sizeof(t));
+    trim(t);
+    out[0] = 0;
+    put_escaped(out, size, t);
+    translate_reset();
+    output_on = 1;
+}
+
 int tool_lookup(const char *s)
 {
     int res;
@@ -480,6 +503,18 @@ int tool_lookup(const char *s)
         if (parts[0])
             printf("  stroke by stroke: %s\n", parts);
         found = 1;
+    } else if (n > 0) {
+        /* not an entry, but steno still types something for it, as
+         * KAT/-S does (cat with -S on it) */
+        outline_typed(st, n, out, sizeof(out));
+        outline_text(st, n, norm, sizeof(norm));
+        if (out[0] && strcmp(out, norm)) {
+            printf("%s is no entry, but types\n  %s\n", norm, out);
+            outline_parts(st, n, parts, sizeof(parts));
+            if (parts[0])
+                printf("  stroke by stroke: %s\n", parts);
+            found = 1;
+        }
     }
     res = dict_outlines(s, out, sizeof(out), 50);
     if (res) {

@@ -1059,8 +1059,6 @@ static void stroked(long st)
 {
     static long long last_check;
     long long now;
-    struct trans *top;
-    int was_strokes;
     char s[32];
 
     if (!st)
@@ -1076,13 +1074,11 @@ static void stroked(long st)
         last_check = now;
         dict_reload();
     }
-    top = history_count() ? history_at(history_count() - 1) : 0;
-    was_strokes = history_strokes();
     translate(st);
     dict_stroked();
-    tape_stroke(st, top, was_strokes);    /* only if a viewer is there */
+    tape_stroke(st);              /* only if a viewer is there */
     if (!out_mode)
-        tui_stroke(st, top);
+        tui_stroke(st);
     if (reset_pending) {
         reset_pending = 0;
         translate_reset();

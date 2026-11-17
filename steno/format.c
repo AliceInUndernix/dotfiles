@@ -522,6 +522,57 @@ int last_words(int count, char *out, int size)
     return (int)(blen - s - at[0]);
 }
 
+/* The newest translations whose text makes the last count words (as
+ * last_words gives them): their strokes into st (at most max), and
+ * how many strokes, 0 when none. Translations that wrote nothing
+ * there (KPA before the word, or after it) are not part of it. */
+int word_strokes(int count, long *st, int max)
+{
+    int at[64], n, i, j, first, last, k;
+    long s, ws, hi, lo;
+    struct trans *t;
+
+    if (count < 1)
+        count = 1;
+    if (count > 64)
+        count = 64;
+    s = look_start();
+    n = word_starts(buf + s, (int)(blen - s), at, count);
+    if (!n)
+        return 0;
+    ws = base + s + at[0];
+    hi = base + blen;          /* where the text of the next one starts */
+    first = -1;
+    last = -1;
+    for (i = history_count() - 1; i >= 0; i--) {
+        t = history_at(i);
+        lo = t->lo;
+        if (t->nact && lo < hi) {
+            if (hi <= ws)
+                break;
+            if (last < 0)
+                last = i;
+            first = i;
+            hi = lo;
+        }
+        if (lo <= ws)
+            break;
+    }
+    if (first < 0)
+        return 0;
+    k = 0;
+    for (i = first; i <= last; i++) {
+        t = history_at(i);
+        for (j = 0; j < t->nst; j++) {
+            if (k == max)
+                return 0;
+            st[k] = t->st[j];
+            k++;
+        }
+    }
+    return k;
+}
+
 /* fragments: \s*[^\s]+\s* ; the first one without its leading spaces */
 int last_fragments(int count, char *out, int size)
 {

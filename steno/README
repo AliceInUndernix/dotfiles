@@ -122,7 +122,9 @@ OPTIONS
               is written (shortest first); for an outline of several
               strokes, what each stroke writes alone, which is why it
               is written so (high + draw + lick: hydraulic). STROKE?
-              is a stroke that writes nothing alone
+              is a stroke that writes nothing alone; an outline
+              that is no entry but still types something (KAT/-S:
+              cats, a suffix on a word) says what it types
     -a O T    add outline O -> T to the user dictionary; says first
               what O gives now and how T is written already. As in
               Dotterel, straight quotes in T are saved typographic
@@ -214,14 +216,18 @@ written:
                               HR EU B G   hydraulic
 
 An undone stroke and its * leave the tape (or stay, dim, with u),
-and what it had cleared comes back. A suffix stroke (-D, -G ...) shows the word it made: PRE/SKRAOEUB, -D
-gives prescribed on the -D line, the earlier lines cleared as in an
-outline. One * takes back what steno
-takes back: a stroke that writes nothing (KPA, which only capitalises
-the next word) goes together with the stroke before it, and so do
-the tape's lines. Fingerspelling the same way, as
-you spell: the newest letter's line shows the word so far (s, so,
-som, some ...) and the letters before it are cleared.
+and what it had cleared comes back. A suffix stroke (-D, -G ...)
+shows the word it made: PRE/SKRAOEUB, -D gives prescribed on the -D
+line, the earlier lines cleared as in an outline (and SKRAOEUBD, the
+suffix in the stroke, shows scribed, not scribe {^ed}). The same for
+strokes that change what is there: #* (KAT: cath) and SP-LS (cat hat:
+cathat) clear the lines they changed, # (repeat) shows what it wrote
+again, and a stroke that does nothing shows no text. One * takes back
+what steno takes back: a stroke that writes nothing (KPA, which only
+capitalises the next word) goes together with the stroke before it,
+and so do the tape's lines. Fingerspelling the same way, as you
+spell: the newest letter's line shows the word so far (s, so, som,
+some ...) and the letters before it are cleared.
 
 The suggestions: the words you typed, and under each every outline
 that writes them, shortest first (a word being fingerspelled as it
@@ -230,7 +236,11 @@ again, they move to the bottom). The newest is at the bottom in both.
 The outline you used last is bold: green when no outline of that
 text has fewer strokes (the same number is right too), red when one
 has (then it is added at the end of the list if it is not there).
-Only the last one is marked.
+It is the strokes that wrote the word, whatever the dictionary has:
+KAT/-S for cats (red: KATS), KAT for Cat after KPA. Only the last
+one is marked. When a stroke takes the word before in (pre, then
+prescribe), puts a suffix on it, or is a *, the lines for the words
+that are gone go too.
 
     q, Ctrl+C          quit
     t                  show or hide the tape

@@ -45,11 +45,12 @@ int dict_explain(const long *st, int n, char *out, int size);
 /* --- translator -------------------------------------------------- */
 
 extern int undo_levels;
+extern int stroke_removed, stroke_removed_strokes, stroke_added;
+extern int stroke_undo;
 void translate(long st);
 void translate_reset(void);
 int history_count(void);
 struct trans *history_at(int i);
-int history_strokes(void);
 
 /* --- formatter --------------------------------------------------- */
 
@@ -67,6 +68,7 @@ int trans_word_finished(struct trans *t);
 int last_words(int count, char *out, int size);   /* bytes, or 0 */
 int last_fragments(int count, char *out, int size);
 int last_chars(int count, char *out, int size);
+int word_strokes(int count, long *st, int max);
 
 /* the translations the formatter and the translator share */
 struct action;
@@ -112,8 +114,8 @@ int atoi_small(const char *s);         /* -1: not a number */
 /* --- terminal tools (tools.c) --------------------------------- */
 
 extern char user_dict[1024];
-void tape_stroke(long st, struct trans *top, int was_strokes);
-int stroke_result(long st, struct trans *top, char *out, int size);
+void tape_stroke(long st);
+int stroke_result(char *out, int size);
 int view_main(int tape, int sugg, const char *cfg);   /* view.c */
 void open_viewer(const char *flag);     /* -T, -S, -TS in a terminal */
 const char *feed_path(const char *name);
@@ -131,7 +133,7 @@ void tui_stop(void);
 void tui_draw(void);
 int tui_key(void);                          /* -1: quit */
 void tui_log(const char *m);
-void tui_stroke(long st, struct trans *top);
+void tui_stroke(long st);
 int keyboard_state(const char **port, const char **why);
 int add_dict_line(const char *val, int user);
 int config_save(void);

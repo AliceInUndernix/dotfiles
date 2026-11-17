@@ -15,6 +15,11 @@
 
 int undo_levels = 100;
 
+/* what the last stroke did, for the tape: the translations it took
+ * out of the history (and their strokes), the ones it put in, and
+ * whether it was an undo */
+int stroke_removed, stroke_removed_strokes, stroke_added, stroke_undo;
+
 static struct trans **hist;
 static int nhist, chist;
 static struct trans *tail;        /* the last one no longer undoable */
@@ -368,6 +373,7 @@ static void macro_undo(long st)
     int i;
     struct trans *t;
 
+    stroke_undo = 1;
     for (i = nhist - 1; i >= 0 && i < nhist; i--) {
         t = hist[i];
         untranslate_translation(t);
@@ -662,7 +668,7 @@ static void flush(struct trans *extra)
     struct trans *prev;
     struct trans **doo;
     struct trans **list;
-    int ndo, n;
+    int ndo, n, i;
 
     prev = 0;
     if (nhist - to_do > 0)
@@ -682,6 +688,11 @@ static void flush(struct trans *extra)
         n++;
     }
     doo = list;
+    for (i = 0; i < nto_undo; i++) {
+        stroke_removed++;
+        stroke_removed_strokes += to_undo[i]->nst;
+    }
+    stroke_added += ndo;
     if (nto_undo || n)
         format_flush(to_undo, nto_undo, doo, n, prev);
     free(list);
@@ -693,6 +704,10 @@ static void flush(struct trans *extra)
 
 void translate(long st)
 {
+    stroke_removed = 0;
+    stroke_removed_strokes = 0;
+    stroke_added = 0;
+    stroke_undo = 0;
     translate_stroke(st);
     flush(0);
     sweep();
@@ -712,16 +727,6 @@ void translate_reset(void)
 int history_count(void)
 {
     return nhist;
-}
-
-int history_strokes(void)
-{
-    int i, n;
-
-    n = 0;
-    for (i = 0; i < nhist; i++)
-        n += hist[i]->nst;
-    return n;
 }
 
 struct trans *history_at(int i)

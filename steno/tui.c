@@ -81,13 +81,13 @@ void tui_log(const char *m)
     tui_dirty = 1;
 }
 
-void tui_stroke(long st, struct trans *top)
+void tui_stroke(long st)
 {
     if (!tui_on)
         return;
     nstrokes++;
     stroke_text(st, last_stroke);
-    stroke_result(st, top, last_text, sizeof(last_text));
+    stroke_result(last_text, sizeof(last_text));
     tui_dirty = 1;
 }
 

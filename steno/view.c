@@ -53,7 +53,8 @@ struct box {
     /* the tape's lines only: */
     long seq[KEEP_LINES];      /* a number for each, never reused */
     long by[KEEP_LINES];       /* cleared by that line (0: shown) */
-    char dead[KEEP_LINES];     /* undone by a * after it */
+    char dead[KEEP_LINES];     /* undone by a * after it; in the
+                                  suggestions, the lines sent last */
     char undo[KEEP_LINES];     /* a * line; in the suggestions, the
                                   word being fingerspelled */
 };
@@ -148,8 +149,6 @@ static void tape_merge(struct box *b, int i, int n, int undone)
     int j, k;
 
     if (b->undo[i]) {
-        if (undone < 1)
-            undone = 1;
         for (j = i - 1; j >= 0 && undone > 0; j--) {
             if (b->undo[j] || b->dead[j])
                 continue;
@@ -286,14 +285,16 @@ static void got_suggest(char *line)
     char cell[CELL_MAX], *w, *o, *next;
     struct box *b;
     int i, k;
-    int spell;
+    int spell, replace;
 
     /* = ...: the fingerspelled word so far, in place of the last one
-     * (undo[] marks it in this box) */
+     * (undo[] marks it in this box); ~ ...: these words in place of
+     * the last lines sent (dead[] marks them) */
     b = &boxes[1];
     for (i = 0; i < b->nlines; i++)
         strip_marks(b->lines[i]);
     spell = line[0] == '=' && (!line[1] || line[1] == '\t');
+    replace = line[0] == '~' && (!line[1] || line[1] == '\t');
     for (i = 0; i < b->nlines; i++) {
         if (b->undo[i] && spell) {
             drop_line(b, i);
@@ -303,7 +304,13 @@ static void got_suggest(char *line)
     }
     for (; i < b->nlines; i++)
         b->undo[i] = 0;
-    if (spell)
+    for (i = b->nlines - 1; i >= 0; i--) {
+        if (b->dead[i] && replace)
+            drop_line(b, i);
+        else
+            b->dead[i] = 0;
+    }
+    if (spell || replace)
         line += line[1] ? 2 : 1;
 
     for (w = line; w && *w; w = next) {
@@ -332,6 +339,7 @@ static void got_suggest(char *line)
             printf("%s%s  %s\n", boxes[0].shown ? "= " : "", w, o);
         keep(b, cell);
         b->undo[b->nlines - 1] = spell;
+        b->dead[b->nlines - 1] = 1;
     }
 }
 
