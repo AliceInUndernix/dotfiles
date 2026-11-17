@@ -5,3 +5,6 @@
 # Browsers
 icecat	icecat
 chromium	chromium-browser
+
+# Claude desktop (installed by hand with get-claude-desktop.sh)
+claude	claude-desktop
