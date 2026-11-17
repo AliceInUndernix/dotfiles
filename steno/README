@@ -6,7 +6,8 @@ SYNOPSIS
     steno [-qv] [-c CONFIG] [-p PORT]  read the keyboard, type into X
     steno -T                           paper tape
     steno -S                           suggestions
-    steno -TS                          both, side by side
+    steno -TS                          both, side by side (-ST: the
+                                       suggestions on the left)
     steno -l WORD|OUTLINE              look it up
     steno -a OUTLINE TRANSLATION       add a stroke
     steno -A                           add strokes, asking for each
@@ -75,7 +76,7 @@ in a small screen, in the look of btop:
     | doing       typing                                            |
     | last        KAT  cat                                          |
     | since start 212 strokes, 10 dictionaries, 130831 entries      |
-    +--+q quit+-+o output+-+t tape+-+s suggestions+-+b both+--------+
+    +-+q quit+-+o output+-+t tape+-+s suggestions+-+b both+-+A add..+
     +-+dictionaries+------------------------------------------------+
     |> 1 on  ~/.system/share/steno/user.dict    3  dict, -a adds .. |
     |  2 on  dotterel-base.dict            113816  dict             |
@@ -99,6 +100,10 @@ steno would say on stderr.
     d              take it out of the list (y to be sure); the file
                    stays
     r              read again the dictionary files that changed
+    A              add a stroke: type its outline, Enter (the messages
+                   say what it gives now), then its text, Enter; it
+                   goes into the user dictionary, as steno -a (Esc
+                   stops)
     o              output on or off, as PLOVER:TOGGLE
     t, s, b        open the tape, the suggestions or both in a window
                    of their own (steno -T, -S, -TS in the "terminal"
@@ -117,7 +122,8 @@ OPTIONS
               ttyACM9, every second until the keyboard is there
     -T        show the paper tape
     -S        show the suggestions
-    -TS       show both (also -ST, or -T -S)
+    -TS       show both, the tape on the left (also -T -S)
+    -ST       show both, the suggestions on the left (also -S -T)
     -l X      what outline X gives in each dictionary, and how text X
               is written (shortest first); for an outline of several
               strokes, what each stroke writes alone, which is why it
@@ -196,7 +202,8 @@ PAPER TAPE AND SUGGESTIONS
 
 Each is its own box, drawn as btop draws them: steno -T is the tape,
 steno -S the suggestions, steno -TS both, side by side (one above the
-other in a terminal under 60 columns). So they can go in one window
+other in a terminal under 60 columns), the tape first; steno -ST puts
+the suggestions first. So they can go in one window
 or in two, wherever there is room.
 
     +-+tape+--------------------------++-+suggestions+----------------+
@@ -255,9 +262,15 @@ that are gone go too.
     u                  undone strokes and their * gone from the tape
                        (the start), or there and dim, as in Plover
     Tab                with both: which one scrolls (its title is lit)
+    x                  with both: swap them (left and right, or top
+                       and bottom)
     l, /               look up a word or outline: type it, Enter; the
                        box shows each outline and why (steno -l); Esc
                        closes it
+    a                  add a stroke: type its outline, Enter (the box
+                       says what it gives now), then its text, Enter;
+                       it goes into the user dictionary, as steno -a
+                       (Esc stops)
     any other key draws it again
 
 At least one box stays. Into a pipe, it writes the lines instead

@@ -1180,6 +1180,7 @@ int main(int argc, char **argv)
     const char *cfg, *arg1, *arg2;
     struct pollfd pf[3];
     int i, n, test, r, tool, show_tape, show_sugg, quiet, kb, keys;
+    int sugg_first;
     struct sigaction sa;
 
     cfg = 0;
@@ -1187,6 +1188,7 @@ int main(int argc, char **argv)
     tool = 0;
     show_tape = 0;
     show_sugg = 0;
+    sugg_first = 0;
     quiet = 0;
     arg1 = 0;
     arg2 = 0;
@@ -1202,8 +1204,10 @@ int main(int argc, char **argv)
         } else if (!strcmp(argv[i], "-T")) {
             show_tape = 1;
         } else if (!strcmp(argv[i], "-S")) {
+            sugg_first = !show_tape;   /* -S -T: suggestions first */
             show_sugg = 1;
         } else if (!strcmp(argv[i], "-TS") || !strcmp(argv[i], "-ST")) {
+            sugg_first = argv[i][1] == 'S';
             show_tape = 1;
             show_sugg = 1;
         } else if (!strcmp(argv[i], "-C") && i + 2 < argc) {
@@ -1230,7 +1234,7 @@ int main(int argc, char **argv)
         }
     }
     if (show_tape || show_sugg)
-        return view_main(show_tape, show_sugg, cfg);
+        return view_main(show_tape, show_sugg, sugg_first, cfg);
     out_mode = test;
     scopy(cfg_path, cfg ? cfg : config_path("~/.config/steno/config"),
         sizeof(cfg_path));

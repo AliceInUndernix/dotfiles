@@ -70,8 +70,13 @@ static long next_seq = 1;
 static volatile int resized, stop_view;
 static const char *view_cfg;   /* -c, for steno -l */
 
-/* the lookup: asking (typing), and its last answer */
+/* the lookup (and adding a stroke): what is asked, and its last
+ * answer. finding: 0 nothing asked, 1 a lookup, 2 the outline of a
+ * stroke to add, 3 its translation */
 static int finding;
+static char add_out[FIND_MAX];  /* the outline, while its text is asked */
+static int added;              /* the answer shown is of an add */
+static int sugg_left;          /* x: the suggestions on the left (-ST) */
 static char find[FIND_MAX];
 static int nfind;
 static char found[FOUND_MAX][CELL_MAX];
@@ -551,7 +556,8 @@ static void draw_sugg(int y, int x, int w, int h)
 /* the keys under the boxes: under one box all of them; with both, the
  * tape's under the tape and the rest under the suggestions */
 static const char *const keys_all[] = {
-    "quit", "clear", "tape", "undo", "suggestions", "l lookup"
+    "quit", "clear", "tape", "undo", "suggestions", "l lookup", "add",
+    "x swap"
 };
 
 static void draw_box(int which, int y, int x, int w, int h)
@@ -585,10 +591,10 @@ static void draw_box(int which, int y, int x, int w, int h)
     scr_border(y, x, w, 1, title, 0, 0);
     scr_title_dim = 0;
     keys = keys_all;
-    nkeys = 6;
+    nkeys = 7;
     if (boxes[!which].shown) {
         keys = which ? keys_all + 4 : keys_all;
-        nkeys = which ? 2 : 4;
+        nkeys = 4;
     }
     scr_border(y + h - 1, x, w, 0, 0, keys, nkeys);
 }
@@ -597,7 +603,10 @@ static void draw_box(int which, int y, int x, int w, int h)
  * answer of steno -l */
 static void draw_find(int rows, int cols)
 {
-    static const char *const keys[] = { "Enter look up", "Esc close" };
+    static const char *const look[] = { "Enter look up", "Esc close" };
+    static const char *const next[] = { "Enter next", "Esc stop" };
+    static const char *const add[] = { "Enter add", "Esc stop" };
+    char prompt[FIND_MAX + 32];
     int h, y, row, n;
 
     h = 3 + (nfound ? nfound + 1 : 0);
@@ -606,13 +615,20 @@ static void draw_find(int rows, int cols)
     if (h < 3 || cols < 12)
         return;
     y = rows - h;
-    scr_border(y, 0, cols, 1, "lookup", 0, 0);
+    scr_border(y, 0, cols, 1, finding >= 2 || (!finding && added) ?
+        "add a stroke" : "lookup", 0, 0);
     scr_side(y + 1, 0, cols);
     scr_move(y + 1, 1);
     scr_col(C_BLUE);
-    scr_put("> ");
+    if (finding == 2)
+        scopy(prompt, "outline> ", sizeof(prompt));
+    else if (finding == 3)
+        sprintf(prompt, "%s> ", add_out);
+    else
+        scopy(prompt, "> ", sizeof(prompt));
+    n = scr_text(prompt, cols - 5);
     scr_col(C_TEXT);
-    n = 2 + scr_text(find, cols - 5);
+    n += scr_text(find, cols - 3 - n);
     scr_col(C_SELECT);
     scr_put(finding ? " " : "");
     scr_col(C_PLAIN);
@@ -629,7 +645,8 @@ static void draw_find(int rows, int cols)
         scr_col(C_PLAIN);
         scr_fill(' ', cols - 2 - n);
     }
-    scr_border(y + h - 1, 0, cols, 0, 0, keys, 2);
+    scr_border(y + h - 1, 0, cols, 0, 0, finding == 2 ? next :
+        finding == 3 ? add : look, 2);
 }
 
 static void draw(void)
@@ -644,11 +661,17 @@ static void draw(void)
             wt = cols / 2;
             if (wt < NUM_KEYS + 16)
                 wt = NUM_KEYS + 16;
-            draw_box(0, 0, 0, wt, rows);
-            draw_box(1, 0, wt, cols - wt, rows);
+            if (sugg_left) {
+                draw_box(1, 0, 0, cols - wt, rows);
+                draw_box(0, 0, cols - wt, wt, rows);
+            } else {
+                draw_box(0, 0, 0, wt, rows);
+                draw_box(1, 0, wt, cols - wt, rows);
+            }
         } else {
-            draw_box(0, 0, 0, cols, rows / 2);
-            draw_box(1, rows / 2, 0, cols, rows - rows / 2);
+            /* one above the other: the first one on top */
+            draw_box(sugg_left, 0, 0, cols, rows / 2);
+            draw_box(!sugg_left, rows / 2, 0, cols, rows - rows / 2);
         }
     } else {
         draw_box(boxes[1].shown, 0, 0, cols, rows);
@@ -660,16 +683,17 @@ static void draw(void)
 
 /* --- the lookup ------------------------------------------------------ */
 
-/* steno [-c CFG] -l WHAT, its answer into found[] */
-static void look_up(void)
+/* steno [-c CFG] FLAG A [B]: -l WHAT or -a OUTLINE TEXT, its answer
+ * into found[] */
+static void run_steno(const char *flag, const char *a, const char *b)
 {
     char buf[FOUND_MAX * 128], *p, *nl;
-    const char *argv[6];
+    const char *argv[7];
     int fd[2], r, n, k;
     pid_t pid;
 
     nfound = 0;
-    if (!find[0])
+    if (!a[0])
         return;
     r = pipe(fd);
     if (r < 0)
@@ -683,10 +707,14 @@ static void look_up(void)
         argv[k] = view_cfg;
         k++;
     }
-    argv[k] = "-l";
+    argv[k] = flag;
     k++;
-    argv[k] = find;
+    argv[k] = a;
     k++;
+    if (b) {
+        argv[k] = b;
+        k++;
+    }
     argv[k] = 0;
     pid = fork();
     if (pid == 0) {
@@ -735,17 +763,39 @@ static void find_key(int c)
     if (c == 27) {
         finding = 0;
         nfound = 0;
-    } else if (c == '\r' || c == '\n') {
-        look_up();
-    } else if (c == 127 || c == 8) {
-        if (nfind > 0) {
-            nfind--;
-            find[nfind] = 0;
+    } else if ((c == '\r' || c == '\n') && finding == 2) {
+        /* the outline: what it gives now, then its translation */
+        if (!find[0]) {
+            finding = 0;
+            return;
         }
+        scopy(add_out, find, sizeof(add_out));
+        run_steno("-l", add_out, 0);
+        finding = 3;
+        nfind = 0;
+        find[0] = 0;
+    } else if ((c == '\r' || c == '\n') && finding == 3) {
+        run_steno("-a", add_out, find);
+        finding = 0;
+        added = 1;
+        nfind = 0;
+        find[0] = 0;
+    } else if (c == '\r' || c == '\n') {
+        run_steno("-l", find, 0);
+    } else if (c == 127 || c == 8) {
+        /* a whole character, also one of several bytes (UTF-8) */
+        while (nfind > 0 && ((unsigned char)find[nfind - 1] & 0xc0) ==
+            0x80)
+        {
+            nfind--;
+        }
+        if (nfind > 0)
+            nfind--;
+        find[nfind] = 0;
     } else if (c == 21) {
         nfind = 0;             /* Ctrl+U */
         find[0] = 0;
-    } else if (c >= 32 && c < 127 && nfind < FIND_MAX - 1) {
+    } else if (c >= 32 && c != 127 && nfind < FIND_MAX - 1) {
         find[nfind] = (char)c;
         nfind++;
         find[nfind] = 0;
@@ -866,11 +916,14 @@ static int view_keys(const unsigned char *k, int n)
             return -1;
         if (c == 27 && nfound) {
             nfound = 0;
-        } else if (c == 'l' || c == '/') {
-            finding = 1;
+        } else if (c == 'l' || c == '/' || c == 'a' || c == 'A') {
+            finding = c == 'a' || c == 'A' ? 2 : 1;
+            added = 0;
             nfind = 0;
             find[0] = 0;
             nfound = 0;
+        } else if (c == 'x' && boxes[0].shown && boxes[1].shown) {
+            sugg_left = !sugg_left;
         } else if (c == 'c') {
             boxes[0].nlines = 0;
             boxes[1].nlines = 0;
@@ -901,7 +954,7 @@ static int view_keys(const unsigned char *k, int n)
     return 0;
 }
 
-int view_main(int tape, int sugg, const char *cfg)
+int view_main(int tape, int sugg, int sugg_first, const char *cfg)
 {
     struct pollfd pf[3];
     struct termios old, raw;
@@ -910,6 +963,7 @@ int view_main(int tape, int sugg, const char *cfg)
     unsigned char k[64];
 
     view_cfg = cfg;
+    sugg_left = sugg_first;
     for (i = 0; i < KEEP_LINES; i++) {
         boxes[0].at[i] = i;
         boxes[1].at[i] = i;

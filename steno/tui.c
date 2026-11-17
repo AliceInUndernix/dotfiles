@@ -30,7 +30,10 @@ static int nlogs;
 static int sel, top_row;       /* the chosen dictionary, the first shown */
 static long nstrokes;
 static char last_stroke[32], last_text[LOG_LEN];
-static int asking;             /* 0, 'a' (a name to add), 'd' (remove?) */
+static int asking;             /* 0, 'a' (a name to add), 'd' (remove?),
+                                  'A' (an outline to add), 'T' (its
+                                  translation) */
+static char add_outline[256];
 static char input[INPUT_MAX];
 static int ninput;
 
@@ -121,7 +124,8 @@ static void field(int y, int x, int w, const char *label, const char *c,
 static void draw_status(int y, int w)
 {
     static const char *const keys[] = {
-        "q quit", "o output", "t tape", "s suggestions", "b both"
+        "q quit", "o output", "t tape", "s suggestions", "b both",
+        "A add stroke"
     };
     const char *port, *why, *d;
     char s[LOG_LEN + 64];
@@ -165,7 +169,7 @@ static void draw_status(int y, int w)
     sprintf(s, "%ld strokes, %d dictionaries, %ld entries", nstrokes,
         dict_count(), dict_entries());
     field(y + 5, 1, w - 2, "since start", C_TEXT, s, 0, 0);
-    scr_border(y + 6, 0, w, 0, 0, keys, 5);
+    scr_border(y + 6, 0, w, 0, 0, keys, 6);
 }
 
 /* home as ~, and when it is too long, its end: ..steno/user.dict */
@@ -247,6 +251,7 @@ static void draw_dicts(int y, int w, int h)
 
 static void draw_logs(int y, int w, int h)
 {
+    char s[300];
     int i, row, inner, n;
 
     scr_border(y, 0, w, 1, "messages", 0, 0);
@@ -262,11 +267,19 @@ static void draw_logs(int y, int w, int h)
         n = 0;
         if (asking && row == inner - 1) {
             scr_col(C_BLUE);
-            n = scr_text(asking == 'a' ? " add (name or path, Enter; Esc "
-                "stops): " : " remove it? y/n ", w - 2);
+            if (asking == 'T') {
+                sprintf(s, " translation of %.200s (Enter adds, Esc "
+                    "stops): ", add_outline);
+                n = scr_text(s, w - 2);
+            } else {
+                n = scr_text(asking == 'a' ? " add (name or path, Enter; "
+                    "Esc stops): " : asking == 'A' ? " add a stroke: its "
+                    "outline (Enter; Esc stops): " : " remove it? y/n ",
+                    w - 2);
+            }
             scr_col(C_TITLE);
             n += scr_text(input, w - 2 - n);
-            if (asking == 'a' && n < w - 2) {
+            if (asking != 'd' && n < w - 2) {
                 scr_put("_");
                 n++;
             }
@@ -325,6 +338,38 @@ static void save(void)
         tui_log("saved in the settings file");
 }
 
+/* the outline of a stroke to add: what it gives now, then ask for
+ * the translation (steno's own strokes can type it) */
+static void added_outline(void)
+{
+    char out[TEXT_MAX * 4], m[LOG_LEN], *p, *nl;
+    long st[STROKE_MAX];
+    int n;
+
+    scopy(add_outline, input, sizeof(add_outline));
+    n = outline_parse(add_outline, st, STROKE_MAX);
+    if (n <= 0) {
+        sprintf(m, "not an outline: %.200s", add_outline);
+        tui_log(m);
+        return;
+    }
+    n = dict_explain(st, n, out, sizeof(out));
+    for (p = out; n && *p; p = nl + 1) {
+        nl = strchr(p, '\n');
+        if (nl)
+            *nl = 0;
+        while (*p == ' ')
+            p++;
+        sprintf(m, "%.60s now gives %.150s", add_outline, p);
+        tui_log(m);
+        if (!nl)
+            break;
+    }
+    asking = 'T';
+    ninput = 0;
+    input[0] = 0;
+}
+
 static void answer(int c)
 {
     int r, n, user;
@@ -345,6 +390,15 @@ static void answer(int c)
     /* adding: a line editor, as small as it gets */
     if (c == 27) {
         asking = 0;
+    } else if ((c == '\r' || c == '\n') && asking == 'A') {
+        asking = 0;
+        if (!ninput)
+            return;
+        added_outline();
+    } else if ((c == '\r' || c == '\n') && asking == 'T') {
+        asking = 0;
+        add_stroke(add_outline, input, m, sizeof(m));
+        tui_log(m);
     } else if (c == '\r' || c == '\n') {
         asking = 0;
         if (!ninput)
@@ -358,14 +412,19 @@ static void answer(int c)
             save();
         }
     } else if (c == 127 || c == 8) {
-        if (ninput > 0) {
+        /* a whole character, also one of several bytes (UTF-8) */
+        while (ninput > 0 && ((unsigned char)input[ninput - 1] & 0xc0) ==
+            0x80)
+        {
             ninput--;
-            input[ninput] = 0;
         }
+        if (ninput > 0)
+            ninput--;
+        input[ninput] = 0;
     } else if (c == 21) {
         ninput = 0;            /* Ctrl+U */
         input[0] = 0;
-    } else if (c >= 32 && c < 127 && ninput < INPUT_MAX - 1) {
+    } else if ((c >= 32 && c != 127) && ninput < INPUT_MAX - 1) {
         input[ninput] = (char)c;
         ninput++;
         input[ninput] = 0;
@@ -432,6 +491,10 @@ int tui_key(void)
             save();
         } else if (c == 'a') {
             asking = 'a';
+            ninput = 0;
+            input[0] = 0;
+        } else if (c == 'A') {
+            asking = 'A';
             ninput = 0;
             input[0] = 0;
         } else if (c == 'd' && dict_count() > 1) {

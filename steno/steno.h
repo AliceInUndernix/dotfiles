@@ -116,12 +116,14 @@ int atoi_small(const char *s);         /* -1: not a number */
 extern char user_dict[1024];
 void tape_stroke(long st);
 int stroke_result(char *out, int size);
-int view_main(int tape, int sugg, const char *cfg);   /* view.c */
+int view_main(int tape, int sugg, int sugg_first,
+    const char *cfg);                       /* view.c */
 void open_viewer(const char *flag);     /* -T, -S, -TS in a terminal */
 const char *feed_path(const char *name);
 int tool_lookup(const char *s);
 void typographic(const char *text, char *out, int size);
 int tool_add(const char *outline, const char *text);
+int add_stroke(const char *outline, const char *text, char *msg, int size);
 int tool_add_loop(void);
 
 /* --- the status screen (tui.c) and its engine side (main.c) ---- */

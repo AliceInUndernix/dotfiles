@@ -888,6 +888,43 @@ void typographic(const char *text, char *out, int size)
     }
 }
 
+/* outline -> text into the user dictionary, from the status screen:
+ * what happened goes into msg, not to stdout. 0 when added. */
+int add_stroke(const char *outline, const char *text, char *msg, int size)
+{
+    int res;
+    char norm[STROKE_MAX * 32], typo[TEXT_MAX];
+    const char *t;
+
+    t = target();
+    if (!t) {
+        scopy(msg, "no .dict dictionary to add to", size);
+        return -1;
+    }
+    if (!lookup_outline(outline, norm, sizeof(norm))) {
+        scopy(msg, "not an outline: ", size);
+        scat(msg, outline, size);
+        return -1;
+    }
+    if (!text[0]) {
+        scopy(msg, "no translation: nothing added", size);
+        return -1;
+    }
+    typographic(text, typo, sizeof(typo));
+    res = write_entry(t, norm, typo);
+    if (res < 0) {
+        scopy(msg, "could not write ", size);
+        scat(msg, t, size);
+        return -1;
+    }
+    dict_reload();
+    scopy(msg, "added ", size);
+    scat(msg, norm, size);
+    scat(msg, " -> ", size);
+    scat(msg, typo, size);
+    return 0;
+}
+
 int tool_add(const char *outline, const char *text)
 {
     int res;
