@@ -339,7 +339,7 @@ void tape_stroke(long st)
     if (made && is_spelled(t)) {
         spell_n++;
         spelling = 1;
-    } else if (stroke_undo && spell_n > 0) {
+    } else if (stroke_undo && spell_n > 0 && stroke_removed > 0) {
         spell_n -= stroke_removed;     /* letters undone */
         if (spell_n < 0)
             spell_n = 0;
