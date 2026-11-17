@@ -410,7 +410,12 @@ applyrules(Client *c)
 		XFree(ch.res_class);
 	if (ch.res_name)
 		XFree(ch.res_name);
-	c->tags = c->tags & TAGMASK ? c->tags & TAGMASK : c->mon->tagset[c->mon->seltags];
+	/* only real tags: a window opened while a scratchpad is shown (e.g.
+	 * started from it) must not get the scratchpad's tag and come along
+	 * with it to other tags */
+	if (!(c->tags & TAGMASK))
+		c->tags = c->mon->tagset[c->mon->seltags];
+	c->tags = c->tags & TAGMASK ? c->tags & TAGMASK : 1;
 }
 
 int
@@ -1272,8 +1277,12 @@ manage(Window w, XWindowAttributes *wa)
 		for (m = mons; m && m->num != saved[2]; m = m->next);
 		if (m)
 			c->mon = m;
-		if (saved[1] & (TAGMASK | SPTAGMASK))
-			c->tags = saved[1] & (TAGMASK | SPTAGMASK);
+		/* a scratchpad has only its scratchpad tag; a window with real
+		 * tags too got it by mistake before 2026-11-17 */
+		if (saved[1] & TAGMASK)
+			c->tags = saved[1] & TAGMASK;
+		else if (saved[1] & SPTAGMASK)
+			c->tags = saved[1] & SPTAGMASK;
 		c->isfloating = saved[3] & 1;
 		c->issticky = (saved[3] >> 1) & 1;
 		c->ispinned = c->issticky || ((saved[3] >> 2) & 1);
@@ -2451,6 +2460,12 @@ togglescratch(const Arg *arg)
 				selmon->wy + (selmon->wh - HEIGHT(c)) / 2,
 				c->w, c->h, 0);
 		arrange(selmon);
+		focus(c);
+		restack(selmon);
+		return;
+	}
+	if (ISVISIBLE(c) && c != selmon->sel) {
+		/* shown but not focused: focus it instead of hiding it */
 		focus(c);
 		restack(selmon);
 		return;
