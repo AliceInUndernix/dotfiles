@@ -4,8 +4,9 @@
  * anyone, which shows only what everyone may see.
  *
  * It reads what the vpn service writes in /run/vpn (status, events)
- * and the kernel's counters, redraws twice a second, and runs vpn's
- * own commands for the keys. One process, no threads, no libraries
+ * and the kernel's counters, redraws once a second, on the second,
+ * and at once when the service writes something new (inotify), and
+ * runs vpn's own commands for the keys. One process, no threads, no libraries
  * but a little of libc, plain ANSI terminal codes.
  *
  *   vpntop       the whole screen, with keys (root)
@@ -19,6 +20,8 @@
 #include <sys/ioctl.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/inotify.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <termios.h>
@@ -631,13 +634,31 @@ static char *word(const char *s, int n, char *out, int max)
 static char ev_buf[EVENTS_MAX];
 static char *ev_line[EV_LINES];
 static int ev_n;
+static long long ev_ino = -1, ev_size = -1, ev_mtime = -1;
 
+/* load_events: read and split the events again, but only when the
+ * file changed (another inode, size or time) */
 static void load_events(void)
 {
     int fd, n, got;
     off_t size;
     char *p, *nl;
+    struct stat sb;
 
+    if (stat(RUN_DIR "/events", &sb) < 0) {
+        ev_n = 0;
+        ev_ino = -1;
+        return;
+    }
+    if ((long long)sb.st_ino == ev_ino &&
+        (long long)sb.st_size == ev_size &&
+        (long long)sb.st_mtime == ev_mtime)
+    {
+        return;
+    }
+    ev_ino = sb.st_ino;
+    ev_size = sb.st_size;
+    ev_mtime = sb.st_mtime;
     ev_n = 0;
     ev_buf[0] = 0;
     fd = open(RUN_DIR "/events", O_RDONLY);
@@ -2295,10 +2316,74 @@ static void load_all(void)
     sample();
 }
 
+/* --- waking up: on the second, or when /run/vpn changes ------------ */
+
+static int ino_fd = -1, ino_wd = -1;
+
+/* watch_run: an inotify watch on /run/vpn, tried again each second
+ * until the directory exists; without inotify it is read each second */
+static void watch_run(void)
+{
+    int fl;
+
+    if (ino_fd < 0) {
+        ino_fd = inotify_init();
+        if (ino_fd < 0)
+            return;
+        fl = fcntl(ino_fd, F_GETFL);
+        fcntl(ino_fd, F_SETFL, fl | O_NONBLOCK);
+        fcntl(ino_fd, F_SETFD, FD_CLOEXEC);
+    }
+    if (ino_wd >= 0)
+        return;
+    ino_wd = inotify_add_watch(ino_fd, RUN_DIR,
+        IN_CLOSE_WRITE | IN_MOVED_TO | IN_DELETE | IN_DELETE_SELF);
+}
+
+/* ino_read: the changes inotify has; 1 when one of them is a file
+ * the screen shows (not OpenVPN's and Tor's logs, or temporary files) */
+static int ino_read(void)
+{
+    char b[4096];
+    struct inotify_event *e;
+    int n, i, hit;
+
+    n = read(ino_fd, b, sizeof b);
+    if (n <= 0)
+        return 0;
+    hit = 0;
+    i = 0;
+    while (i + (int)sizeof(struct inotify_event) <= n) {
+        e = (struct inotify_event *)(b + i);
+        if (e->mask & (IN_DELETE_SELF | IN_IGNORED)) {
+            ino_wd = -1;
+            hit = 1;
+        } else if (e->len > 0 && (same(e->name, "status") ||
+            same(e->name, "public") || same(e->name, "events") ||
+            same(e->name, "up") || same(e->name, "fwmode") ||
+            same(e->name, "fw-off") || same(e->name, "level")))
+        {
+            hit = 1;
+        }
+        i += sizeof(struct inotify_event) + e->len;
+    }
+    return hit;
+}
+
+/* to_second: milliseconds until the next whole second (and a little
+ * past it, so the clock on the screen has turned) */
+static int to_second(void)
+{
+    struct timeval tv;
+
+    gettimeofday(&tv, 0);
+    return 1000 - (int)(tv.tv_usec / 1000) + 5;
+}
+
 int main(int argc, char **argv)
 {
-    struct pollfd p[2];
-    int n, k, run, r;
+    struct pollfd p[3];
+    int n, k, run, r, np, ji, ii;
 
     if (argc > 1 && same(argv[1], "-w"))
         watch_only = 1;
@@ -2324,16 +2409,41 @@ int main(int argc, char **argv)
     tty_raw();
     run = 1;
     while (run && !got_quit) {
+        watch_run();
         load_all();
         draw();
         p[0].fd = 0;
         p[0].events = POLLIN;
-        p[1].fd = job_fd;
-        p[1].events = POLLIN;
-        n = poll(p, job_fd >= 0 ? 2 : 1, 500);
+        p[0].revents = 0;
+        np = 1;
+        ji = -1;
+        ii = -1;
+        if (job_fd >= 0) {
+            p[np].fd = job_fd;
+            p[np].events = POLLIN;
+            p[np].revents = 0;
+            ji = np;
+            np++;
+        }
+        if (ino_wd >= 0) {
+            p[np].fd = ino_fd;
+            p[np].events = POLLIN;
+            p[np].revents = 0;
+            ii = np;
+            np++;
+        }
+        /* a change of no interest waits for the second, not a redraw */
+        for (;;) {
+            n = poll(p, np, to_second());
+            if (n <= 0 || ii < 0 || !(p[ii].revents & POLLIN))
+                break;
+            r = ino_read();
+            if (r || ji >= 0 || (p[0].revents & POLLIN))
+                break;
+        }
         if (n <= 0)
             continue;
-        if (job_fd >= 0 && (p[1].revents & (POLLIN | POLLHUP)))
+        if (ji >= 0 && (p[ji].revents & (POLLIN | POLLHUP)))
             job_read();
         if (p[0].revents & POLLIN) {
             k = key();
