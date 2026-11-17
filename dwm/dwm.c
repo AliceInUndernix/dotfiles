@@ -150,6 +150,11 @@ typedef struct {
 	int monitor;
 } Rule;
 
+typedef struct {
+	const char *name; /* st -t title that marks the window */
+	const char **cmd;
+} Scratchpad;
+
 /* function declarations */
 static void applyrules(Client *c);
 static int applysizehints(Client *c, int *x, int *y, int *w, int *h, int interact);
@@ -301,7 +306,9 @@ static Window root, wmcheckwin;
 /* configuration, allows nested code to access above variables */
 #include "config.h"
 
-static unsigned int scratchtag = 1 << LENGTH(tags);
+/* each scratchpad has its own tag bit after the real tags */
+#define SPTAG(i)                (1 << (LENGTH(tags) + (i)))
+#define SPTAGMASK               (((1 << LENGTH(scratchpads)) - 1) << LENGTH(tags))
 
 struct Pertag {
 	unsigned int curtag, prevtag; /* current and previous tag */
@@ -315,7 +322,7 @@ struct Pertag {
 static int startruleused[LENGTH(startrules)];
 
 /* compile-time check if all tags fit into an unsigned int bit array. */
-struct NumTags { char limitexceeded[LENGTH(tags) > 31 ? -1 : 1]; };
+struct NumTags { char limitexceeded[LENGTH(tags) + LENGTH(scratchpads) > 31 ? -1 : 1]; };
 
 /* function implementations */
 static int combo = 0;
@@ -1228,6 +1235,7 @@ manage(Window w, XWindowAttributes *wa)
 	Monitor *m;
 	long *saved = NULL;
 	unsigned long n = 0;
+	unsigned int i;
 	int restored;
 
 	c = ecalloc(1, sizeof(Client));
@@ -1264,8 +1272,8 @@ manage(Window w, XWindowAttributes *wa)
 		for (m = mons; m && m->num != saved[2]; m = m->next);
 		if (m)
 			c->mon = m;
-		if (saved[1] & (TAGMASK | scratchtag))
-			c->tags = saved[1] & (TAGMASK | scratchtag);
+		if (saved[1] & (TAGMASK | SPTAGMASK))
+			c->tags = saved[1] & (TAGMASK | SPTAGMASK);
 		c->isfloating = saved[3] & 1;
 		c->issticky = (saved[3] >> 1) & 1;
 		c->ispinned = c->issticky || ((saved[3] >> 2) & 1);
@@ -1278,9 +1286,13 @@ manage(Window w, XWindowAttributes *wa)
 		XDeleteProperty(dpy, w, dwmatom[DwmClient]);
 		restored = 1 + (saved[3] & 1); /* 2: it was floating */
 	} else {
-		selmon->tagset[selmon->seltags] &= ~scratchtag;
-		if (!strcmp(c->name, scratchpadname)) {
-			c->mon->tagset[c->mon->seltags] |= c->tags = scratchtag;
+		/* a new window hides the scratchpads, unless it is one */
+		for (i = 0; i < LENGTH(scratchpads)
+		    && strcmp(c->name, scratchpads[i].name); i++);
+		if (i == LENGTH(scratchpads)) {
+			selmon->tagset[selmon->seltags] &= ~SPTAGMASK;
+		} else {
+			c->mon->tagset[c->mon->seltags] |= c->tags = SPTAG(i);
 			c->isfloating = True;
 			c->x = c->mon->wx + (c->mon->ww / 2 - WIDTH(c) / 2);
 			c->y = c->mon->wy + (c->mon->wh / 2 - HEIGHT(c) / 2);
@@ -1637,19 +1649,21 @@ restorestate(int before)
 				m->pertag->sel[i] = c && c->mon == m ? c : NULL;
 			}
 			sortstack(m);
-			/* the scratchpad's tag is only in view if there is a
-			 * scratchpad */
-			for (c = m->clients; c && !(c->tags & scratchtag);
-				c = c->next);
-			if (!c)
-				m->tagset[m->seltags] &= ~scratchtag;
+			/* a scratchpad's tag is only in view if that
+			 * scratchpad is there */
+			for (i = 0; i < LENGTH(scratchpads); i++) {
+				for (c = m->clients; c && !(c->tags & SPTAG(i));
+					c = c->next);
+				if (!c)
+					m->tagset[m->seltags] &= ~SPTAG(i);
+			}
 			if (!m->tagset[m->seltags])
 				m->tagset[m->seltags] = 1;
 			continue;
 		}
 		m->seltags = r[1] & 1;
-		m->tagset[0] = r[2] & (TAGMASK | scratchtag) ? r[2] & (TAGMASK | scratchtag) : 1;
-		m->tagset[1] = r[3] & (TAGMASK | scratchtag) ? r[3] & (TAGMASK | scratchtag) : 1;
+		m->tagset[0] = r[2] & (TAGMASK | SPTAGMASK) ? r[2] & (TAGMASK | SPTAGMASK) : 1;
+		m->tagset[1] = r[3] & (TAGMASK | SPTAGMASK) ? r[3] & (TAGMASK | SPTAGMASK) : 1;
 		if (r[4] >= 0 && r[4] <= (long)LENGTH(tags))
 			m->pertag->curtag = r[4];
 		if (r[5] >= 0 && r[5] <= (long)LENGTH(tags))
@@ -2285,10 +2299,14 @@ void
 spawn(const Arg *arg)
 {
 	struct sigaction sa;
+	unsigned int i;
 
 	if (arg->v == dmenucmd)
 		dmenumon[0] = '0' + selmon->num;
-	selmon->tagset[selmon->seltags] &= ~scratchtag;
+	for (i = 0; i < LENGTH(scratchpads)
+	    && arg->v != scratchpads[i].cmd; i++);
+	if (i == LENGTH(scratchpads)) /* other scratchpads stay */
+		selmon->tagset[selmon->seltags] &= ~SPTAGMASK;
 	if (fork() == 0) {
 		if (dpy)
 			close(ConnectionNumber(dpy));
@@ -2410,23 +2428,43 @@ togglefloating(const Arg *arg)
 void
 togglescratch(const Arg *arg)
 {
-	Client *c;
-	unsigned int found = 0;
+	Client *c = NULL;
+	Monitor *m;
+	Arg sp;
+	unsigned int bit = SPTAG(arg->ui), newtagset;
 
-	for (c = selmon->clients; c && !(found = c->tags & scratchtag); c = c->next);
-	if (found) {
-		unsigned int newtagset = selmon->tagset[selmon->seltags] ^ scratchtag;
-		if (newtagset) {
-			selmon->tagset[selmon->seltags] = newtagset;
-			focus(NULL);
-			arrange(selmon);
-		}
-		if (ISVISIBLE(c)) {
-			focus(c);
-			restack(selmon);
-		}
-	} else
-		spawn(arg);
+	for (m = mons; m && !c; m = m->next)
+		for (c = m->clients; c && !(c->tags & bit); c = c->next);
+	if (!c) {
+		sp.v = scratchpads[arg->ui].cmd;
+		spawn(&sp);
+		return;
+	}
+	if (c->mon != selmon) {
+		/* open on another monitor: bring it here, in the middle */
+		c->mon->tagset[c->mon->seltags] &= ~bit;
+		sendmon(c, selmon);
+		c->tags = bit;
+		selmon->tagset[selmon->seltags] |= bit;
+		if (c->isfloating)
+			resize(c, selmon->wx + (selmon->ww - WIDTH(c)) / 2,
+				selmon->wy + (selmon->wh - HEIGHT(c)) / 2,
+				c->w, c->h, 0);
+		arrange(selmon);
+		focus(c);
+		restack(selmon);
+		return;
+	}
+	newtagset = selmon->tagset[selmon->seltags] ^ bit;
+	if (newtagset) {
+		selmon->tagset[selmon->seltags] = newtagset;
+		focus(NULL);
+		arrange(selmon);
+	}
+	if (ISVISIBLE(c)) {
+		focus(c);
+		restack(selmon);
+	}
 }
 
 void

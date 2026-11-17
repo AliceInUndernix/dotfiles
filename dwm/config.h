@@ -80,12 +80,19 @@ static char dmenumon[2] = "0"; /* component of dmenucmd, manipulated in spawn() 
  * and size are in dmenu/config.h */
 static const char *dmenucmd[] = { "dmenu_apps", "-m", dmenumon, NULL };
 static const char *termcmd[]  = { "st", NULL };
-/* scratchpad: one floating st, Mod+` shows/hides it on any tag. It runs
- * tmux session "scratchpad": attaches if the session exists, else starts it,
- * so closing the window keeps the shells. Separate from Mod+x's sessions. */
-static const char scratchpadname[] = "scratchpad";
-static const char *scratchpadcmd[] = { "st", "-t", scratchpadname, "-g", "120x34",
+/* scratchpads: floating st windows that show/hide on any tag, found by
+ * their title. Mod+` runs tmux session "scratchpad" (attaches if it
+ * exists, else starts it, so closing the window keeps the shells;
+ * separate from Mod+x's sessions). Mod+n is a plain st. */
+static const char *sptmuxcmd[] = { "st", "-t", "scratchpad", "-g", "120x34",
 	"-e", "tmux", "new-session", "-A", "-s", "scratchpad", NULL };
+static const char *sptermcmd[] = { "st", "-t", "scratchterm", "-g", "120x34",
+	NULL };
+static const Scratchpad scratchpads[] = {
+	/* title          command */
+	{ "scratchpad",   sptmuxcmd },  /* 0: Mod+` */
+	{ "scratchterm",  sptermcmd },  /* 1: Mod+n */
+};
 static const char *lockcmd[]  = { "slock", NULL };
 /* xss-lock (x/xinitrc) locks with slock before the suspend happens */
 static const char *suspendcmd[] = { "loginctl", "suspend", NULL };
@@ -105,7 +112,8 @@ static const Key keys[] = {
 	/* modifier                     key        function        argument */
 	{ MODKEY,                       XK_p,      spawn,          {.v = dmenucmd } },
 	{ MODKEY|ShiftMask,             XK_Return, spawn,          {.v = termcmd } },
-	{ MODKEY,                       XK_grave,  togglescratch,  {.v = scratchpadcmd } },
+	{ MODKEY,                       XK_grave,  togglescratch,  {.ui = 0 } },
+	{ MODKEY,                       XK_n,      togglescratch,  {.ui = 1 } },
 	{ MODKEY,                       XK_b,      togglebar,      {0} },
 	{ MODKEY,                       XK_j,      focusstack,     {.i = +1 } },
 	{ MODKEY,                       XK_k,      focusstack,     {.i = -1 } },
