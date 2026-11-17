@@ -27,7 +27,9 @@ struct table {
     long *keys;           /* strokes of every entry, one after another */
     char *vals;           /* translations, each ending in 0 */
     long nkeys, ckeys, nvals, cvals;
-    long *slot;           /* hash slots: entry number + 1, 0 = empty */
+    long *slot;           /* hash slots: entry number + 1 (0 = empty)
+                             in the low 24 bits, 8 bits of the hash
+                             above (SLOT_TAG) */
     long *ent_key;        /* entry -> offset in keys (count first) */
     long *ent_val;        /* entry -> offset in vals */
     long nent, cent, cval, nslot;
@@ -80,31 +82,59 @@ static int ndicts;
 static int raw_on;
 static int raw_saved[DICT_MAX];
 static int mods_stale;     /* the modifiers' keys must be found again */
+static long dict_gen;      /* changes with any dictionary or its place */
 
 /* --- strokes ------------------------------------------------------ */
 
 static const char key_letters[] = "#STKPWHRAO*EUFRPBLGTSDZ";
 
+/* next_key[c][pos]: the first key from pos on with the letter c, + 1
+ * (0: none), so a letter is found in one step */
+static unsigned char next_key[128][NUM_KEYS + 1];
+static int next_made;
+
+static void make_next_key(void)
+{
+    int c, pos, k;
+
+    for (c = 0; c < 128; c++) {
+        for (pos = 0; pos <= NUM_KEYS; pos++) {
+            next_key[c][pos] = 0;
+            for (k = pos; k < NUM_KEYS; k++) {
+                if (key_letters[k] == c) {
+                    next_key[c][pos] = (unsigned char)(k + 1);
+                    break;
+                }
+            }
+        }
+    }
+    next_made = 1;
+}
+
 long stroke_parse(const char *s, int n)
 {
     long st;
     int i, k, pos;
+    unsigned char c;
 
+    if (!next_made)
+        make_next_key();
     st = 0;
     pos = 0;
     for (i = 0; i < n; i++) {
-        if (s[i] == '-') {
+        c = (unsigned char)s[i];
+        if (c == '-') {
             if (pos < 11)
                 pos = 11;
             continue;
         }
-        for (k = pos; k < NUM_KEYS; k++)
-            if (key_letters[k] == s[i])
-                break;
-        if (k == NUM_KEYS)
+        if (c >= 128)
             return -1;
-        st |= 1L << k;
-        pos = k + 1;
+        k = next_key[c][pos];
+        if (!k)
+            return -1;
+        st |= 1L << (k - 1);
+        pos = k;
     }
     return st;
 }
@@ -195,21 +225,29 @@ static void *grow(void *p, long *cap, long need, long size)
     return q;
 }
 
+/* An entry and 8 bits of its outline's hash in one slot: an outline
+ * is read only when those are the same, so a miss rarely touches it */
+#define SLOT_ENTRY 0xffffffL
+#define SLOT_TAG(h) ((long)(((h) >> 24) & 0x7f) << 24)
+
 static long find(struct table *t, const long *st, int n)
 {
     unsigned long h;
-    long i, e;
+    long i, e, tag;
     long *k;
 
     if (!t->nslot)
         return -1;
-    h = hash(st, n) % (unsigned long)t->nslot;
-    i = (long)h;
+    h = hash(st, n);
+    i = (long)(h & (unsigned long)(t->nslot - 1));
+    tag = SLOT_TAG(h);
     while (t->slot[i]) {
-        e = t->slot[i] - 1;
-        k = t->keys + t->ent_key[e];
-        if (k[0] == n && !memcmp(k + 1, st, n * sizeof(long)))
-            return e;
+        if ((t->slot[i] & ~SLOT_ENTRY) == tag) {
+            e = (t->slot[i] & SLOT_ENTRY) - 1;
+            k = t->keys + t->ent_key[e];
+            if (k[0] == n && !memcmp(k + 1, st, n * sizeof(long)))
+                return e;
+        }
         i++;
         if (i == t->nslot)
             i = 0;
@@ -223,8 +261,8 @@ static void rehash(struct table *t)
     unsigned long h;
     long *k;
 
-    n = t->nslot ? t->nslot * 2 : 1024;
-    while (n < t->nent * 2 + 16)
+    n = 1024;                  /* a power of two: & for % */
+    while (n < t->nslot * 2 || n < t->nent * 2 + 16)
         n *= 2;
     free(t->slot);
     t->slot = malloc(n * sizeof(long));
@@ -236,14 +274,14 @@ static void rehash(struct table *t)
     t->nslot = n;
     for (e = 0; e < t->nent; e++) {
         k = t->keys + t->ent_key[e];
-        h = hash(k + 1, (int)k[0]) % (unsigned long)n;
-        i = (long)h;
+        h = hash(k + 1, (int)k[0]);
+        i = (long)(h & (unsigned long)(n - 1));
         while (t->slot[i]) {
             i++;
             if (i == n)
                 i = 0;
         }
-        t->slot[i] = e + 1;
+        t->slot[i] = (e + 1) | SLOT_TAG(h);
     }
 }
 
@@ -263,6 +301,10 @@ static void put(struct table *t, const long *st, int n, const char *v)
         t->nvals += len;
         return;
     }
+    if (t->nent + 1 >= SLOT_ENTRY) {
+        say("too many entries in one dictionary", 0);
+        return;
+    }
     if (t->nent * 2 + 2 > t->nslot)
         rehash(t);
     t->keys = grow(t->keys, &t->ckeys, t->nkeys + n + 1, sizeof(long));
@@ -275,14 +317,14 @@ static void put(struct table *t, const long *st, int n, const char *v)
     t->nkeys += n + 1;
     t->nvals += len;
     t->nent++;
-    h = hash(st, n) % (unsigned long)t->nslot;
-    i = (long)h;
+    h = hash(st, n);
+    i = (long)(h & (unsigned long)(t->nslot - 1));
     while (t->slot[i]) {
         i++;
         if (i == t->nslot)
             i = 0;
     }
-    t->slot[i] = t->nent;
+    t->slot[i] = t->nent | SLOT_TAG(h);
     if (n > t->longest)
         t->longest = n;
 }
@@ -1032,7 +1074,18 @@ static int load_dict_file(struct dict *d, char *buf)
 {
     char *p, *l, *f[3], text[TEXT_MAX];
     int ln, n;
+    long words;
 
+    /* about as many entries as words: hash slots for them all at once,
+     * not grown (and every entry hashed again) as they come */
+    words = 0;
+    for (p = buf; *p; p++)
+        if (*p == ' ' || *p == '\t')
+            words++;
+    if (words * 2 + 16 > d->t.nslot) {
+        d->t.nslot = words;
+        rehash(&d->t);
+    }
     p = buf;
     ln = 0;
     while ((l = next_line(&p)) != 0) {
@@ -1499,6 +1552,7 @@ int dict_add(const char *path)
 {
     int res;
 
+    dict_gen++;
     if (ndicts == DICT_MAX) {
         say("too many dictionaries", 0);
         return -1;
@@ -1542,6 +1596,7 @@ void dict_reload(void)
         dicts[i] = tmp;
         dicts[i].enabled = enabled;
         mods_stale = 1;
+        dict_gen++;
         if (verbose)
             say("read again: %s", dicts[i].path);
     }
@@ -1594,8 +1649,8 @@ static int same_text(const char *a, const char *b, int fold)
 {
     if (!fold)
         return !strcmp(a, b);
-    while (*a && low_ascii((unsigned char)*a) ==
-        low_ascii((unsigned char)*b))
+    while (*a && (*a == *b || ((*a | 32) == (*b | 32) &&
+        (*a | 32) >= 'a' && (*a | 32) <= 'z')))
     {
         a++;
         b++;
@@ -1612,7 +1667,8 @@ static unsigned long fold_hash(const char *s)
 
     h = 2166136261UL;
     for (; *s; s++) {
-        h ^= (unsigned long)low_ascii((unsigned char)*s);
+        h ^= (unsigned long)(*s >= 'A' && *s <= 'Z' ? *s + 32 :
+            (unsigned char)*s);
         h *= 16777619UL;
         h &= 0xffffffffUL;
     }
@@ -1651,8 +1707,9 @@ static void text_index(struct table *t)
  * ones a lookup would really reach (no higher dictionary has them).
  * When none writes it exactly, ones that differ only in case. One
  * pass over the entries. */
-int dict_outlines(const char *text, char *out, int size, int max)
+static int outlines_found(const char *text, char *out, int size, int max)
 {
+    unsigned long th;
     long e, *k, fk[FOUND_MAX];
     int fx[FOUND_MAX], nf, exact, i, j, n, pass, at, m;
     char one[STROKE_MAX * 32], s[32];
@@ -1662,6 +1719,7 @@ int dict_outlines(const char *text, char *out, int size, int max)
     out[0] = 0;
     nf = 0;
     exact = 0;
+    th = fold_hash(text);
     for (i = 0; i < ndicts; i++) {
         if (!dicts[i].enabled || dicts[i].kind != dk_json)
             continue;
@@ -1669,7 +1727,7 @@ int dict_outlines(const char *text, char *out, int size, int max)
         text_index(t);
         if (!t->nthead)
             continue;
-        e = t->thead[fold_hash(text) & (t->nthead - 1)] - 1;
+        e = t->thead[th & (t->nthead - 1)] - 1;
         for (; e >= 0 && nf < FOUND_MAX; e = t->tnext[e] - 1) {
             v = t->vals + t->ent_val[e];
             if (!same_text(v, text, 1))
@@ -1720,6 +1778,51 @@ int dict_outlines(const char *text, char *out, int size, int max)
             scat(out, "  ", size);
         scat(out, one, size);
         n++;
+    }
+    return n;
+}
+
+/* The last texts asked for, with their answers: after each stroke the
+ * suggestions ask again for the words that were there before. Kept
+ * until a dictionary changes. */
+#define OUTLINES_CACHE 16
+#define OUTLINES_TEXT 128
+#define OUTLINES_OUT 512
+
+struct asked {
+    long gen;
+    int max, n;
+    char text[OUTLINES_TEXT];
+    char out[OUTLINES_OUT];
+};
+static struct asked asked[OUTLINES_CACHE];
+static int next_asked;
+
+int dict_outlines(const char *text, char *out, int size, int max)
+{
+    struct asked *a;
+    int i, n;
+
+    for (i = 0; i < OUTLINES_CACHE; i++) {
+        a = &asked[i];
+        if (a->gen == dict_gen + 1 && a->max == max &&
+            !strcmp(a->text, text))
+        {
+            scopy(out, a->out, size);
+            return a->n;
+        }
+    }
+    n = outlines_found(text, out, size, max);
+    if ((int)strlen(text) < OUTLINES_TEXT && (int)strlen(out) <
+        OUTLINES_OUT && (int)strlen(out) < size - 1)
+    {
+        a = &asked[next_asked];
+        next_asked = (next_asked + 1) % OUTLINES_CACHE;
+        a->gen = dict_gen + 1;
+        a->max = max;
+        a->n = n;
+        scopy(a->text, text, OUTLINES_TEXT);
+        scopy(a->out, out, OUTLINES_OUT);
     }
     return n;
 }
@@ -1800,6 +1903,7 @@ int dict_raw_toggle(void)
 {
     int i, have;
 
+    dict_gen++;
     have = 0;
     for (i = 0; i < ndicts; i++)
         if (dicts[i].raw)
@@ -1866,6 +1970,7 @@ int dict_enabled(int i)
 
 void dict_set_enabled(int i, int on)
 {
+    dict_gen++;
     if (i < 0 || i >= ndicts)
         return;
     if (raw_on)
@@ -1922,6 +2027,7 @@ int dict_move(int i, int dir)
     struct dict t;
     int j, k;
 
+    dict_gen++;
     j = i + dir;
     if (i < 0 || i >= ndicts || j < 0 || j >= ndicts)
         return -1;
@@ -1936,6 +2042,7 @@ int dict_move(int i, int dir)
 
 void dict_remove(int i)
 {
+    dict_gen++;
     if (i < 0 || i >= ndicts)
         return;
     dict_free(&dicts[i]);

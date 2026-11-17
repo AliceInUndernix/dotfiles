@@ -195,8 +195,12 @@ static void mark(struct trans *t)
         mark(t->replaced[i]);
 }
 
-/* Free what neither the history nor the tail can reach any more. */
-static void sweep(void)
+/* Free what neither the history nor the tail can reach any more. Not
+ * after every stroke: only when the translations made since the last
+ * time are as many as were kept then (and always when told to). */
+static int nkept;
+
+static void sweep_now(void)
 {
     int i, j;
     struct trans *t;
@@ -218,6 +222,13 @@ static void sweep(void)
         }
     }
     nlive = j;
+    nkept = j;
+}
+
+static void sweep(void)
+{
+    if (nlive > nkept * 2 + 64 || nlive > LIVE_MAX / 2)
+        sweep_now();
 }
 
 /* --- lookups ------------------------------------------------------ */
@@ -719,7 +730,7 @@ void translate_reset(void)
     tail = 0;
     nto_undo = 0;
     to_do = 0;
-    sweep();
+    sweep_now();
     format_reset();
 }
 

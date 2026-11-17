@@ -48,9 +48,15 @@ static char spell_word[TEXT_MAX];
 const char *feed_path(const char *name)
 {
     static char p[1100];
+    static int dir_len;        /* the directory is made once */
     const char *x;
     char *s;
 
+    if (dir_len) {
+        p[dir_len] = 0;
+        scat(p, name, sizeof(p));
+        return p;
+    }
     x = getenv("XDG_STATE_HOME");
     if (x && x[0] == '/')
         scopy(p, x, 1000);
@@ -66,6 +72,7 @@ const char *feed_path(const char *name)
     }
     mkdir(p, 0700);
     scat(p, "/", sizeof(p));
+    dir_len = strlen(p);
     scat(p, name, sizeof(p));
     return p;
 }

@@ -47,8 +47,10 @@ struct box {
     int shown;
     char got[FEED_LINE * 2];   /* read but no newline yet */
     int ngot;
-    char lines[KEEP_LINES][CELL_MAX];
-    int nlines;                /* the newest is lines[nlines - 1] */
+    char pool[KEEP_LINES][CELL_MAX];
+    int at[KEEP_LINES];        /* line i is pool[at[i]]: a line taken out
+                                  moves no text, only these */
+    int nlines;                /* the newest is line nlines - 1 */
     int scroll;                /* lines up from the newest (0: follow) */
     /* the tape's lines only: */
     long seq[KEEP_LINES];      /* a number for each, never reused */
@@ -60,6 +62,7 @@ struct box {
 };
 
 static struct box boxes[2];    /* 0 tape, 1 suggestions */
+#define BOX_LINE(b, i) ((b)->pool[(b)->at[i]])
 static int fullscreen, focus;
 static int hide_undone = 1;    /* u: undone strokes and * not shown */
 static int box_x[2], box_w[2], box_y[2], box_h[2];   /* where drawn */
@@ -111,10 +114,12 @@ static void feed_hide(struct box *b)
 /* line i out, the ones after it one place up */
 static void drop_line(struct box *b, int i)
 {
-    int k;
+    int k, slot;
 
     k = b->nlines - i - 1;
-    memmove(b->lines[i], b->lines[i + 1], k * CELL_MAX);
+    slot = b->at[i];
+    memmove(b->at + i, b->at + i + 1, k * sizeof(int));
+    b->at[b->nlines - 1] = slot;   /* free again, after the lines */
     memmove(b->seq + i, b->seq + i + 1, k * sizeof(long));
     memmove(b->by + i, b->by + i + 1, k * sizeof(long));
     memmove(b->dead + i, b->dead + i + 1, k);
@@ -129,7 +134,7 @@ static void keep(struct box *b, const char *s)
     if (b->nlines == KEEP_LINES)
         drop_line(b, 0);
     i = b->nlines;
-    scopy(b->lines[i], s, CELL_MAX);
+    scopy(BOX_LINE(b, i), s, CELL_MAX);
     b->seq[i] = next_seq;
     next_seq++;
     b->by[i] = 0;
@@ -183,11 +188,11 @@ static void tape_spelled(struct box *b, const char *word, int n)
         if (last < 0) {
             last = j;
             b->by[j] = 0;      /* shown again when a letter is undone */
-            t = strchr(b->lines[j], '\t');
+            t = strchr(BOX_LINE(b, j), '\t');
             t = t ? strchr(t + 1, '\t') : 0;
             if (t) {
                 t[1] = 0;
-                scat(b->lines[j], word, CELL_MAX);
+                scat(BOX_LINE(b, j), word, CELL_MAX);
             }
         } else if (!b->by[j]) {
             b->by[j] = b->seq[last];
@@ -291,8 +296,10 @@ static void got_suggest(char *line)
      * (undo[] marks it in this box); ~ ...: these words in place of
      * the last lines sent (dead[] marks them) */
     b = &boxes[1];
+    /* only the lines sent last can have marks */
     for (i = 0; i < b->nlines; i++)
-        strip_marks(b->lines[i]);
+        if (b->dead[i] || b->undo[i])
+            strip_marks(BOX_LINE(b, i));
     spell = line[0] == '=' && (!line[1] || line[1] == '\t');
     replace = line[0] == '~' && (!line[1] || line[1] == '\t');
     for (i = 0; i < b->nlines; i++) {
@@ -330,7 +337,7 @@ static void got_suggest(char *line)
         scat(cell, o, sizeof(cell));
         b = &boxes[1];
         for (i = 0; i < b->nlines; i++) {
-            if (!strncmp(b->lines[i], cell, k)) {
+            if (!strncmp(BOX_LINE(b, i), cell, k)) {
                 drop_line(b, i);
                 break;
             }
@@ -394,13 +401,13 @@ static void draw_tape(int y, int x, int w, int h)
         n = 0;
         i = j < nshown ? shown[j] : b->nlines;
         if (i < b->nlines) {
-            tr = strchr(b->lines[i], '\t');
-            cols = (int)(tr - b->lines[i]);
+            tr = strchr(BOX_LINE(b, i), '\t');
+            cols = (int)(tr - BOX_LINE(b, i));
             scr_col(C_TEXT);
             st = tr + 1;
             tr = strchr(st, '\t');
             if (w >= NUM_KEYS + 12) {
-                scr_put_n(b->lines[i], cols);
+                scr_put_n(BOX_LINE(b, i), cols);
                 n = cols;
             } else {
                 /* too narrow for the columns: the stroke as written */
@@ -519,7 +526,7 @@ static void draw_sugg(int y, int x, int w, int h)
     filled = 0;
     first = last;
     while (first > 0) {
-        n = sugg_rows(b->lines[first - 1], w, rows, 64);
+        n = sugg_rows(BOX_LINE(b, first - 1), w, rows, 64);
         if (filled + n > h && filled)
             break;             /* the newest shows, even cut off */
         filled += n;
@@ -527,7 +534,7 @@ static void draw_sugg(int y, int x, int w, int h)
     }
     row = 0;
     for (i = first; i < last; i++) {
-        n = sugg_rows(b->lines[i], w, rows, 64);
+        n = sugg_rows(BOX_LINE(b, i), w, rows, 64);
         for (j = 0; j < n && row < h; j++, row++) {
             scr_move(y + row, x);
             scr_col(j ? C_BLUE : C_TEXT);
@@ -903,6 +910,10 @@ int view_main(int tape, int sugg, const char *cfg)
     unsigned char k[64];
 
     view_cfg = cfg;
+    for (i = 0; i < KEEP_LINES; i++) {
+        boxes[0].at[i] = i;
+        boxes[1].at[i] = i;
+    }
     boxes[0].name = "tape";
     boxes[1].name = "suggest";
     boxes[0].fd = -1;

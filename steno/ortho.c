@@ -478,12 +478,18 @@ static long nwords;
 
 static void index_words(void)
 {
-    long i, n;
+    long n;
 
+    const char *p, *e, *q;
+
+    /* memchr finds the newlines many bytes at a time */
+    e = words_txt + words_len;
     n = 0;
-    for (i = 0; i < words_len; i++)
-        if (words_txt[i] == '\n')
-            n++;
+    p = words_txt;
+    while ((q = memchr(p, '\n', e - p)) != 0) {
+        n++;
+        p = q + 1;
+    }
     word_at = malloc((n + 1) * sizeof(long));
     if (!word_at) {
         say("out of memory", 0);
@@ -491,11 +497,12 @@ static void index_words(void)
     }
     nwords = 0;
     word_at[0] = 0;
-    for (i = 0; i < words_len; i++)
-        if (words_txt[i] == '\n') {
-            nwords++;
-            word_at[nwords] = i + 1;
-        }
+    p = words_txt;
+    while ((q = memchr(p, '\n', e - p)) != 0) {
+        nwords++;
+        word_at[nwords] = (long)(q + 1 - words_txt);
+        p = q + 1;
+    }
 }
 
 static int cmp_word(const char *w, long at)
@@ -620,6 +627,54 @@ static void one_suffix(const char *word, const char *suffix, char *out,
     scopy(out, simple, size);
 }
 
+/* the last words made, as Plover keeps them (lru_cache): the same
+ * word and suffix come again and again, and the rules are slow */
+#define SUFFIX_CACHE 256
+
+struct made {
+    char word[WORD_MAX];
+    char suffix[WORD_MAX];
+    char out[WORD_MAX];
+};
+static struct made made[SUFFIX_CACHE];
+
+static unsigned long made_hash(const char *w, const char *s)
+{
+    unsigned long h;
+
+    h = 5381;
+    for (; *w; w++)
+        h = (h * 33 + (unsigned char)*w) & 0xffffffffUL;
+    h = (h * 33 + 1) & 0xffffffffUL;
+    for (; *s; s++)
+        h = (h * 33 + (unsigned char)*s) & 0xffffffffUL;
+    return h;
+}
+
+static void one_suffix_cached(const char *word, const char *suffix,
+    char *out, int size)
+{
+    struct made *m;
+
+    if (strlen(word) >= WORD_MAX || strlen(suffix) >= WORD_MAX) {
+        one_suffix(word, suffix, out, size);
+        return;
+    }
+    m = &made[made_hash(word, suffix) % SUFFIX_CACHE];
+    if (m->word[0] && !strcmp(m->word, word) &&
+        !strcmp(m->suffix, suffix))
+    {
+        scopy(out, m->out, size);
+        return;
+    }
+    one_suffix(word, suffix, out, size);
+    if ((int)strlen(out) >= WORD_MAX)
+        return;
+    scopy(m->word, word, WORD_MAX);
+    scopy(m->suffix, suffix, WORD_MAX);
+    scopy(m->out, out, WORD_MAX);
+}
+
 void add_suffix(const char *word, const char *suffix, char *out, int size)
 {
     char s[TEXT_MAX];
@@ -627,12 +682,12 @@ void add_suffix(const char *word, const char *suffix, char *out, int size)
 
     sp = strchr(suffix, ' ');
     if (!sp) {
-        one_suffix(word, suffix, out, size);
+        one_suffix_cached(word, suffix, out, size);
         return;
     }
     scopy(s, suffix, sizeof(s));
     if (sp - suffix < (int)sizeof(s))
         s[sp - suffix] = 0;
-    one_suffix(word, s, out, size);
+    one_suffix_cached(word, s, out, size);
     scat(out, sp, size);
 }

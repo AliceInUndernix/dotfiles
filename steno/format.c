@@ -509,11 +509,49 @@ static long look_start(void)
  * (the tape, the suggestions and their marks all ask after a stroke) */
 static int scan_at[64], scan_n;
 static long scan_s, scan_gen = -1;
+static int scan_full;          /* scanned from look_start, not less */
 
-static void scan_words(void)
+#define LOOK_NEAR 128
+
+/* after a space at or after from, as look_start does it */
+static long after_space(long from)
 {
-    if (scan_gen == text_gen)
+    long s;
+    int k;
+
+    s = from;
+    while (s < blen && !is_space_at(buf + s, blen - s))
+        s++;
+    while (s < blen) {
+        k = is_space_at(buf + s, blen - s);
+        if (!k)
+            break;
+        s += k;
+    }
+    return s;
+}
+
+/* Words never run over a space (but the ones after them), so the words
+ * after any space are the same as when scanned from further back: the
+ * last 128 bytes are scanned first, and all of look_start's only when
+ * they have too few words. */
+static void scan_words(int count)
+{
+    long s;
+
+    if (scan_gen == text_gen && (scan_full || scan_n >= count))
         return;
+    s = blen > LOOK_NEAR ? after_space(blen - LOOK_NEAR) : 0;
+    scan_full = 1;
+    if (s > 0 && s < blen) {
+        scan_s = s;
+        scan_n = word_starts(buf + s, (int)(blen - s), scan_at, 64);
+        scan_gen = text_gen;
+        scan_full = 0;
+        if (scan_n >= count)
+            return;
+        scan_full = 1;
+    }
     scan_s = look_start();
     scan_n = word_starts(buf + scan_s, (int)(blen - scan_s), scan_at, 64);
     scan_gen = text_gen;
@@ -526,7 +564,7 @@ static long words_from(int count)
         count = 1;
     if (count > 64)
         count = 64;
-    scan_words();
+    scan_words(count);
     if (!scan_n)
         return -1;
     if (count > scan_n)
