@@ -201,9 +201,10 @@ Privacy
   DHCP answer; if DHCP still fails, vpn gives the cards their own MACs
   back after 30 s. The hostname is "host" and the system's time zone
   is UTC, so programs can't give away either: browsers, git commits
-  and mail headers all say UTC. Only dwm's bar shows your own time,
-  from ~/.config/tz (see x/xinitrc); that file is not in the repo.
-  A screenshot of the whole screen shows the bar.
+  and mail headers all say UTC. Only dwm's bar and tmux's clock
+  show your own time, from ~/.config/tz (see x/xinitrc and
+  tmux/tmux.conf); that file is not in the repo. A screenshot of
+  the whole screen (or of a tmux window) shows it.
 - The clock is set through Tor, so no time server learns your
   address or when you start the machine.
 - Nothing is logged for long: the status, the events (vpn log),

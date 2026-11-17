@@ -190,7 +190,8 @@ first start without internet.
 
 `tmux/tmux.conf` stays close to defaults (prefix is still Ctrl-b): no Esc
 delay for Neovim, true colour from st, windows numbered from 1, vi keys
-in copy mode, a plain grey status bar. No extra key bindings: the
+in copy mode, a plain grey status bar with the time on the right (your
+own zone from ~/.config/tz, like dwm's bar). No extra key bindings: the
 Moonlander's tmux layer (hold the key right of DWM) types Ctrl-b plus
 tmux's own default keys. In dwm, Super+x opens st with tmux attached to
 the last session (or a new one if there is none), Super+Shift+x always
