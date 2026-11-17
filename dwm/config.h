@@ -6,7 +6,7 @@ static const unsigned int snap      = 32;       /* snap pixel */
 static const unsigned int winsnap   = 16;       /* snap to other windows' edges, pixel */
 static const int showbar            = 0;        /* 0 means no bar (Mod+b shows it) */
 static const int topbar             = 1;        /* 0 means bottom bar */
-static const char *fonts[]          = { "Liberation Mono:pixelsize=20" };
+static const char *fonts[]          = { "Liberation Mono:pixelsize=18" };
 /* Habamax colours (Neovim's colorscheme, see nvim/init.lua) */
 static const char col_bg[]          = "#1c1c1c";
 static const char col_border[]      = "#585858";
