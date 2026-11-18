@@ -175,12 +175,6 @@ install_clean() { build_suckless clean; }
 # unseal is a link to seal.
 install_seal() { build_suckless seal; }
 
-# snake: the snake game in the terminal, and snaked, the same game
-# playing itself very faintly behind everything on the desktop (see
-# snake/README); xinitrc starts snaked, and the patched st and slock
-# draw it. Our own C program, built like the suckless tools.
-install_snake() { build_suckless snake; }
-
 # steno: our own steno engine, in C (see steno/README), built like the
 # suckless tools. Its dictionaries are Dotterel's, from the dotterel repo,
 # cloned into ~/.system/share/steno/dotterel and updated every run:

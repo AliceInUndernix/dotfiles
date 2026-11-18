@@ -47,77 +47,6 @@ struct xrandr {
 
 #include "config.h"
 
-/*
- * snake: the desktop's snake (snaked) on the lock screen too. Only
- * reads the _SNAKE property (after privileges are dropped) and draws
- * squares. See snakebg.h.
- */
-#include "snakebg.h"
-
-struct sbwin {
-	Display *dpy;
-	Window win;
-};
-
-static GC sbgc;
-static unsigned long sbpix[5];
-
-static void
-sbfill(int v, int x, int y, int w, int h, void *arg)
-{
-	struct sbwin *a = arg;
-
-	XSetForeground(a->dpy, sbgc, sbpix[v + 2]); /* the clear colours */
-	XFillRectangle(a->dpy, a->win, sbgc, x, y, w, h);
-}
-
-static void
-sbcolors(Display *dpy)
-{
-	XColor c;
-	int i;
-
-	for (i = 3; i < 5; i++) {
-		c.red = (sb_rgb[i] >> 16 & 0xff) * 257;
-		c.green = (sb_rgb[i] >> 8 & 0xff) * 257;
-		c.blue = (sb_rgb[i] & 0xff) * 257;
-		c.flags = DoRed | DoGreen | DoBlue;
-		sbpix[i] = XAllocColor(dpy, DefaultColormap(dpy,
-		    DefaultScreen(dpy)), &c) ? c.pixel :
-		    BlackPixel(dpy, DefaultScreen(dpy));
-	}
-}
-
-/* the snake on the lock window of the default screen: all of it, or
- * only the cells that changed */
-static void
-sbshow(Display *dpy, struct lock **locks, int nscreens, int all)
-{
-	struct sbwin a;
-	int s, i, x, y, w, h;
-
-	for (s = 0; s < nscreens; s++)
-		if (locks[s]->root == DefaultRootWindow(dpy))
-			break;
-	if (s == nscreens)
-		return;
-	a.dpy = dpy;
-	a.win = locks[s]->win;
-	if (!sbgc)
-		sbgc = XCreateGC(dpy, a.win, 0, NULL);
-	if (all) {
-		XClearWindow(dpy, a.win);
-		sb_paint(0, 0, DisplayWidth(dpy, DefaultScreen(dpy)),
-		         DisplayHeight(dpy, DefaultScreen(dpy)), sbfill, &a);
-		return;
-	}
-	for (i = 0; i < sb_nchg; i++) {
-		sb_cellarea(sb_chg[i], &x, &y, &w, &h);
-		XClearArea(dpy, a.win, x, y, w, h, False);
-		sb_paint(x, y, w, h, sbfill, &a);
-	}
-}
-
 static void
 die(const char *errstr, ...)
 {
@@ -212,13 +141,6 @@ readpw(Display *dpy, struct xrandr *rr, struct lock **locks, int nscreens,
 	failure = 0;
 	oldc = INIT;
 
-	/* snake: hear of it, and show it */
-	sb_init(dpy);
-	if (sb_read(dpy) == 2 && sb_on) {
-		sbcolors(dpy);
-		sbshow(dpy, locks, nscreens, 1);
-	}
-
 	while (running && !XNextEvent(dpy, &ev)) {
 		if (ev.type == KeyPress) {
 			explicit_bzero(&buf, sizeof(buf));
@@ -278,7 +200,6 @@ readpw(Display *dpy, struct xrandr *rr, struct lock **locks, int nscreens,
 					XClearWindow(dpy, locks[screen]->win);
 				}
 				oldc = color;
-				sbshow(dpy, locks, nscreens, 1);
 			}
 		} else if (rr->active && ev.type == rr->evbase + RRScreenChangeNotify) {
 			rre = (XRRScreenChangeNotifyEvent*)&ev;
@@ -292,21 +213,8 @@ readpw(Display *dpy, struct xrandr *rr, struct lock **locks, int nscreens,
 						XResizeWindow(dpy, locks[screen]->win,
 						              rre->width, rre->height);
 					XClearWindow(dpy, locks[screen]->win);
-					sbshow(dpy, locks, nscreens, 1);
 					break;
 				}
-			}
-		} else if (sb_event(&ev)) {
-			/* snake: a step */
-			switch (sb_read(dpy)) {
-			case 2:
-				if (sb_on)
-					sbcolors(dpy);
-				sbshow(dpy, locks, nscreens, 1);
-				break;
-			case 1:
-				sbshow(dpy, locks, nscreens, 0);
-				break;
 			}
 		} else {
 			for (screen = 0; screen < nscreens; screen++)

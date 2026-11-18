@@ -57,7 +57,7 @@ esac; done
 . "$DOTFILES/install/net.sh"
 . "$DOTFILES/install/check.sh"
 
-PARTS="ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver clean seal snake steno moonlander net $APPS"
+PARTS="ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver clean seal steno moonlander net $APPS"
 # only when named (or numbered): not in "all" or without arguments
 ONLY_NAMED=$APPS
 

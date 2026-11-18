@@ -258,94 +258,6 @@ static char *opt_title = NULL;
 
 static uint buttons; /* bit field of pressed buttons */
 
-/*
- * snake: the desktop's snake (snaked) behind the text, drawn where a
- * cell's background is the default background colour, so also in vim
- * or btop with the same colour. See snakebg.h.
- */
-#define SB_LISTEN
-#include "snakebg.h"
-
-static XftColor sbcol[3];
-static int sbcolok;
-static int sbwx, sbwy; /* where the window is on the screen */
-
-static void
-sbfill(int v, int x, int y, int w, int h, void *arg)
-{
-	(void)arg;
-	XftDrawRect(xw.draw, &sbcol[v], x - sbwx, y - sbwy, w, h);
-}
-
-/* the snake in window area x, y, w, h, if bg is the background */
-static void
-sbdraw(Color *bg, int x, int y, int w, int h)
-{
-	XRenderColor *a = &bg->color, *b = &dc.col[defaultbg].color;
-
-	if (!sb_on || IS_SET(MODE_REVERSE) || a->red >> 8 != b->red >> 8 ||
-	    a->green >> 8 != b->green >> 8 || a->blue >> 8 != b->blue >> 8)
-		return;
-	sb_paint(x + sbwx, y + sbwy, w, h, sbfill, NULL);
-}
-
-static void
-sbcolors(void)
-{
-	XRenderColor c;
-	int i;
-
-	for (i = 1; i < 3; i++) {
-		if (sbcolok)
-			XftColorFree(xw.dpy, xw.vis, xw.cmap, &sbcol[i]);
-		c.red = (sb_rgb[i] >> 16 & 0xff) * 257;
-		c.green = (sb_rgb[i] >> 8 & 0xff) * 257;
-		c.blue = (sb_rgb[i] & 0xff) * 257;
-		c.alpha = 0xffff;
-		XftColorAllocValue(xw.dpy, xw.vis, xw.cmap, &c, &sbcol[i]);
-	}
-	sbcolok = 1;
-}
-
-/* where the window is on the screen; 1 if it moved */
-static int
-sbwhere(void)
-{
-	Window child;
-	int x, y;
-
-	if (!XTranslateCoordinates(xw.dpy, xw.win, DefaultRootWindow(xw.dpy),
-	    0, 0, &x, &y, &child) || (x == sbwx && y == sbwy))
-		return 0;
-	sbwx = x;
-	sbwy = y;
-	return 1;
-}
-
-/* the snake moved: mark the lines it changed for drawing */
-static void
-sbupdate(void)
-{
-	int i, r, x, y, w, h;
-
-	r = sb_read(xw.dpy);
-	if (r == 2) {
-		if (sb_on)
-			sbcolors();
-		tsetdirt(0, INT_MAX);
-		return;
-	}
-	for (i = 0; r == 1 && i < sb_nchg; i++) {
-		sb_cellarea(sb_chg[i], &x, &y, &w, &h);
-		x -= sbwx;
-		y -= sbwy;
-		if (x + w <= 0 || y + h <= 0 || x >= win.w || y >= win.h)
-			continue;
-		tsetdirt((y - win.vborderpx) / win.ch,
-		         (y + h - 1 - win.vborderpx) / win.ch);
-	}
-}
-
 void
 clipcopy(const Arg *dummy)
 {
@@ -632,13 +544,8 @@ void
 propnotify(XEvent *e)
 {
 	XPropertyEvent *xpev;
-	Atom clipboard;
+	Atom clipboard = XInternAtom(xw.dpy, "CLIPBOARD", 0);
 
-	if (sb_event(e)) {
-		sbupdate();
-		return;
-	}
-	clipboard = XInternAtom(xw.dpy, "CLIPBOARD", 0);
 	xpev = &e->xproperty;
 	if (xpev->state == PropertyNewValue &&
 			(xpev->atom == XA_PRIMARY ||
@@ -987,7 +894,6 @@ xclear(int x1, int y1, int x2, int y2)
 	XftDrawRect(xw.draw,
 			&dc.col[IS_SET(MODE_REVERSE)? defaultfg : defaultbg],
 			x1, y1, x2-x1, y2-y1);
-	sbdraw(&dc.col[defaultbg], x1, y1, x2-x1, y2-y1);
 }
 
 void
@@ -1425,11 +1331,6 @@ xinit(int cols, int rows)
 	/* Xft rendering context */
 	xw.draw = XftDrawCreate(xw.dpy, xw.buf, xw.vis, xw.cmap);
 
-	/* snake: hear of the desktop's snake */
-	sb_init(xw.dpy);
-	if (sb_read(xw.dpy) == 2 && sb_on)
-		sbcolors();
-
 	/* input methods */
 	if (!ximopen(xw.dpy)) {
 		XRegisterIMInstantiateCallback(xw.dpy, NULL, NULL, NULL,
@@ -1727,7 +1628,6 @@ xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len, int x, i
 
 	/* Clean up the region we want to draw to. */
 	XftDrawRect(xw.draw, bg, winx, winy, width, win.ch);
-	sbdraw(bg, winx, winy, width, win.ch);
 
 	/* Set the clip region because Xft is sometimes dirty. */
 	r.x = 0;
@@ -1966,21 +1866,14 @@ void
 visibility(XEvent *ev)
 {
 	XVisibilityEvent *e = &ev->xvisibility;
-	int vis = e->state != VisibilityFullyObscured;
 
-	/* snake: hidden (dwm moves windows of other tags off the screen),
-	 * don't wake up for it; shown, catch up */
-	sb_listen(xw.dpy, vis);
-	if (vis && !IS_SET(MODE_VISIBLE))
-		sbupdate();
-	MODBIT(win.mode, vis, MODE_VISIBLE);
+	MODBIT(win.mode, e->state != VisibilityFullyObscured, MODE_VISIBLE);
 }
 
 void
 unmap(XEvent *ev)
 {
 	win.mode &= ~MODE_VISIBLE;
-	sb_listen(xw.dpy, 0);
 }
 
 void
@@ -2170,9 +2063,6 @@ cmessage(XEvent *e)
 void
 resize(XEvent *e)
 {
-	/* snake: moved, so the snake lies elsewhere in the window */
-	if (sbwhere() && sb_on)
-		tsetdirt(0, INT_MAX);
 	if (e->xconfigure.width == win.w && e->xconfigure.height == win.h)
 		return;
 
@@ -2206,7 +2096,6 @@ run(void)
 	} while (ev.type != MapNotify);
 
 	ttyfd = ttynew(opt_line, shell, opt_io, opt_cmd);
-	sbwhere(); /* snake: the wait above took the ConfigureNotify */
 	cresize(w, h);
 
 	for (timeout = -1, drawing = 0, lastblink = (struct timespec){0};;) {
