@@ -1660,6 +1660,40 @@ static int same_text(const char *a, const char *b, int fold)
 
 #define FOUND_MAX 64
 
+/* keys in the strokes of k (count first) */
+static int outline_keys(const long *k)
+{
+    int i, n;
+    long st;
+
+    n = 0;
+    for (i = 1; i <= k[0]; i++)
+        for (st = k[i]; st; st &= st - 1)
+            n++;
+    return n;
+}
+
+/* which outline is shorter: fewer strokes, then fewer keys (count
+ * first in both) */
+static int outline_cmp(const long *a, const long *b)
+{
+    if (a[0] != b[0])
+        return a[0] < b[0] ? -1 : 1;
+    return outline_keys(a) - outline_keys(b);
+}
+
+/* the same for outlines written as text, KAT/-S; a bad one is last */
+int outline_text_cmp(const char *a, const char *b)
+{
+    long x[STROKE_MAX + 1], y[STROKE_MAX + 1];
+
+    x[0] = outline_parse(a, x + 1, STROKE_MAX);
+    y[0] = outline_parse(b, y + 1, STROKE_MAX);
+    if (x[0] <= 0 || y[0] <= 0)
+        return (x[0] <= 0) - (y[0] <= 0);
+    return outline_cmp(x, y);
+}
+
 /* a hash of a text, the same for texts that differ only in case */
 static unsigned long fold_hash(const char *s)
 {
@@ -1748,11 +1782,12 @@ static int outlines_found(const char *text, char *out, int size, int max)
             nf++;
         }
     }
-    /* shortest first; same length: dictionary order (stable) */
+    /* shortest first: fewest strokes, then fewest keys; the same:
+     * dictionary order (stable) */
     for (i = 1; i < nf; i++) {
         for (j = i; j > 0; j--) {
-            if (dicts[fx[j - 1]].t.keys[fk[j - 1]] <=
-                dicts[fx[j]].t.keys[fk[j]])
+            if (outline_cmp(dicts[fx[j - 1]].t.keys + fk[j - 1],
+                dicts[fx[j]].t.keys + fk[j]) <= 0)
             {
                 break;
             }
@@ -1798,6 +1833,137 @@ struct asked {
 static struct asked asked[OUTLINES_CACHE];
 static int next_asked;
 
+#define FORMS 32
+#define ONE_MAX 256
+
+/* a symbol on its own, as ., ?, -- (no letter, digit or space) */
+static int is_symbol(const char *s)
+{
+    int n;
+
+    for (n = 0; s[n]; n++) {
+        if ((s[n] >= 'a' && s[n] <= 'z') || (s[n] >= 'A' && s[n] <= 'Z') ||
+            (s[n] >= '0' && s[n] <= '9') || s[n] == ' ' || s[n] == '\t' ||
+            s[n] == '{' || s[n] == '}')
+        {
+            return 0;
+        }
+    }
+    return n > 0 && n < 16;
+}
+
+/* The text as asked, and the forms the dictionaries may have it in:
+ * with typographic quotes (don't: don\342\200\231t, as -a saves it) and a
+ * symbol as the meta that writes it ({.} for ., {?}, {^-^}). Their
+ * outlines together, shortest first, each once. */
+static int outlines_any(const char *text, char *out, int size, int max)
+{
+    static char forms[FORMS][TEXT_MAX];
+    static char got[TEXT_MAX * 2];
+    static char all[FOUND_MAX][ONE_MAX];
+    char *p, *q;
+    int nforms, i, j, k, n, len;
+
+    static const char *const wrap[] = {
+        "{%s}", "{^%s^}", "{^%s}", "{%s^}", "{~|%s^}", "{^~|%s}",
+        "{^~|%s^}"
+    };
+    int nbase;
+
+    nforms = 0;
+    scopy(forms[nforms++], text, TEXT_MAX);
+    typographic(text, forms[nforms], TEXT_MAX);
+    if (strcmp(forms[nforms], text))
+        nforms++;
+    /* a straight quote alone: the typographic ones */
+    if (!strcmp(text, "\"") || !strcmp(text, "'")) {
+        scopy(forms[nforms++], text[0] == '"' ? "\342\200\234" :
+            "\342\200\231", TEXT_MAX);
+        if (text[0] == '"')
+            scopy(forms[nforms++], "\342\200\235", TEXT_MAX);
+    }
+    /* a symbol: also as the metas that write it */
+    nbase = nforms;
+    for (i = 0; i < nbase; i++) {
+        if (!is_symbol(forms[i]) || strlen(forms[i]) > 16)
+            continue;
+        for (j = 0; j < (int)(sizeof(wrap) / sizeof(wrap[0])) &&
+            nforms < FORMS; j++)
+        {
+            sprintf(forms[nforms++], wrap[j], forms[i]);
+        }
+    }
+    n = 0;
+    for (i = 0; i < nforms; i++) {
+        if (!outlines_found(forms[i], got, sizeof(got), FOUND_MAX))
+            continue;
+        for (p = got; *p && n < FOUND_MAX; p = q) {
+            while (*p == ' ')
+                p++;
+            for (q = p; *q && *q != ' '; q++)
+                ;
+            len = (int)(q - p);
+            if (!len || len >= ONE_MAX)
+                continue;
+            memcpy(all[n], p, len);
+            all[n][len] = 0;
+            for (j = 0; j < n && strcmp(all[j], all[n]); j++)
+                ;
+            if (j == n)
+                n++;
+        }
+    }
+    /* shortest first again, now across the forms (stable) */
+    for (i = 1; i < n; i++) {
+        for (j = i; j > 0 && outline_text_cmp(all[j - 1], all[j]) > 0; j--) {
+            char t[ONE_MAX];
+            scopy(t, all[j], ONE_MAX);
+            scopy(all[j], all[j - 1], ONE_MAX);
+            scopy(all[j - 1], t, ONE_MAX);
+        }
+    }
+    out[0] = 0;
+    k = 0;
+    for (i = 0; i < n && k < max; i++) {
+        if (k)
+            scat(out, "  ", size);
+        scat(out, all[i], size);
+        k++;
+    }
+    return k;
+}
+
+/* Every entry a lookup reaches (no higher dictionary has its outline),
+ * for the suggestions' guesses: fn(text, strokes, n, arg) for each,
+ * until it gives nonzero. */
+void dict_each(int (*fn)(const char *, const long *, int, void *),
+    void *arg)
+{
+    struct table *t;
+    const char *v;
+    long e, *k;
+    int i, at;
+
+    for (i = 0; i < ndicts; i++) {
+        if (!dicts[i].enabled || dicts[i].kind != dk_json)
+            continue;
+        t = &dicts[i].t;
+        for (e = 0; e < t->nent; e++) {
+            k = t->keys + t->ent_key[e];
+            v = t->vals + t->ent_val[e];
+            if (is_deleted(v) || !peek_at(k + 1, (int)k[0], &at) || at != i)
+                continue;
+            if (fn(v, k + 1, (int)k[0], arg))
+                return;
+        }
+    }
+}
+
+long dict_generation(void)
+{
+    return dict_gen;
+}
+
 int dict_outlines(const char *text, char *out, int size, int max)
 {
     struct asked *a;
@@ -1812,7 +1978,7 @@ int dict_outlines(const char *text, char *out, int size, int max)
             return a->n;
         }
     }
-    n = outlines_found(text, out, size, max);
+    n = outlines_any(text, out, size, max);
     if ((int)strlen(text) < OUTLINES_TEXT && (int)strlen(out) <
         OUTLINES_OUT && (int)strlen(out) < size - 1)
     {

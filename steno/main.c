@@ -1166,6 +1166,7 @@ static int test_loop(void)
         n = outline_parse(line, st, STROKE_MAX);
         if (n < 0) {
             printf("? not steno\n");
+            fflush(stdout);
             continue;
         }
         for (i = 0; i < n; i++)

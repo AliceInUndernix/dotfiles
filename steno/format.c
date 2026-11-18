@@ -631,6 +631,48 @@ int word_strokes(int count, long *st, int max)
     return k;
 }
 
+/* a letter, a digit, - or ' (also U+2019): what a word goes on with */
+static int in_word(const char *s, int k)
+{
+    unsigned char c;
+
+    c = (unsigned char)s[0];
+    if (k == 1)
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+            (c >= '0' && c <= '9') || c == '-' || c == '\'';
+    if (k == 3 && c == 0xe2 && (unsigned char)s[1] == 0x80)
+        return (unsigned char)s[2] == 0x99;   /* the apostrophe */
+    return 1;                  /* letters beyond ASCII */
+}
+
+/* The text from at (an offset as in trans->lo) to the end, as it is
+ * now, for the suggestions and the tape; *word: a word can start there
+ * (the start, after a space, or the text starts with one). The bytes,
+ * or -1 when that part is cut off or does not fit. */
+int text_since(long at, char *out, int size, int *word)
+{
+    long from;
+    int k;
+
+    out[0] = 0;
+    *word = 0;
+    from = at - base;
+    if (from < 0 || from > blen || blen - from >= size)
+        return -1;
+    memcpy(out, buf + from, blen - from);
+    out[blen - from] = 0;
+    if (from == 0) {
+        *word = 1;
+    } else {
+        /* after anything but a letter, a digit, - or an apostrophe
+         * (a space, an opening quote or bracket, a dash) */
+        k = u8back(buf, (int)from, 1);
+        *word = !in_word(buf + from - k, k) || (blen > from &&
+            is_space_at(buf + from, (int)(blen - from)));
+    }
+    return (int)(blen - from);
+}
+
 /* fragments: \s*[^\s]+\s* ; the first one without its leading spaces */
 int last_fragments(int count, char *out, int size)
 {
@@ -748,16 +790,31 @@ static int ukus_lookup(const char *w, int by_us, char *out, int size)
     return 1;
 }
 
-static void uk_us_switch(const char *w, char *out, int size)
+static void ukus_load(void)
 {
-    int res;
-
     if (!ukus_read) {
         ukus_read = 1;
         ukus = pairs_read(dotterel_data("uk_to_us.txt"), &nukus);
         if (!ukus)
             say("no UK/US list (%s)", dotterel_data("uk_to_us.txt"));
     }
+}
+
+/* the UK spelling of an American one (color: colour), for the
+ * suggestions: 1 when there is one */
+int uk_spelling(const char *us, char *out, int size)
+{
+    ukus_load();
+    if (!us[0] || !ukus)
+        return 0;
+    return ukus_lookup(us, 1, out, size) && strcmp(out, us);
+}
+
+static void uk_us_switch(const char *w, char *out, int size)
+{
+    int res;
+
+    ukus_load();
     if (!w[0] || !ukus) {
         scopy(out, w, size);
         return;

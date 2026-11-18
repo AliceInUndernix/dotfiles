@@ -41,6 +41,10 @@ int dict_move(int i, int dir);              /* -1: can't */
 void dict_remove(int i);
 int dict_convert(const char *in, const char *outdir, char *made, int size);
 int dict_explain(const long *st, int n, char *out, int size);
+void dict_each(int (*fn)(const char *, const long *, int, void *),
+    void *arg);
+long dict_generation(void);
+int outline_text_cmp(const char *a, const char *b);
 
 /* --- translator -------------------------------------------------- */
 
@@ -68,6 +72,8 @@ int trans_word_finished(struct trans *t);
 int last_words(int count, char *out, int size);   /* bytes, or 0 */
 int last_fragments(int count, char *out, int size);
 int last_chars(int count, char *out, int size);
+int text_since(long at, char *out, int size, int *word);
+int uk_spelling(const char *us, char *out, int size);
 int word_strokes(int count, long *st, int max);
 
 /* the translations the formatter and the translator share */

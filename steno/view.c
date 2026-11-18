@@ -269,27 +269,8 @@ static void got_tape(char *line)
 /* one line of the suggest feed: WORDS <tab> OUTLINES ..., kept as one
  * line for each WORDS <tab> OUTLINES; words already there move to the
  * bottom, so each shows once */
-/* only the outline used last has its mark (+ shortest, ! not): take
- * the ones from the lines before away */
-static void strip_marks(char *cell)
-{
-    char *r, *w;
-
-    r = strchr(cell, '\t');
-    if (!r)
-        return;
-    for (w = r; *r; r++) {
-        if ((*r == '+' || *r == '!') && r[1] && r[1] != ' ' &&
-            (r[-1] == ' ' || r[-1] == '\t'))
-        {
-            continue;
-        }
-        *w = *r;
-        w++;
-    }
-    *w = 0;
-}
-
+/* Every words line keeps the mark of the outline that wrote it last
+ * (+ the shortest, ! not); typed again, the new line replaces it. */
 static void got_suggest(char *line)
 {
     char cell[CELL_MAX], *w, *o, *next;
@@ -301,10 +282,6 @@ static void got_suggest(char *line)
      * (undo[] marks it in this box); ~ ...: these words in place of
      * the last lines sent (dead[] marks them) */
     b = &boxes[1];
-    /* only the lines sent last can have marks */
-    for (i = 0; i < b->nlines; i++)
-        if (b->dead[i] || b->undo[i])
-            strip_marks(BOX_LINE(b, i));
     spell = line[0] == '=' && (!line[1] || line[1] == '\t');
     replace = line[0] == '~' && (!line[1] || line[1] == '\t');
     for (i = 0; i < b->nlines; i++) {
@@ -524,8 +501,13 @@ static void draw_sugg(int y, int x, int w, int h)
     int i, j, n, row, filled, first, last;
 
     b = &boxes[1];
-    if (b->scroll > b->nlines - 1)
-        b->scroll = b->nlines > 0 ? b->nlines - 1 : 0;
+    /* scrolled up no further than the oldest filling the box (the
+     * scroll counts words, a word takes lines) */
+    filled = 0;
+    for (i = 0; i < b->nlines && filled < h; i++)
+        filled += sugg_rows(BOX_LINE(b, i), w, rows, 64);
+    if (b->scroll > b->nlines - i)
+        b->scroll = b->nlines - i > 0 ? b->nlines - i : 0;
     last = b->nlines - b->scroll;
     /* from the newest shown back, until the box is full */
     filled = 0;
@@ -606,6 +588,7 @@ static void draw_find(int rows, int cols)
     static const char *const look[] = { "Enter look up", "Esc close" };
     static const char *const next[] = { "Enter next", "Esc stop" };
     static const char *const add[] = { "Enter add", "Esc stop" };
+    static const char *const shown[] = { "l look up", "a add", "Esc close" };
     char prompt[FIND_MAX + 32];
     int h, y, row, n;
 
@@ -623,7 +606,7 @@ static void draw_find(int rows, int cols)
     if (finding == 2)
         scopy(prompt, "outline> ", sizeof(prompt));
     else if (finding == 3)
-        sprintf(prompt, "%s> ", add_out);
+        sprintf(prompt, "%.*s writes> ", FIND_MAX, add_out);
     else
         scopy(prompt, "> ", sizeof(prompt));
     n = scr_text(prompt, cols - 5);
@@ -645,8 +628,11 @@ static void draw_find(int rows, int cols)
         scr_col(C_PLAIN);
         scr_fill(' ', cols - 2 - n);
     }
-    scr_border(y + h - 1, 0, cols, 0, 0, finding == 2 ? next :
-        finding == 3 ? add : look, 2);
+    if (!finding)
+        scr_border(y + h - 1, 0, cols, 0, 0, shown, 3);
+    else
+        scr_border(y + h - 1, 0, cols, 0, 0, finding == 2 ? next :
+            finding == 3 ? add : look, 2);
 }
 
 static void draw(void)
@@ -769,6 +755,20 @@ static void find_key(int c)
             finding = 0;
             return;
         }
+        {
+            long st[STROKE_MAX];
+
+            if (outline_parse(find, st, STROKE_MAX) <= 0) {
+                /* say so now, not after the text: it stays to mend */
+                nfound = 2;
+                sprintf(found[0], "%.*s is not an outline",
+                    CELL_MAX - 32, find);
+                scopy(found[1], "  keys in steno order: "
+                    "#STKPWHRAO*EUFRPBLGTSDZ, strokes split by /",
+                    CELL_MAX);
+                return;
+            }
+        }
         scopy(add_out, find, sizeof(add_out));
         run_steno("-l", add_out, 0);
         finding = 3;
@@ -781,7 +781,11 @@ static void find_key(int c)
         nfind = 0;
         find[0] = 0;
     } else if (c == '\r' || c == '\n') {
+        /* the answer stays; keys are the window's again (l: a new
+         * lookup, Esc: close) */
         run_steno("-l", find, 0);
+        finding = 0;
+        added = 0;
     } else if (c == 127 || c == 8) {
         /* a whole character, also one of several bytes (UTF-8) */
         while (nfind > 0 && ((unsigned char)find[nfind - 1] & 0xc0) ==
