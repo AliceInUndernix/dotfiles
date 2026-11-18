@@ -59,6 +59,12 @@ applied in this order; dwm.c already has them, so don't apply again):
                      the dragged edges to the screen edges, and a snapped
                      edge ignores size increments so it lines up exactly.
                      patches/dwm-snapwindows-local.diff.
+  masterdeck         local, the reverse of doubledeck: the master
+                     windows lie on top of each other at full master
+                     size (the focused one shows), the stack is tiled
+                     as in tile. Symbol D[], Mod+e. With nmaster 1 it
+                     looks like tile; Mod+i/d change how many windows
+                     are in the master pile.
   startrules         local: startrules[] in config.h, rules that place
                      only the first matching window in the first minute
                      after login (for apps x/xinitrc starts).
