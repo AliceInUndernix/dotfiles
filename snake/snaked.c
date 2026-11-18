@@ -44,7 +44,7 @@ static const char *usage_text[2] = {
     "  -s RRGGBB  snake behind text, faint (default 242424)\n"
     "  -f RRGGBB  food behind text, faint (default 2b2620)\n",
     "  -S RRGGBB  snake on the desktop and the lock screen\n"
-    "             (default 87af87, Habamax green)\n"
+    "             (default 9e9e9e, Habamax grey)\n"
     "  -F RRGGBB  food on the desktop and the lock screen\n"
     "             (default d787d7, Habamax magenta)\n"
     "  -t MS      milliseconds per step (default 200)\n"
@@ -54,7 +54,7 @@ static const char *usage_text[2] = {
 static unsigned long opt_bg = 0x1c1c1cUL;
 static unsigned long opt_snake = 0x242424UL;
 static unsigned long opt_food = 0x2b2620UL;
-static unsigned long opt_csnake = 0x87af87UL;
+static unsigned long opt_csnake = 0x9e9e9eUL;
 static unsigned long opt_cfood = 0xd787d7UL;
 static int opt_cell = 16;
 static int opt_tick = 200;

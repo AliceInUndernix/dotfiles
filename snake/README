@@ -89,7 +89,7 @@ SNAKED: THE SNAKE BEHIND EVERYTHING
 snaked runs the autopilot on the whole screen, for ever: when the board
 is full it starts again. It is meant to run all the time, from
 ~/.xinitrc. Where nothing covers it, on the desktop and the lock
-screen, the snake is in clear colours (Habamax green, the food
+screen, the snake is in clear colours (Habamax light grey, the food
 magenta); behind the text of a terminal it is very faint, just lighter
 than the background, so it never gets in the way of reading.
 
@@ -122,7 +122,7 @@ millisecond a step.
     pkill snaked             stop: the snake goes, the desktop is plain
 
 Options: -b background (1c1c1c); behind text -s snake (242424) and -f
-food (2b2620); on the desktop and the lock screen -S snake (87af87)
+food (2b2620); on the desktop and the lock screen -S snake (9e9e9e)
 and -F food (d787d7); colours as RRGGBB. -c a cell's size in pixels
 (16); -t milliseconds per step (200).
 
