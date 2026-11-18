@@ -16,6 +16,7 @@ script puts the whole configuration back after a fresh install.
 | `webarchiver/` | WebArchiver, our own C program: archives whole websites with wget for offline reading, keeps them updated with version history (`webarchiver/README`) | `~/.system/bin/webarchiver` |
 | `clean/` | clean, our own C program: takes metadata out of pictures, documents, video and audio, in place, with a backup (`clean/README`) | `~/.system/bin/clean` |
 | `seal/` | seal, our own C program: `seal DIR` turns a directory into one encrypted file (password, Argon2id and XChaCha20-Poly1305), `unseal FILE` gives it back, into RAM by default (`seal/README`) | `~/.system/bin/seal`, `unseal` |
+| `snake/` | snake, our own C program: the snake game in the terminal, with an autopilot that always wins; and snaked, the same game playing itself on the desktop (clear colours there and on the lock screen, very faint behind terminal text), started by `xinitrc` and drawn by the patched st and slock (`snake/README`) | `~/.system/bin/snake`, `snaked` |
 | `steno/` | steno, our own C program: a steno engine (a port of Plover's) for the Moonlander's Gemini PR with Dotterel's dictionaries, typing into X; `steno -T` paper tape and suggestions, `steno -a`/`-A` add strokes, `steno -l` looks up (`steno/README`) | `~/.system/bin/steno`, `~/.config/steno/config` (symlink) |
 | `nvim/` | Neovim config (0.11+, no plugin manager) | `~/.config/nvim` (symlink), `~/.system/bin/vim` -> nvim (first in PATH) |
 | `tmux/` | tmux config | `~/.config/tmux/tmux.conf` (symlink) |
@@ -117,7 +118,7 @@ Add `-a` to make emerge ask first (-qva):
 ```sh
 ./install.sh            # every part that needs no root (the same as: all)
 ./install.sh all icecat # every part, and IceCat too
-./install.sh nvim       # only some parts: ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver clean seal steno moonlander net icecat chromium
+./install.sh nvim       # only some parts: ksh xdg x nvim tmux flameshot mpv sioyek wiremix btop feh dwm st dmenu slock webarchiver clean seal snake steno moonlander net icecat chromium
 ./install.sh 4 12       # the same by number (0 is --deps)
 ./install.sh check      # only look: what is installed, missing, out of date
 ./install.sh update     # the newest version: git pull, all, then check

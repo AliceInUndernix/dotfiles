@@ -8,3 +8,10 @@ config.def.h as upstream so new releases can be compared against it.
 
 Local changes:
 - config.h: group "nogroup" -> "nobody" (Gentoo has no "nogroup").
+- snake (patches/snake.diff, 2026-11-18; take it out with
+  patch -R -p1 < patches/snake.diff): the lock screen shows snaked's
+  snake (see snake/README). After privileges are dropped, readpw()
+  reads the root window's _SNAKE property (snakebg.h, a copy of
+  snake/snakebg.h) and draws its squares, in its clear colours, on the
+  default screen's lock window; the property's events get their own
+  branch, so they don't raise the windows like other events.

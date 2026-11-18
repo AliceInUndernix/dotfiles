@@ -1,0 +1,88 @@
+.TH SNAKED 1 snake
+.SH NAME
+snaked \- the snake game playing itself on the X desktop
+.SH SYNOPSIS
+.B snaked
+.RB [ \-b
+.IR RRGGBB ]
+.RB [ \-c
+.IR PX ]
+.RB [ \-f
+.IR RRGGBB ]
+.RB [ \-s
+.IR RRGGBB ]
+.RB [ \-F
+.IR RRGGBB ]
+.RB [ \-S
+.IR RRGGBB ]
+.RB [ \-t
+.IR MS ]
+.SH DESCRIPTION
+.B snaked
+plays snake with the autopilot of
+.BR snake (1)
+on the whole screen, for ever: it goes at the food in a staircase,
+never hits anything, fills the screen, and starts again. On the
+desktop and the lock screen the snake is in clear colours; behind the
+text of a terminal it is very faint, just lighter than the background.
+.PP
+It paints the desktop (the root window), and at every step puts the
+board in the root window's
+.B _SNAKE
+property. Programs that read it draw the snake in their own empty
+background, so that it seems to run behind them: the patched
+.BR st (1)
+behind the text of every terminal, wherever a cell's background is
+the background colour (in vim and btop too), and the patched
+.BR slock (1)
+on the lock screen. Other programs cover it, as they would cover a
+wallpaper. There is no compositor and no transparency.
+.PP
+Only one
+.B snaked
+runs on a display. It stops on SIGTERM or SIGINT
+.RB ( "pkill snaked" ),
+takes the snake off the screen and removes the property.
+.SH OPTIONS
+.TP
+.BI \-b " RRGGBB"
+background (default 1c1c1c, Habamax's)
+.TP
+.BI \-c " PX"
+size of a cell in pixels (default 16)
+.TP
+.BI \-s " RRGGBB"
+snake behind text, faint (default 242424)
+.TP
+.BI \-f " RRGGBB"
+food behind text, a smaller square, faint (default 2b2620)
+.TP
+.BI \-S " RRGGBB"
+snake on the desktop and the lock screen (default 87af87, Habamax
+green)
+.TP
+.BI \-F " RRGGBB"
+food on the desktop and the lock screen (default d787d7, Habamax
+magenta)
+.TP
+.BI \-t " MS"
+milliseconds per step (default 200)
+.SH THE PROPERTY
+.B _SNAKE
+is a STRING: the line
+.IP
+.B snake2
+.I SEQ CELL X Y W H SNAKE FOOD CSNAKE CFOOD
+.PP
+(the step count, a cell's size in pixels, the board's top left corner
+on the screen, the board in cells, the faint colours and the clear
+ones as RRGGBB), a
+newline, then W times H bytes, row by row:
+.B 0
+empty,
+.B 1
+snake,
+.B 2
+food.
+.SH SEE ALSO
+.BR snake (1)

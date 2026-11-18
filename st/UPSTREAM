@@ -32,3 +32,16 @@ pixel against the build before them):
   - twrite skips UTF-8 decoding for ASCII bytes
   - Shift+Up/PageUp etc. mark the screen dirty and let run() draw, so
     held keys don't draw once per key repeat
+
+Our own patch, snake (patches/snake.diff, 2026-11-18; take it out with
+patch -R -p1 < patches/snake.diff): draws snaked's snake (see
+snake/README) behind the text, where a cell's background is the
+background colour (compared by colour, so vim's and btop's #1c1c1c
+count too). snakebg.h reads the root window's _SNAKE property; it is a
+copy of snake/snakebg.h. In x.c: the sb* functions after the globals,
+sbdraw() after each background fill (xdrawglyphfontspecs, xclear), the
+property in propnotify(), the window's place in resize() and once after
+mapping in run(), and visibility()/unmap() stop listening while the
+window is hidden (dwm moves windows of other tags off the screen).
+tsetdirt() is no longer static (st.c, st.h), so x.c can mark the lines
+a step changed.

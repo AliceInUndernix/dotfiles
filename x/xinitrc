@@ -4,6 +4,17 @@
 # Wallpaper: Habamax's background colour, same as st, tmux and Neovim.
 xsetroot -solid "#1c1c1c"
 
+# The snake: snaked plays snake by itself on the whole screen: clear
+# on the desktop and the lock screen (slock), very faint behind the text
+# of the terminals (the patched st and slock draw it; see
+# snake/README). Options for colours and speed: snaked -h.
+# pkill snaked stops it. SNAKED=false: not at all.
+SNAKED=true
+SNAKED_OPTS=""
+if $SNAKED && command -v snaked >/dev/null 2>&1; then
+	snaked $SNAKED_OPTS &
+fi
+
 # Sound: start PipeWire and WirePlumber (Gentoo without systemd; with
 # systemd they start by themselves as user services).
 if [ ! -d /run/systemd/system ] && command -v gentoo-pipewire-launcher >/dev/null 2>&1; then

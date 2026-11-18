@@ -136,7 +136,7 @@ ck_part() {
 	tmux|flameshot|mpv|sioyek|wiremix|btop)
 		ck_links "$1"
 		ck_cmd "$1" ;;
-	dwm|st|webarchiver|clean|seal) ck_built "$1" ;;
+	dwm|st|webarchiver|clean|seal|snake) ck_built "$1" ;;
 	steno)
 		ck_built steno
 		ck_links steno

@@ -1,0 +1,105 @@
+.TH SNAKE 1 snake
+.SH NAME
+snake \- terminal snake game
+.SH SYNOPSIS
+.B snake
+.RB [ \-afn ]
+.RB [ \-s
+.IR W x H ]
+.RB [ \-t
+.IR MS ]
+.br
+.B snake \-h
+.SH DESCRIPTION
+Steer the snake to the food
+.RB ( <> ).
+Each piece of food makes it one cell longer, scores a point and makes
+it a little faster. The game ends when the snake runs into a wall or
+into itself, and is won when it fills the whole board.
+.PP
+The board fills the terminal unless
+.B \-s
+is given. The game waits for the first direction key. A change of the
+terminal size pauses it; when the terminal is smaller than the board,
+it says so until it is big enough again.
+.B r
+starts a new game sized to the terminal as it is then.
+.SS Autopilot
+With
+.B \-a
+or
+.BR a ,
+the game plays itself: it goes at the food on the slant, in a
+staircase with steps two cells long, never hits anything, and always
+wins. Its way is always part of a Hamiltonian cycle through every
+cell, made of 2x2 blocks round a tree, that the whole snake lies on
+in order, so it can never be trapped; at each step it looks for such
+a cycle that agrees with the body and the way to the food.
+.PP
+A direction key takes over; with
+.B a
+the autopilot takes over again, first steering until the snake fits a
+cycle, so then a win is likely but not certain. Games it played any
+part of do not count for the best score. The cycles need both sides
+even, so an odd side is made one cell shorter.
+.SH OPTIONS
+.TP
+.B \-a
+autopilot from the start
+.TP
+.BI \-s " W" x H
+a board of
+.I W
+by
+.I H
+cells (at least 10x6, an odd side made one shorter); a cell is two
+columns wide
+.TP
+.BI \-t " MS"
+milliseconds per step at the start (20 to 2000, default 150); each
+piece of food takes 2 off, down to 60
+.TP
+.B \-f
+fixed speed: no speed-up when eating
+.TP
+.B \-n
+neither read nor write the best score
+.TP
+.B \-h
+help
+.SH KEYS
+.TP
+.BR h " " j " " k " " l ", arrows"
+left, down, up, right; two turns can wait for the next steps. With the
+autopilot on, you take over.
+.TP
+.B a
+autopilot on and off
+.TP
+.BR + ", " \-
+faster, slower: halves or doubles the time per step (0 to 2000 ms);
+after that, eating no longer speeds up
+.TP
+.BR p ", space"
+pause and go on (a direction key goes on too)
+.TP
+.B r
+new game
+.TP
+.BR q ", Ctrl-c"
+quit
+.TP
+.B Ctrl-z
+stop; after
+.B fg
+the game is paused
+.SH FILES
+.TP
+.I ~/.system/state/snake/best
+the best score, one number. It is only kept when
+.I ~/.system/state
+exists; delete it to start over.
+.SH NOTES
+Needs a terminal with 256 colours and DEC line drawing (st, xterm,
+tmux). It needs nothing but the kernel: a static binary, no curses,
+no terminfo.
