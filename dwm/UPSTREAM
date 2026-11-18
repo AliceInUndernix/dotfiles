@@ -25,9 +25,10 @@ applied in this order; dwm.c already has them, so don't apply again):
   doubledeck         dwm-deck-double-6.2.diff
   restart            local, not from suckless.org (the idea of restartsig
                      and preserveonrestart, written for this dwm):
-                     Mod+Shift+r or `dwm restart` in a terminal execs dwm
-                     again in place. Before that, every window gets its
-                     tags, monitor, order and floating geometry as an X
+                     Mod+Ctrl+Shift+r (Mod+Shift+r before cfacts) or
+                     `dwm restart` in a terminal execs dwm again in
+                     place. Before that, every window gets its tags,
+                     monitor, order and floating geometry as an X
                      property, and the root window each monitor's tags in
                      view and pertag settings (layouts, mfact, nmaster,
                      focused window); the new dwm reads them back. `dwm
@@ -68,5 +69,17 @@ applied in this order; dwm.c already has them, so don't apply again):
   startrules         local: startrules[] in config.h, rules that place
                      only the first matching window in the first minute
                      after login (for apps x/xinitrc starts).
+  cfacts             local, the idea of the suckless cfacts patch: each
+                     window has a height weight in its column (tile, and
+                     the stack of masterdeck). Mod+Shift+h/l move the
+                     border under the focused window up/down by 1/40 of
+                     the column (the last window moves the border above
+                     it); only the two windows at that border change,
+                     and none gets less than 1/20. Kept over dwm restart.
+                     resetcfacts (equal again) has no key yet. Lock moved
+                     from Mod+Shift+l to Mod+Shift+o for it, and st from
+                     Mod+Shift+Return to Mod+Shift+u, and restart from
+                     Mod+Shift+r to Mod+Ctrl+Shift+r, so Shift on a
+                     Moonlander dwm-layer key never does something else.
 Their config.def.h hunks are not applied (config.def.h stays upstream);
 the settings are in config.h.

@@ -37,7 +37,7 @@ fi
 
 # xss-lock runs slock when the screen blanks (only if the idle lock above
 # is on) and always before the laptop suspends, so waking needs the
-# password. Mod+Shift+l locks by hand, Mod+Ctrl+Shift+z suspends.
+# password. Mod+Shift+o locks by hand, Mod+Ctrl+Shift+z suspends.
 xss-lock -- slock &
 
 # Status text on the right of dwm's bar (Mod+b shows the bar): the date
@@ -89,6 +89,6 @@ done &
 ) &
 
 # dwm runs until you quit it (Mod+Shift+q), which ends the X session.
-# dwm restart (or Mod+Shift+r) restarts dwm in place, as the same
+# dwm restart (or Mod+Ctrl+Shift+r) restarts dwm in place, as the same
 # process, so this needs no loop and X keeps running.
 exec dwm

@@ -101,6 +101,7 @@ struct Client {
 	int noborder; /* the X window has no border now (see solitary) */
 	int takefocus, candelete; /* its WM_PROTOCOLS, see updateprotocols */
 	long stackpos; /* restart: place in the focus history (see scan) */
+	float cfact; /* tile: its share of its column's height, 1 = equal */
 	Client *next;
 	Client *snext;
 	Monitor *mon;
@@ -227,6 +228,9 @@ static void setfocus(Client *c);
 static void setfullscreen(Client *c, int fullscreen);
 static void setlayout(const Arg *arg);
 static void setmfact(const Arg *arg);
+static void movecborder(const Arg *arg);
+static void mincfacts(Monitor *m, unsigned int first, unsigned int last);
+void resetcfacts(const Arg *arg); /* no key yet, so not static */
 static void setup(void);
 static void seturgent(Client *c, int urg);
 static void showhide(Client *c);
@@ -1276,6 +1280,7 @@ manage(Window w, XWindowAttributes *wa)
 	/* restart: the window gets back the tags, monitor, position and
 	 * size it had before (savestate() left them on the window) */
 	c->stackpos = LONG_MAX;
+	c->cfact = 1.0;
 	restored = getlongprop(w, dwmatom[DwmClient], &saved, &n) && n >= 8;
 	if (restored) {
 		for (m = mons; m && m->num != saved[2]; m = m->next);
@@ -1292,6 +1297,8 @@ manage(Window w, XWindowAttributes *wa)
 		c->ispinned = c->issticky || ((saved[3] >> 2) & 1);
 		c->noborder = (saved[3] >> 3) & 1;
 		c->stackpos = n >= 9 ? saved[8] : LONG_MAX;
+		if (n >= 10 && saved[9] > 0)
+			c->cfact = saved[9] / 10000.0;
 		c->x = saved[4]; /* also of a tiled or hidden window */
 		c->y = saved[5];
 		c->w = saved[6];
@@ -1389,10 +1396,15 @@ masterdeck(Monitor *m)
 	/* the reverse of doubledeck's stack: the master windows lie on top
 	 * of each other at full master size (the focused one shows), the
 	 * stack windows are tiled as in tile() */
-	unsigned int i, n, h, mw, ty;
+	unsigned int i, n, mw, stop = 0, bottom;
+	float sfacts = 0, sacc = 0;
 	Client *c;
 
 	for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
+	mincfacts(m, m->nmaster, n);
+	for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++)
+		if (n >= m->nmaster)
+			sfacts += c->cfact;
 	if (n == 0)
 		return;
 
@@ -1400,14 +1412,17 @@ masterdeck(Monitor *m)
 		mw = m->nmaster ? m->ww * m->mfact : 0;
 	else
 		mw = m->ww;
-	for (i = ty = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), i++)
+	for (i = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), i++)
 		if (i < m->nmaster) {
 			resize(c, m->wx, m->wy, mw - (2*c->bw), m->wh - (2*c->bw), 0);
 		} else {
-			h = (m->wh - ty) / (n - i);
-			resize(c, m->wx + mw, m->wy + ty, m->ww - mw - (2*c->bw), h - (2*c->bw), 0);
-			if (ty + HEIGHT(c) < m->wh)
-				ty += HEIGHT(c);
+			/* as in tile() */
+			sacc += c->cfact;
+			bottom = m->wh * (sacc / sfacts) + 0.5;
+			resize(c, m->wx + mw, m->wy + stop,
+				m->ww - mw - (2*c->bw),
+				bottom - stop - (2*c->bw), 0);
+			stop = bottom;
 		}
 }
 
@@ -1595,7 +1610,7 @@ savestate(void)
 {
 	Monitor *m;
 	Client *c, *o;
-	long rec[9], *mrec, *r, idx = 0, pos;
+	long rec[10], *mrec, *r, idx = 0, pos;
 	unsigned int i, nmons = 0;
 
 	for (m = mons; m; m = m->next)
@@ -1633,8 +1648,9 @@ savestate(void)
 			rec[6] = c->isfullscreen ? c->oldw : c->w;
 			rec[7] = c->isfullscreen ? c->oldh : c->h;
 			rec[8] = pos;
+			rec[9] = (long)(c->cfact * 10000 + 0.5);
 			XChangeProperty(dpy, c->win, dwmatom[DwmClient], XA_CARDINAL, 32,
-				PropModeReplace, (unsigned char *)rec, 9);
+				PropModeReplace, (unsigned char *)rec, 10);
 		}
 	}
 	XChangeProperty(dpy, root, dwmatom[DwmMons], XA_CARDINAL, 32,
@@ -2402,10 +2418,18 @@ tagmon(const Arg *arg)
 void
 tile(Monitor *m)
 {
-	unsigned int i, n, h, mw, my, ty;
+	unsigned int i, n, mw, mtop, stop, bottom;
+	float mfacts = 0, sfacts = 0, macc = 0, sacc = 0;
 	Client *c;
 
 	for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
+	mincfacts(m, 0, MIN(n, m->nmaster));
+	mincfacts(m, m->nmaster, n);
+	for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++)
+		if (n < m->nmaster)
+			mfacts += c->cfact;
+		else
+			sfacts += c->cfact;
 	if (n == 0)
 		return;
 
@@ -2413,18 +2437,148 @@ tile(Monitor *m)
 		mw = m->nmaster ? m->ww * m->mfact : 0;
 	else
 		mw = m->ww;
-	for (i = my = ty = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), i++)
+	/* each window's bottom edge is at its column's running sum of
+	 * cfacts, rounded: moving one border moves no other edge, and the
+	 * last window ends exactly at the bottom (the sums are the same) */
+	mtop = stop = 0;
+	for (i = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), i++)
 		if (i < m->nmaster) {
-			h = (m->wh - my) / (MIN(n, m->nmaster) - i);
-			resize(c, m->wx, m->wy + my, mw - (2*c->bw), h - (2*c->bw), 0);
-			if (my + HEIGHT(c) < m->wh)
-				my += HEIGHT(c);
+			macc += c->cfact;
+			bottom = m->wh * (macc / mfacts) + 0.5;
+			resize(c, m->wx, m->wy + mtop, mw - (2*c->bw),
+				bottom - mtop - (2*c->bw), 0);
+			mtop = bottom;
 		} else {
-			h = (m->wh - ty) / (n - i);
-			resize(c, m->wx + mw, m->wy + ty, m->ww - mw - (2*c->bw), h - (2*c->bw), 0);
-			if (ty + HEIGHT(c) < m->wh)
-				ty += HEIGHT(c);
+			sacc += c->cfact;
+			bottom = m->wh * (sacc / sfacts) + 0.5;
+			resize(c, m->wx + mw, m->wy + stop,
+				m->ww - mw - (2*c->bw),
+				bottom - stop - (2*c->bw), 0);
+			stop = bottom;
 		}
+}
+
+/* tile, masterdeck: the tiled windows first..last-1 form a column; a
+ * window under 1/20 of it (it came from the other column, or windows
+ * were added) gets 1/20, so no window is thinner than that or than the
+ * bar height (applysizehints) and none overlap. The k raised windows
+ * each get x = (sum of the others) / (20 - k), exactly 1/20 of the new
+ * total, so the next arrange changes nothing. */
+void
+mincfacts(Monitor *m, unsigned int first, unsigned int last)
+{
+	Client *c;
+	unsigned int i, k, oldk, pass;
+	float rest, x = 0;
+
+	if (first >= last)
+		return;
+	for (k = 0, pass = 0;; pass++) {
+		oldk = k;
+		rest = 0;
+		k = 0;
+		for (i = 0, c = nexttiled(m->clients); c && i < last;
+		    c = nexttiled(c->next), i++)
+		{
+			if (i < first)
+				continue;
+			if (c->cfact < x)
+				k++;
+			else
+				rest += c->cfact;
+		}
+		if (k >= 20 || rest <= 0 || (pass > 0 && k == oldk))
+			break;
+		x = rest / (20 - k);
+	}
+	if (k == 0 || k >= 20)
+		return;
+	for (i = 0, c = nexttiled(m->clients); c && i < last;
+	    c = nexttiled(c->next), i++)
+	{
+		if (i >= first && c->cfact < x)
+			c->cfact = x;
+	}
+}
+
+/* tile, masterdeck: move the border under the focused window down
+ * (arg->f > 0) or up (arg->f < 0) by that part of its column's height.
+ * The window below takes up the difference, the others keep their size.
+ * The last window of a column moves the border above it. No window gets
+ * less than 1/20 of its column. In masterdeck only the stack has
+ * borders. */
+void
+movecborder(const Arg *arg)
+{
+	Client *c, *a = NULL, *b = NULL, *prev = NULL;
+	unsigned int i, n, first, last, sel = 0;
+	float sum = 0, d, min;
+
+	if (!arg || !selmon->sel || selmon->sel->isfloating
+	    || (selmon->lt[selmon->sellt]->arrange != tile
+	    && selmon->lt[selmon->sellt]->arrange != masterdeck))
+	{
+		return;
+	}
+	n = 0;
+	for (c = nexttiled(selmon->clients); c; c = nexttiled(c->next)) {
+		if (c == selmon->sel)
+			sel = n;
+		n++;
+	}
+	if (sel < selmon->nmaster
+	    && selmon->lt[selmon->sellt]->arrange == masterdeck)
+	{
+		return;
+	} else if (sel < selmon->nmaster) {
+		first = 0;
+		last = MIN(n, selmon->nmaster);
+	} else {
+		first = selmon->nmaster;
+		last = n;
+	}
+	if (last - first < 2)
+		return;
+	for (i = 0, c = nexttiled(selmon->clients); i < last;
+	    c = nexttiled(c->next), i++)
+	{
+		if (i < first)
+			continue;
+		sum += c->cfact;
+		if (i == sel + 1)
+			b = c;
+		if (i == sel && sel + 1 == last) {
+			a = prev;
+			b = c;
+		} else if (i == sel) {
+			a = c;
+		}
+		prev = c;
+	}
+	if (!a || !b)
+		return;
+	d = arg->f * sum;
+	min = sum / 20;
+	if (a->cfact + d < min)
+		d = min - a->cfact;
+	if (b->cfact - d < min)
+		d = b->cfact - min;
+	if (arg->f > 0 ? d <= 0 : d >= 0)
+		return;
+	a->cfact += d;
+	b->cfact -= d;
+	arrange(selmon);
+}
+
+/* tile: every window on the screen gets an equal share again */
+void
+resetcfacts(const Arg *arg)
+{
+	Client *c;
+
+	for (c = nexttiled(selmon->clients); c; c = nexttiled(c->next))
+		c->cfact = 1.0;
+	arrange(selmon);
 }
 
 void

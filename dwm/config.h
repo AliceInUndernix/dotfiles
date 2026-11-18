@@ -112,7 +112,10 @@ static const char *tmuxnewcmd[] = { "st", "-e", "tmux", "new-session", NULL };
 static const Key keys[] = {
 	/* modifier                     key        function        argument */
 	{ MODKEY,                       XK_p,      spawn,          {.v = dmenucmd } },
-	{ MODKEY|ShiftMask,             XK_Return, spawn,          {.v = termcmd } },
+	/* Super+Shift+u, not Super+Shift+Return: on the Moonlander dwm
+	 * layer Shift on a key must never do something else, and Super+
+	 * Return is zoom. The same for lock below (Super+l is setmfact). */
+	{ MODKEY|ShiftMask,             XK_u,      spawn,          {.v = termcmd } },
 	{ MODKEY,                       XK_grave,  togglescratch,  {.ui = 0 } },
 	{ MODKEY,                       XK_n,      togglescratch,  {.ui = 1 } },
 	{ MODKEY,                       XK_b,      togglebar,      {0} },
@@ -124,6 +127,12 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_d,      incnmaster,     {.i = -1 } },
 	{ MODKEY,                       XK_h,      setmfact,       {.f = -0.05} },
 	{ MODKEY,                       XK_l,      setmfact,       {.f = +0.05} },
+	/* tile, masterdeck: Shift+h/l move the border under the focused
+	 * window up/down (the last window of a column moves the one above
+	 * it), by 1/40 of the column. resetcfacts gives every window an
+	 * equal share again; it has no key yet. */
+	{ MODKEY|ShiftMask,             XK_h,      movecborder,    {.f = -0.025} },
+	{ MODKEY|ShiftMask,             XK_l,      movecborder,    {.f = +0.025} },
 	{ MODKEY,                       XK_Return, zoom,           {0} },
 	{ MODKEY,                       XK_Tab,    view,           {0} },
 	{ MODKEY|ShiftMask,             XK_c,      killclient,     {0} },
@@ -154,7 +163,7 @@ static const Key keys[] = {
 	TAGKEYS(                        XK_7,                      6)
 	TAGKEYS(                        XK_8,                      7)
 	TAGKEYS(                        XK_9,                      8)
-	{ MODKEY|ShiftMask,             XK_l,      spawn,          {.v = lockcmd } },
+	{ MODKEY|ShiftMask,             XK_o,      spawn,          {.v = lockcmd } },
 	/* suspend needs Ctrl and Shift, and no other shortcut uses z, so a
 	 * slip on another key cannot suspend the machine */
 	{ MODKEY|ControlMask|ShiftMask, XK_z,      spawn,          {.v = suspendcmd } },
@@ -169,7 +178,7 @@ static const Key keys[] = {
 	{ MODKEY|ShiftMask,             XK_q,      quit,           {0} },
 	/* restart dwm in place (e.g. after ./install.sh dwm): windows keep their
 	 * tags, order and layouts. From a terminal: dwm restart */
-	{ MODKEY|ShiftMask,             XK_r,      restart,        {0} },
+	{ MODKEY|ControlMask|ShiftMask, XK_r,      restart,        {0} },
 };
 
 /* button definitions */

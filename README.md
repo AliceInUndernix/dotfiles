@@ -12,7 +12,7 @@ script puts the whole configuration back after a fresh install.
 | `dwm/` | dwm 6.8 source (window manager) | `~/.system/bin/dwm` |
 | `st/` | st 0.9.3 source (terminal): scrollback like Alacritty (Shift+PageUp/PageDown/Home/End, mouse wheel), Symbols Nerd Font for icons | `~/.system/bin/st`, font in `~/.system/share/fonts` |
 | `dmenu/` | dmenu 5.4 source (launcher), `dmenu_apps` and its list `apps` | `~/.system/bin/dmenu`, `dmenu_apps`, `~/.config/dmenu/apps` |
-| `slock/` | slock 1.7 source (screen locker; Mod+Shift+l locks, Mod+Ctrl+Shift+z suspends) | `~/.system/bin/slock` |
+| `slock/` | slock 1.7 source (screen locker; Mod+Shift+o locks, Mod+Ctrl+Shift+z suspends) | `~/.system/bin/slock` |
 | `webarchiver/` | WebArchiver, our own C program: archives whole websites with wget for offline reading, keeps them updated with version history (`webarchiver/README`) | `~/.system/bin/webarchiver` |
 | `clean/` | clean, our own C program: takes metadata out of pictures, documents, video and audio, in place, with a backup (`clean/README`) | `~/.system/bin/clean` |
 | `seal/` | seal, our own C program: `seal DIR` turns a directory into one encrypted file (password, Argon2id and XChaCha20-Poly1305), `unseal FILE` gives it back, into RAM by default (`seal/README`) | `~/.system/bin/seal`, `unseal` |
@@ -172,7 +172,7 @@ $EDITOR config.h
 ../install.sh dwm           # no root needed (slock: su -c '../install.sh slock')
 ```
 
-For dwm, then type `dwm restart` in a terminal (or press Super+Shift+r):
+For dwm, then type `dwm restart` in a terminal (or press Super+Ctrl+Shift+r):
 dwm starts again in place with the new build, and every window stays on
 its tag, in the same order, with each tag's layout. For the other tools,
 start them again. Rules for these directories:
