@@ -214,9 +214,13 @@ Only when named. It installs:
   installer finds every `Principia*.zip` in your home, newest first,
   and asks which one to install from (or name it:
   `PRINCIPIA_ZIP=FILE`; with no terminal to ask on, it installs none).
-  The zip is checked first (only `Principia/`, nothing outside it, at
-  most 2 GB unpacked) and goes into `GameData/Principia` of `KSP_DIR`, or of the
-  first KSP found in Steam's, GOG's or `~/KSP`. An old one is moved
+  The zip is checked first (nothing outside its folder, no links, at
+  most 2 GB unpacked). Its layout may change from release to release,
+  so the installer does not expect one: it finds Principia's folder
+  inside (the one with `ksp_plugin_adapter.dll`, else the one above
+  `principia.so`), leaves out anything else in the zip, and puts it
+  into `GameData/Principia` of `KSP_DIR`, or of the first KSP found in
+  Steam's, GOG's or `~/KSP`. An old one is moved
   out of the game to `~/.system/state/backup/ksp/`. Start a new save
   after installing it.
 

@@ -3,7 +3,7 @@
 # (./install.sh ksp; not in "all"). Sourced by install.sh, not run.
 #
 #   kspkan     our own KSP mod manager, from the kspkan repo, cloned into
-#              ~/.system/share/kspkan, built and installed into
+#              ~/.system/share/kspkan-src, built and installed into
 #              ~/.system/bin like the suckless tools. Until that repo has
 #              its code (a Makefile), this says so and goes on.
 #   Principia  the n-body gravity mod, from a zip you download yourself
@@ -11,7 +11,9 @@
 #              release pages, so nothing here fetches it for you):
 #                PRINCIPIA_ZIP=~/Principia-Lie.zip ./install.sh ksp
 #              or it finds every Principia*.zip in ~ and asks which.
-#              It goes into GameData/Principia of KSP_DIR, or of the first KSP found
+#              Principia's folder is found inside the zip whatever its
+#              layout (principia_root), and goes into GameData/Principia
+#              of KSP_DIR, or of the first KSP found
 #              in the usual places (Steam, GOG, ~/KSP). An old one is
 #              moved to ~/.system/state/backup/ksp/Principia.<date>.
 #
@@ -91,11 +93,43 @@ principia_ask() {
 	done
 }
 
+# principia_root <dir>: the Principia folder somewhere under an
+# unpacked zip, whatever its layout (Principia/, GameData/Principia/,
+# a release folder around them, or the files right at the top). It is
+# the folder of ksp_plugin_adapter.dll, the part KSP loads; if that is
+# missing, the folder named Principia above principia.so. The shallowest
+# wins. Nothing if there is none.
+principia_root() {
+	f=$(find "$1" -type f -iname ksp_plugin_adapter.dll |
+		awk -F / '{ print NF " " $0 }' | sort -n | head -n 1 |
+		cut -d ' ' -f 2-)
+	if [ -n "$f" ]; then
+		dirname "$f"
+		return
+	fi
+	f=$(find "$1" -type f -name principia.so |
+		awk -F / '{ print NF " " $0 }' | sort -n | head -n 1 |
+		cut -d ' ' -f 2-)
+	[ -n "$f" ] || return 0
+	d=$(dirname "$f")
+	while [ "$d" != "$1" ] && [ "$d" != / ]; do
+		case $(basename "$d") in
+		[Pp]rincipia) echo "$d"; return ;;
+		esac
+		d=$(dirname "$d")
+	done
+	# no folder named Principia: the files are right at the top
+	echo "$1"
+}
+
 # ksp_libs_missing: the libraries principia.so can't find (ldd), or the
 # LLVM runtime packages not installed when there is no principia.so yet.
 ksp_libs_missing() {
-	so="$(ksp_dir)/GameData/Principia/Linux/x64/principia.so"
-	if [ -f "$so" ]; then
+	so=
+	p="$(ksp_dir)/GameData/Principia"
+	[ ! -d "$p" ] ||
+		so=$(find "$p" -type f -name principia.so | head -n 1)
+	if [ -n "$so" ]; then
 		ldd "$so" 2>/dev/null | awk '/not found/ { printf " %s", $1 }'
 	elif command -v portageq >/dev/null 2>&1; then
 		for a in $KSP_LIBS; do
@@ -196,11 +230,9 @@ install_principia() {
 	fi
 	command -v unzip >/dev/null 2>&1 ||
 		die "unzip not found (su -c '$DOTFILES/install.sh --deps')"
-	# Look before unpacking: only Principia/..., no absolute paths or
-	# "..", and not more than PRINCIPIA_MAX_BYTES in all.
-	bad=$(unzip -Z1 "$z" | grep -v -e '^Principia/' -e '^GameData/Principia/' |
-		head -n 1) || :
-	[ -z "$bad" ] || die "$z has $bad, not only Principia/; not installed"
+	# Look before unpacking: no absolute paths or "..", and not more
+	# than PRINCIPIA_MAX_BYTES in all. The layout inside the zip is not
+	# trusted to stay the same: Principia's folder is found afterwards.
 	! unzip -Z1 "$z" | grep -q -e '^/' -e '\.\./' -e '^\.\.' ||
 		die "$z has paths outside its directory; not installed"
 	size=$(unzip -Zt "$z" | awk '{ print $3 }')
@@ -215,15 +247,33 @@ install_principia() {
 		rm -rf "$tmp"
 		die "unpacking $z failed"
 	fi
-	new=$tmp/Principia
-	[ -d "$new" ] || new=$tmp/GameData/Principia
+	if [ -n "$(find "$tmp" -type l | head -n 1)" ]; then
+		rm -rf "$tmp"
+		die "$z has symbolic links; not installed"
+	fi
+	new=$(principia_root "$tmp")
+	if [ -z "$new" ]; then
+		rm -rf "$tmp"
+		die "no Principia in $z (no ksp_plugin_adapter.dll or principia.so)"
+	fi
+	[ -n "$(find "$new" -type f -name principia.so | head -n 1)" ] ||
+		warn "$z has no principia.so: is it the Linux build?"
+	# whatever else is next to it (other mods, read-me files) stays out
+	[ "$new" = "$tmp" ] ||
+	for o in "$(dirname "$new")"/*; do
+		[ -e "$o" ] && [ "$o" != "$new" ] || continue
+		say "skip    $(basename "$o") (also in the zip; not Principia)"
+	done
 	# the old one out of GameData (KSP would load both)
 	if [ -e "$dst" ]; then
 		userdir "$BACKUP/ksp"
 		mv "$dst" "$BACKUP/ksp/Principia.$STAMP"
 		say "backup  $dst -> $BACKUP/ksp/Principia.$STAMP"
 	fi
-	mv "$new" "$dst"
+	mv "$new" "$dst" || {
+		rm -rf "$tmp"
+		die "could not move Principia into $dst"
+	}
 	rm -rf "$tmp"
 	own "$dst"
 	userdir "$STATE/ksp"
