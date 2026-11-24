@@ -267,14 +267,14 @@ ck_net() {
 	if [ -u /usr/local/bin/vpnauth ]; then
 		ck_ok "vpnauth (your password for vpn commands)"
 		[ ! -f /usr/local/bin/vpnauth ] ||
-			[ -z "$(find "$n/vpnauth.c" -newer /usr/local/bin/vpnauth)" ] ||
+			[ -z "$(find -L "$n/vpnauth.c" -newer /usr/local/bin/vpnauth)" ] ||
 			ck_bad "vpnauth is older than vpnauth.c: su -c '$DOTFILES/install.sh net'"
 	else
 		ck_bad "vpnauth missing: vpn asks root's password (install.sh net)"
 	fi
 	if [ -x /usr/local/bin/vpntop ]; then
 		ck_ok "vpntop (the screen of vpn)"
-		[ -z "$(find "$n/vpntop.c" -newer /usr/local/bin/vpntop)" ] ||
+		[ -z "$(find -L "$n/vpntop.c" -newer /usr/local/bin/vpntop)" ] ||
 			ck_bad "vpntop is older than vpntop.c: su -c '$DOTFILES/install.sh net'"
 	else
 		ck_bad "vpntop missing: vpn shows its plain screen (install.sh net)"

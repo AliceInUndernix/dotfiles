@@ -13,13 +13,13 @@ count=0
 for drv in xhci_hcd xhci-pci-renesas ehci-pci ohci-pci uhci_hcd; do
     dir=/sys/bus/pci/drivers/$drv
     [ -d "$dir" ] || continue
-    for d in "$dir"/0000:*; do
+    for d in "$dir"/*:*:*.*; do
         [ -e "$d" ] || continue
         a=${d##*/}
         echo "reset-usb: $drv $a"
-        echo "$a" >| "$dir/unbind"
+        echo "$a" >| "$dir/unbind" || echo "reset-usb: unbind $a failed" >&2
         sleep 1
-        echo "$a" >| "$dir/bind"
+        echo "$a" >| "$dir/bind" || echo "reset-usb: bind $a failed" >&2
         count=$((count + 1))
     done
 done

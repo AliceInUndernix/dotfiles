@@ -192,12 +192,14 @@ cert_end() {
 # Always: IPv6 dropped, nothing comes in that wasn't asked for, .onion
 # addresses go into Tor, and the local network only with "vpn lan on".
 
-tor_uid() { id -u tor 2>/dev/null || say 65534; }
+# no tor user or vpnallow group: an id nothing has (not 65534, which
+# is nobody's and would let nobody's programs out)
+tor_uid() { id -u tor 2>/dev/null || say 4294967294; }
 
 ALLOW_GROUP=vpnallow
 allow_gid() {
     getent group "$ALLOW_GROUP" 2>/dev/null | cut -d: -f3 | grep . ||
-        say 65534
+        say 4294967294
 }
 
 nft_rules() {
@@ -1271,6 +1273,8 @@ cmd_refresh() {
     need_root refresh
     opened=no
     FETCH_DNS=
+    before=$(cat "$RUN/fwmode" 2>/dev/null)
+    case $before in ''|refresh) before=closed ;; esac
     st=$(sed -n 's/^state=//p' "$RUN/status" 2>/dev/null)
     lv=$(sed -n 's/^level=//p' "$RUN/status" 2>/dev/null)
     if ! nft list table inet vpn >/dev/null 2>&1; then
@@ -1310,7 +1314,8 @@ cmd_refresh() {
         fi ;;
     esac
     k=
-    [ $opened = no ] || firewall closed
+    # back to the mode it had (sandbox, torvpn...), not always closed
+    [ $opened = no ] || firewall "$before"
     FETCH_DNS=
     if [ $rc -ne 0 ]; then
         warn "could not get them (error $rc)"
@@ -2170,8 +2175,13 @@ boot)
     need_root boot
     [ ! -e "$ETC/off" ] || exit 0
     S_LEVEL=$(cur_level)
-    firewall closed
-    random_macs ;;
+    # a firewall that did not load means an open network: say so, and
+    # fail, so OpenRC shows it at boot
+    rc=0
+    firewall closed || rc=1
+    [ $rc -eq 0 ] || warn "the firewall did not load: the network is OPEN"
+    random_macs
+    exit $rc ;;
 firewall)
     need_root firewall
     S_LEVEL=$(cur_level)

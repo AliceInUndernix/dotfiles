@@ -33,7 +33,10 @@ xss-lock -- slock &
 # Trackball: stop false double clicks and change buttons (see
 # ballfix/README). Add -m FROM=TO to change a button, e.g. -m side=middle.
 if command -v ballfix >/dev/null 2>&1; then
-	ballfix &
+	# again after an unplug or a USB reset, which end it; the loop
+	# stops with the X session ($$ becomes dwm by the exec below)
+	x=$$
+	( while kill -0 "$x" 2>/dev/null; do ballfix; sleep 2; done ) &
 fi
 
 # Status text on the right of dwm's bar (Mod+b shows the bar): the date

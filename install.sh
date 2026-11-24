@@ -98,6 +98,9 @@ case ${1:-} in pick|--pick)
 		say "these need root: su -c '$DOTFILES/install.sh$rootp'"
 	exit $rc ;;
 esac
+EMERGE_OPTS=-qv  # -a: -qva, so emerge asks before it builds anything
+APT_OPTS=-y      # -a: apt and pacman ask too
+PACMAN_OPTS=--noconfirm
 # uninstall: install/uninstall.sh
 case ${1:-} in uninstall|--uninstall)
 	shift
@@ -120,9 +123,6 @@ want_all=no
 ask=no
 asked=
 parts=
-EMERGE_OPTS=-qv  # -a: -qva, so emerge asks before it builds anything
-APT_OPTS=-y      # -a: apt and pacman ask too
-PACMAN_OPTS=--noconfirm
 # check: only look, and before anything else is done
 case ${1:-} in check|--check)
 	shift
@@ -411,7 +411,7 @@ fi
 # take group and other permissions off everything in their home.
 chmod 700 "$HOME"
 # slock is left alone: it is root's, so you could no longer run it.
-n=$(find "$HOME" ! -type l ! -path "$SYSBIN/slock" -user "$USER_NAME" \
+n=$(find "$HOME" -xdev ! -type l ! -path "$SYSBIN/slock" -user "$USER_NAME" \
 	-perm /077 -print -exec chmod go= {} + | wc -l)
 [ "$n" -eq 0 ] || say "private $n files and directories in $HOME (only $USER_NAME and root)"
 [ -z "$skipped" ] ||

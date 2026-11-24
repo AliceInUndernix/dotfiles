@@ -186,7 +186,15 @@ pick() {
 		for w in $line; do
 			case $w in
 			q|quit) return 1 ;;
-			a|all) chosen="deps $PARTS" ;;
+			a|all)	# like install.sh all: ksp and the browsers
+				# only when picked by number
+				chosen=deps
+				for p in $PARTS; do
+					case " $ONLY_NAMED " in
+					*" $p "*) ;;
+					*) chosen="$chosen $p" ;;
+					esac
+				done ;;
 			n|none) chosen= ;;
 			0|deps) chosen=$(toggle "$chosen" deps) ;;
 			[1-9]|[1-9][0-9])
