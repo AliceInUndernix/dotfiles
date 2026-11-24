@@ -25,7 +25,7 @@ install_nvim() {
 		userdir "$pack"
 		tar -xzf "$tarball" -C "$pack"
 		if [ -d "$pack/$name/doc" ] && command -v nvim >/dev/null 2>&1; then
-			nvim --headless -u NONE -i NONE -n -c "helptags $pack/$name/doc" -c q >/dev/null 2>&1 || :
+			as_user "nvim --headless -u NONE -i NONE -n -c 'helptags $pack/$name/doc' -c q" >/dev/null 2>&1 || :
 		fi
 		own "$pack/$name"
 		say "plugin  $name (from archive)"
@@ -301,7 +301,9 @@ install_steno() {
 			usermod -aG "$g" "$USER_NAME"
 			say "group   $USER_NAME in $g (the Moonlander's serial port; log in again)"
 		fi
-		su -s /bin/sh "$USER_NAME" -c "INSTALL_LOG='$INSTALL_LOG' '$DOTFILES/install.sh' steno"
+		fix_owner >/dev/null
+		su -s /bin/sh "$USER_NAME" -c "INSTALL_LOG='$INSTALL_LOG' \
+INSTALL_NESTED=yes '$DOTFILES/install.sh' steno"
 		return
 	fi
 	in_group "$g" ||

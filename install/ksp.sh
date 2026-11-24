@@ -202,8 +202,9 @@ install_ksp() {
 			warn "install libc++, libc++abi and libunwind (LLVM 20+)" \
 				"with your package manager"
 		fi
+		fix_owner >/dev/null
 		su -s /bin/sh "$USER_NAME" -c "INSTALL_LOG='$INSTALL_LOG' \
-KSP_DIR='${KSP_DIR:-}' PRINCIPIA_ZIP='${PRINCIPIA_ZIP:-}' \
+INSTALL_NESTED=yes KSP_DIR='${KSP_DIR:-}' PRINCIPIA_ZIP='${PRINCIPIA_ZIP:-}' \
 '$DOTFILES/install.sh' ksp"
 		return
 	fi

@@ -49,6 +49,17 @@ LOG_DIR=$STATE/install
 # own <path>...: give files root made in the user's home to the user.
 own() { chown -hR "$USER_NAME:$USER_GROUP" "$@"; }
 
+# fix_owner: as root, give the user back what root's programs (fc-cache,
+# a package manager) wrote into the user's ~/.system; slock stays
+# root's. Done before the user's own runs and at the end. Prints how
+# many it changed.
+fix_owner() {
+	[ "$AS_ROOT" = yes ] || { echo 0; return 0; }
+	find "$SYSTEM" "$CONFIG" -xdev ! -path "$SYSBIN/slock" \
+		! -user "$USER_NAME" -print \
+		-exec chown -h "$USER_NAME:$USER_GROUP" {} + 2>/dev/null | wc -l
+}
+
 # userdir <dir>: mkdir -p, with every directory it creates owned by the user.
 userdir() {
 	[ -d "$1" ] && return

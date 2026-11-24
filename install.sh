@@ -284,6 +284,10 @@ if [ "$want_deps" = yes ]; then
 	install_packages
 fi
 
+# migrate_home: what older versions (and programs without these
+# dotfiles) left in ~ moves into ~/.system. A run that root starts as
+# the user for one part (INSTALL_NESTED) skips it: root's run did it.
+migrate_home() {
 # ~/.local/bin is no longer used: everything lives in ~/.system/bin.
 # Links this script made there are dropped (they are made again in
 # ~/.system/bin); anything else is moved over, never deleted. If a name
@@ -321,8 +325,11 @@ moveinto_r() {
 		[ -e "$f" ] || [ -L "$f" ] || continue
 		t=$2/$(basename "$f")
 		if [ ! -e "$t" ] && [ ! -L "$t" ]; then
-			mv "$f" "$t"
-			echo "move  $f -> $t" >> "$MOVED"
+			if mv "$f" "$t" 2>/dev/null; then
+				echo "move  $f -> $t" >> "$MOVED"
+			else
+				echo "kept  $f (could not move it to $t)" >> "$MOVED"
+			fi
 		elif [ -d "$f" ] && [ ! -L "$f" ] && [ -d "$t" ] && [ ! -L "$t" ]; then
 			( moveinto_r "$f" "$t" )
 		else
@@ -376,6 +383,8 @@ if [ -f "$HOME/.ksh_history" ] && [ ! -e "$STATE/ksh/history" ]; then
 	mv "$HOME/.ksh_history" "$STATE/ksh/history"
 	say "move    $HOME/.ksh_history -> $STATE/ksh/history"
 fi
+}
+[ "${INSTALL_NESTED:-}" = yes ] || migrate_home
 
 # Each part on its own: one that fails (no internet for steno, say)
 # doesn't stop the others; they are listed at the end.
@@ -395,8 +404,7 @@ done
 # their caches and state (fc-cache, nvim): they belong to the user,
 # or the user's programs can't update them. slock stays root's.
 if [ "$AS_ROOT" = yes ]; then
-	n=$(find "$SYSTEM" "$CONFIG" -xdev ! -path "$SYSBIN/slock" ! -user "$USER_NAME" \
-		-print -exec chown -h "$USER_NAME:$USER_GROUP" {} + 2>/dev/null | wc -l)
+	n=$(fix_owner)
 	[ "$n" -eq 0 ] || say "owner   $n files root made in $SYSTEM and $CONFIG -> $USER_NAME"
 fi
 # The user's files are theirs alone, like their umask 077 makes new ones:
