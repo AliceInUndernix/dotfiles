@@ -617,7 +617,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
      * T / K, middle P / W, index H / R, and the star (*) on the index
      * stretch keys g and k. Right: the star on the index stretch keys m
      * and x, then index F / R (n, h), middle P / B, ring L / G, pinky T / S
-     * (a and the : key), and D / Z on the outer pinky column.
+     * (a and the / key), and D / Z on the outer pinky column.
      * All four * keys count as the same star.
      *
      * Every other key is KC_NO (not transparent) on purpose, so nothing from
