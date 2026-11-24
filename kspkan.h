@@ -283,6 +283,8 @@ struct plan {
 int install_plan(struct archive *a, struct jnode *mod, const char *id,
     struct plan *p, char *err, int errsz);
 void plan_free(struct plan *p);
+int install_check(struct ctx *c, struct plan *p, const char *id,
+    char *err, int errsz);
 int install_extract(struct ctx *c, struct archive *a, struct plan *p,
     const char *id, const char *version, int autoinst, char *err,
     int errsz);

@@ -409,16 +409,14 @@ int remove_module(struct ctx *c, const char *id)
     return 0;
 }
 
-int install_extract(struct ctx *c, struct archive *a, struct plan *p,
-    const char *id, const char *version, int autoinst, char *err,
-    int errsz)
+/* refuse a plan whose files would clobber a directory, another
+   module's file or (without -f) a file kspkan did not install */
+int install_check(struct ctx *c, struct plan *p, const char *id,
+    char *err, int errsz)
 {
     struct stat st;
-    struct inst *m;
     const char *owner;
-    unsigned char *data;
-    char *full, *dir, *slash;
-    long len;
+    char *full;
     int i, rc;
 
     for (i = 0; i < p->n; i++) {
@@ -443,6 +441,23 @@ int install_extract(struct ctx *c, struct archive *a, struct plan *p,
                 "(use -f): ", p->v[i].dest);
             return -1;
         }
+    }
+    return 0;
+}
+
+int install_extract(struct ctx *c, struct archive *a, struct plan *p,
+    const char *id, const char *version, int autoinst, char *err,
+    int errsz)
+{
+    struct inst *m;
+    unsigned char *data;
+    char *full, *dir, *slash;
+    long len;
+    int i, rc;
+
+    rc = install_check(c, p, id, err, errsz);
+    if (rc < 0) {
+        return -1;
     }
     m = registry_find(&c->reg, id);
     if (m != NULL) {

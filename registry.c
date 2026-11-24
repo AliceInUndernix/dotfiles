@@ -133,6 +133,7 @@ int registry_load(struct ctx *c)
             *nl = 0;
         }
         if (line[0] == 'M' && line[1] == '\t') {
+            cur = NULL;
             f1 = line + 2;
             f2 = strchr(f1, '\t');
             f3 = NULL;
