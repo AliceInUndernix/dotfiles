@@ -58,7 +58,11 @@ install_net() {
 	done
 	[ -e /etc/vpn/orig/localtime.link ] ||
 		readlink /etc/localtime > /etc/vpn/orig/localtime.link || :
-	echo "$DOTFILES" > /etc/vpn/repo
+	# who the configs are for: vpn on runs root's own copy of these
+	# install scripts (net_snapshot) for that user, never the repo's,
+	# which the user can write to
+	echo "$USER_NAME" > /etc/vpn/user
+	rm -f /etc/vpn/repo
 	rm -f /etc/vpn/off
 	root_link "$(root_put "$net/vpn" net/bin/vpn 755)" /usr/local/bin/vpn
 	# vpnctl: may run vpn's commands with their own password (vpnauth);
@@ -231,8 +235,27 @@ install_net() {
 				warn "$s is in runlevel $l: vpn runs OpenVPN itself (rc-update del $s $l)"
 			done
 	done
+	net_snapshot
 	say "net     ready: reboot, or start it now with"
 	say "        rc-service vpnfw start && rc-service vpn start"
+}
+
+# net_snapshot: install.sh, install/ and net/ copied into root's
+# ~/.system/net/src, root's alone. "vpn on" (run as root) uses this
+# copy, so nothing the user can change runs as root. Each install.sh
+# net from the repo makes it new; run from the copy itself it stays.
+net_snapshot() {
+	s=$ROOT_SYSTEM/net/src
+	[ "$DOTFILES" != "$s" ] || return 0
+	rm -rf "$s.new"
+	install -d -m 700 "$s.new"
+	cp "$DOTFILES/install.sh" "$s.new/"
+	cp -R "$DOTFILES/install" "$DOTFILES/net" "$s.new/"
+	chown -R root:root "$s.new"
+	chmod -R go-rwx "$s.new"
+	rm -rf "$s"
+	mv "$s.new" "$s"
+	say "copy    install scripts -> $s (for vpn on)"
 }
 
 # --- check -------------------------------------------------------------

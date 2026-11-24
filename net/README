@@ -107,6 +107,9 @@ Commands
 Every command but "vpn status", "vpn watch" and "vpn run" asks for your own
 password (not root's): vpnauth checks it and runs vpn as root. You
 must be in group vpnctl (install.sh net puts you there; log in again).
+vpn on (run as root) never runs the repo's install.sh, which you can
+change: install.sh net keeps a copy of install.sh, install/ and net/ in
+root's ~/.system/net/src, root's alone, and vpn on runs that.
 vpn run needs group vpnallow, also set up by install.sh net.
 
 Tor ports. Each SOCKS port has its own Tor circuits and exits, so a

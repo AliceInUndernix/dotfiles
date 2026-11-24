@@ -1448,14 +1448,24 @@ cmd_off() {
     say "To turn it all back on: vpn on (or pick any level)."
 }
 
+# root's own copy of install.sh and net/ (install.sh net makes it),
+# and the user the configs are for
+root_src() { say "$(cd -P "$ETC/.." 2>/dev/null && pwd)/src"; }
+net_user() { cat "$ETC/user" 2>/dev/null; }
+
 cmd_on() {
     need_root on
-    repo=$(cat "$ETC/repo" 2>/dev/null)
-    [ -x "$repo/install.sh" ] ||
-        die "can't find the dotfiles ($ETC/repo): run install.sh net"
+    src=$(root_src)
+    u=$(net_user)
+    # only root's copy: the repo is the user's to change, and this
+    # runs as root
+    [ -x "$src/install.sh" ] && [ "$(stat -c %u "$src/install.sh")" = 0 ] &&
+        [ -n "$u" ] ||
+        die "no root copy of install.sh in $src: run install.sh net as root"
     rm -f "$ETC/off"
-    say "Turning vpn back on: $repo/install.sh net"
-    "$repo/install.sh" net || die "install.sh net failed (its log says why)"
+    say "Turning vpn back on: $src/install.sh net (for $u)"
+    INSTALL_USER=$u "$src/install.sh" net ||
+        die "install.sh net failed (its log says why)"
     # vpn off gave the cards their own MACs back, and vpnfw may still
     # count as started, so it would not make new ones until a reboot
     random_macs
@@ -1574,7 +1584,7 @@ st_back() {
 cmd_selftest() {
     need_root selftest
     [ ! -e "$ETC/off" ] || die "vpn is off (level -1): vpn on first"
-    owner=$(stat -c %U "$(cat "$ETC/repo" 2>/dev/null)" 2>/dev/null)
+    owner=$(net_user)
     phys=$(ip -4 route show default 2>/dev/null | grep -v ' dev tun' |
         sed -n 's/.* dev \([^ ]*\).*/\1/p' | head -n 1)
     router=$(ip -4 route show default 2>/dev/null | grep -v ' dev tun' |
@@ -1939,15 +1949,17 @@ rtry() {
 
 cmd_rescue() {
     need_root rescue
-    repo=$(cat "$ETC/repo" 2>/dev/null)
-    u=$(stat -c %U "$repo" 2>/dev/null)
+    src=$(root_src)
+    u=$(net_user)
     home=$(getent passwd "$u" 2>/dev/null | cut -d : -f 6)
     if [ -z "$u" ] || [ "$u" = root ] || [ ! -d "$home" ]; then
         u=root home=/root
     fi
     RESCUE=$home/vpn-rescue-$(date -u +%Y%m%d-%H%M%S).txt
-    : > "$RESCUE"
-    chmod 600 "$RESCUE"
+    # a new file only (set -C), so a link put there can't send root's
+    # writing elsewhere
+    ( umask 077; set -C; : > "$RESCUE" ) ||
+        die "can't make $RESCUE (is something there already?)"
     rlog "vpn rescue, $(date -u '+%Y-%m-%d %H:%M:%S') UTC"
     rlog "Everything goes to $RESCUE (send it to me)."
     rlog ""
@@ -1968,8 +1980,8 @@ cmd_rescue() {
     rcollect "kernel (network)" "dmesg | grep -i \
         -e eth -e wlp -e wlan -e iwl -e firmware -e link -e dhcp | tail -n 40"
     rcollect "processes" "ps -eo pid,ppid,stat,args --forest"
-    [ ! -x "$repo/install.sh" ] ||
-        rcollect "install.sh check" "$repo/install.sh check </dev/null"
+    [ ! -x "$src/install.sh" ] || rcollect "install.sh check net" \
+        "INSTALL_USER=$u $src/install.sh check net </dev/null"
     rlog "  saved"
     rlog ""
     worked=
