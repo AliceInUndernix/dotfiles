@@ -1,0 +1,32 @@
+#!/bin/sh
+# reset-usb: unbind and rebind every USB host controller so the kernel
+# enumerates all USB devices again. Must be run as root.
+# Usage: reset-usb
+# Note: devices on the rebound controllers (keyboard too) drop for a moment.
+
+if [ "$(id -u)" != 0 ]; then
+    echo "reset-usb: must be run as root" >&2
+    exit 1
+fi
+
+count=0
+for drv in xhci_hcd xhci-pci-renesas ehci-pci ohci-pci uhci_hcd; do
+    dir=/sys/bus/pci/drivers/$drv
+    [ -d "$dir" ] || continue
+    for d in "$dir"/0000:*; do
+        [ -e "$d" ] || continue
+        a=${d##*/}
+        echo "reset-usb: $drv $a"
+        echo "$a" >| "$dir/unbind"
+        sleep 1
+        echo "$a" >| "$dir/bind"
+        count=$((count + 1))
+    done
+done
+
+if [ "$count" = 0 ]; then
+    echo "reset-usb: no USB controllers found" >&2
+    exit 1
+fi
+echo "reset-usb: reset $count controller(s)"
+exit 0

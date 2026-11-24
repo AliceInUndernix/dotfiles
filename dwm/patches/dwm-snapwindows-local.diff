@@ -1,0 +1,167 @@
+diff --git a/dwm/config.h b/dwm/config.h
+index 3c8f755..6beac9a 100644
+--- a/dwm/config.h
++++ b/dwm/config.h
+@@ -3,6 +3,7 @@
+ /* appearance */
+ static const unsigned int borderpx  = 1;        /* border pixel of windows */
+ static const unsigned int snap      = 32;       /* snap pixel */
++static const unsigned int winsnap   = 16;       /* snap to other windows' edges, pixel */
+ static const int showbar            = 0;        /* 0 means no bar (Mod+b shows it) */
+ static const int topbar             = 1;        /* 0 means bottom bar */
+ static const char *fonts[]          = { "Liberation Mono:pixelsize=25" };
+diff --git a/dwm/dwm.c b/dwm/dwm.c
+index cee1705..93d5535 100644
+--- a/dwm/dwm.c
++++ b/dwm/dwm.c
+@@ -206,6 +206,7 @@ static void resize(Client *c, int x, int y, int w, int h, int interact);
+ static void resizeclient(Client *c, int x, int y, int w, int h);
+ static void resizemouse(const Arg *arg);
+ static void restack(Monitor *m);
++static int snapto(Client *c, int vert, int a, int b, int lo, int hi, int *d);
+ static void run(void);
+ static void scan(void);
+ static int sendevent(Client *c, Atom proto);
+@@ -1363,7 +1364,7 @@ motionnotify(XEvent *e)
+ void
+ movemouse(const Arg *arg)
+ {
+-	int x, y, ocx, ocy, nx, ny;
++	int x, y, ocx, ocy, nx, ny, d;
+ 	Client *c;
+ 	Monitor *m;
+ 	XEvent ev;
+@@ -1396,14 +1397,11 @@ movemouse(const Arg *arg)
+ 
+ 			nx = ocx + (ev.xmotion.x - x);
+ 			ny = ocy + (ev.xmotion.y - y);
+-			if (abs(selmon->wx - nx) < snap)
+-				nx = selmon->wx;
+-			else if (abs((selmon->wx + selmon->ww) - (nx + WIDTH(c))) < snap)
+-				nx = selmon->wx + selmon->ww - WIDTH(c);
+-			if (abs(selmon->wy - ny) < snap)
+-				ny = selmon->wy;
+-			else if (abs((selmon->wy + selmon->wh) - (ny + HEIGHT(c))) < snap)
+-				ny = selmon->wy + selmon->wh - HEIGHT(c);
++			/* snap to the screen edges and to other windows' edges */
++			if (snapto(c, 0, nx, nx + WIDTH(c), ny, ny + HEIGHT(c), &d))
++				nx += d;
++			if (snapto(c, 1, ny, ny + HEIGHT(c), nx, nx + WIDTH(c), &d))
++				ny += d;
+ 			if (!c->isfloating && selmon->lt[selmon->sellt]->arrange
+ 			&& (abs(nx - c->x) > snap || abs(ny - c->y) > snap))
+ 				togglefloating(NULL);
+@@ -1706,6 +1704,7 @@ void
+ resizemouse(const Arg *arg)
+ {
+ 	int px, py, nx, ny, nw, nh, ex, ey, left, top, di;
++	int e, d, snw, snh, sw0, sh0;
+ 	unsigned int dui;
+ 	Window dummy;
+ 	Client *c;
+@@ -1745,16 +1744,34 @@ resizemouse(const Arg *arg)
+ 				continue;
+ 			lasttime = ev.xmotion.time;
+ 
++			/* the dragged outer edges snap to the screen edges and
++			 * to other windows' edges */
+ 			if (left) {
+ 				ex = c->x + c->w + 2 * c->bw;
+-				nw = MAX(ex - ev.xmotion.x - 2 * c->bw, 1);
+-			} else
+-				nw = MAX(ev.xmotion.x - c->x - 2 * c->bw + 1, 1);
++				e = ev.xmotion.x;
++				if ((snw = snapto(c, 0, e, e, c->y, c->y + HEIGHT(c), &d)))
++					e += d;
++				nw = MAX(ex - e - 2 * c->bw, 1);
++			} else {
++				e = ev.xmotion.x + 1;
++				if ((snw = snapto(c, 0, e, e, c->y, c->y + HEIGHT(c), &d)))
++					e += d;
++				nw = MAX(e - c->x - 2 * c->bw, 1);
++			}
+ 			if (top) {
+ 				ey = c->y + c->h + 2 * c->bw;
+-				nh = MAX(ey - ev.xmotion.y - 2 * c->bw, 1);
+-			} else
+-				nh = MAX(ev.xmotion.y - c->y - 2 * c->bw + 1, 1);
++				e = ev.xmotion.y;
++				if ((snh = snapto(c, 1, e, e, c->x, c->x + WIDTH(c), &d)))
++					e += d;
++				nh = MAX(ey - e - 2 * c->bw, 1);
++			} else {
++				e = ev.xmotion.y + 1;
++				if ((snh = snapto(c, 1, e, e, c->x, c->x + WIDTH(c), &d)))
++					e += d;
++				nh = MAX(e - c->y - 2 * c->bw, 1);
++			}
++			sw0 = nw;
++			sh0 = nh;
+ 			if (c->mon->wx + nw >= selmon->wx && c->mon->wx + nw <= selmon->wx + selmon->ww
+ 			&& c->mon->wy + nh >= selmon->wy && c->mon->wy + nh <= selmon->wy + selmon->wh)
+ 			{
+@@ -1768,6 +1785,12 @@ resizemouse(const Arg *arg)
+ 				nx = c->x;
+ 				ny = c->y;
+ 				applysizehints(c, &nx, &ny, &nw, &nh, 1);
++				/* a snapped edge lands exactly, size increments
++				 * (terminal cells) or not */
++				if (snw)
++					nw = MAX(sw0, bh);
++				if (snh)
++					nh = MAX(sh0, bh);
+ 				nx = left ? ex - nw - 2 * c->bw : c->x;
+ 				ny = top ? ey - nh - 2 * c->bw : c->y;
+ 				if (nx != c->x || ny != c->y || nw != c->w || nh != c->h)
+@@ -1997,6 +2020,51 @@ setmfact(const Arg *arg)
+ 	arrange(selmon);
+ }
+ 
++/* Snap along one axis (vert: 0 x, 1 y). a and b are the outer edges that
++ * may snap (pass the same for one edge), lo..hi the window's extent on the
++ * other axis. Targets are the monitor's window area edges (within snap) and
++ * the outer edges of other visible windows on the monitor that are level
++ * with it (within winsnap). Sets *d to the nearest shift, returns 0 if none. */
++int
++snapto(Client *c, int vert, int a, int b, int lo, int hi, int *d)
++{
++	Client *o;
++	Monitor *m = c->mon;
++	int t[2], e[2], i, j, olo, ohi, dd, lim, found = 0;
++
++	e[0] = a;
++	e[1] = b;
++	t[0] = vert ? m->wy : m->wx;
++	t[1] = t[0] + (vert ? m->wh : m->ww);
++	o = NULL;
++	lim = snap;
++	for (;;) {
++		for (i = 0; i < 2; i++)
++			for (j = 0; j < 2; j++) {
++				dd = t[j] - e[i];
++				if (abs(dd) < lim && (!found || abs(dd) < abs(*d))) {
++					*d = dd;
++					found = 1;
++				}
++			}
++		for (o = o ? o->next : m->clients; o; o = o->next) {
++			if (o == c || !ISVISIBLE(o) || o->isfullscreen)
++				continue;
++			olo = vert ? o->x : o->y;
++			ohi = olo + (vert ? WIDTH(o) : HEIGHT(o));
++			if (ohi + (int)winsnap < lo || olo - (int)winsnap > hi)
++				continue; /* not level with it */
++			break;
++		}
++		if (!o)
++			break;
++		t[0] = vert ? o->y : o->x;
++		t[1] = t[0] + (vert ? HEIGHT(o) : WIDTH(o));
++		lim = winsnap;
++	}
++	return found;
++}
++
+ void
+ setup(void)
+ {

@@ -1,0 +1,10 @@
+# Programs for dmenu_apps (Mod+p in dwm), linked to ~/.system/config/dmenu/apps.
+# One per line:  name<TAB>command   or just   command
+# Order here only matters until you've used them; then the most used come first.
+
+# Browsers
+icecat	icecat
+chromium	chromium-browser
+
+# Claude desktop (installed by hand with get-claude-desktop.sh)
+claude	claude-desktop

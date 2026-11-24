@@ -1,0 +1,97 @@
+# Handoff: Neovim config for steno prose writing
+
+Written 2026-11-11 so a new Claude project can continue this work from the
+files alone. Read this first, then `README.md` (user guide), then the code.
+The comments in `nvim/init.lua` and `nvim/lua/typetrack.lua` describe the
+current behaviour section by section.
+
+## Files
+
+In the dotfiles repo (github.com/AliceInUndernix/dotfiles); install.sh
+links the whole `nvim/` directory to `~/.system/config/nvim`.
+
+```
+nvim/
+  HANDOFF.md            this file
+  README.md             user guide: install, keys, every feature
+  init.lua              the config
+  lua/typetrack.lua     book typing checker (ghost/check modes)
+```
+
+## The user and their setup
+
+- Gentoo Linux. Neovim 0.11.7 from the stable tree. Upgrading to 0.12
+  was attempted and needs `~amd64` keywords for both
+  `app-editors/neovim` and `dev-lua/luv` in
+  `/etc/portage/package.accept_keywords/neovim`; whether they finished
+  is unknown. The config must keep working on 0.11 (no `vim.pack`).
+- Writes fiction with stenography (steno, the engine in this repo).
+  Spelling comes from steno,
+  so spell checks are off by default.
+- Terminal: st 0.9.3 (patched, see `st/UPSTREAM`), often with tmux,
+  under dwm on X11. Changes go to the dotfiles repo; `~/.system/config/nvim` is
+  a symlink to it, so nothing needs copying.
+- Uses Sioyek as EPUB/PDF reader (the development version, which
+  `install.sh --deps` builds on Gentoo).
+- Prefers plain explanations and a config that stays close to default.
+
+## What was asked for, and how it was done
+
+| Request | Implementation | Status |
+|---|---|---|
+| Minimal config, colour column 80, hybrid line numbers | options at top of init.lua | user ran it |
+| Dark theme "Habamax" | built-in `habamax`; Gruvbox dropped | user ran it |
+| Prose mode, wrap at 80, distraction-free | zen-mode.nvim + vim-pencil (hard wrap), `Space p` | user ran it |
+| Plugins on 0.11 | git clone into pack/plugins/opt + packadd; vim.pack needs 0.12 | user ran it |
+| Remember cursor, folds, undo between sessions | undofile/viewdir/shada in stdpath("state"), mkview/loadview autocmds | not confirmed |
+| Single Enter must not be pulled back into the paragraph | `pencil#autoformat = 0`; `gqip` to re-wrap | fixed after user report, not confirmed |
+| Arrows move by screen line in prose mode only | buffer-local gj/gk maps added on_open, removed on_close | not confirmed |
+| Spell check toggle | `Space s` | not confirmed |
+| Em dash etc. from Plover arrived as "2014" | was an insert-mode `<C-S-u>` map with st and tmux passing Ctrl+Shift+U; removed 2026-11-17 with Plover: steno types symbols directly | removed |
+| System clipboard | `clipboard=unnamedplus`; xclip installed by `install.sh --deps` | not confirmed |
+| Mark typed words green/red in Sioyek | lua/typetrack.lua, `:TypeTrack`, `Space t` | Neovim side tested; never run against Sioyek; Sioyek part now off (crashed) |
+| Skipped words were never flagged; ghost mode (grey book text to type over, wrong letters red) and check mode (no ghosts); letter-by-letter and word-by-word; skip front matter (2026-11-14) | typetrack.lua rewritten around align() + char_diff(); `:TypeGhost`/`Space T`, `:TypeTrack`/`Space t`, `:TypeChapter` (TOC picker) | tested headless on Neovim 0.9.5 only; inline ghosts not seen in a real terminal. The request ended at "skip chapters if": asked what was meant |
+| Retyper faster; ghost text shows the whole paragraph, then the whole next one (2026-11-17) | typetrack.lua: one unzip per book, cheaper HTML and word splitting, changed lines only (on_change), align() stops where it rejoins the last run, banded edit distance; show_ghost + make_room | book load 1.4 s to 0.6 s, fixing a word far up 56 ms to 1-3 ms (250k-word test book, 0.9.5); fuzz-tested against a full re-check; ghost paragraph seen in tmux on 0.9.5 (eol, not inline) |
+
+## Open issues (pick these up first)
+
+1. **Ghost mode not yet seen in a real terminal** (inline virt text, Neovim 0.10+). Ask how it looks and whether skipped words are flagged right.
+2. **Sioyek tracker has never run against Sioyek** (now off by default). It needs the
+   development Sioyek (`select_current_search_match` command), not 2.0.0
+   or sioyek3-alpha0. `install.sh --deps` now builds it on Gentoo
+   (GURU's `sioyek-9999`, newest commit each run, with `--update --deep`
+   for the earlier Qt slot conflict).
+3. **init.lua itself has not been run by Claude** (only a key test, on
+   an older Neovim). The user's reports confirm the rest.
+   Ask for `:messages` output if anything errors on start.
+
+## Rules for editing
+
+- Keep it minimal and close to Neovim defaults; no plugin manager.
+- Keep everything that must work without plugins above the plugin
+  section in init.lua: the file `return`s early if zen-mode or pencil
+  fail to download.
+- Leader is Space. Taken: w, p, s, t, T, Space, /, b, h.
+- No Tree-sitter plugin and no Harper (dropped 2026-11-15 at the user's
+  request): Vim's built-in syntax is enough, and Harper needed Rust. The
+  user does not want LSP completion or error checking for code (asked
+  2026-11-12).
+  Declined for now: gitsigns, vim-fugitive, language servers.
+  vim-tmux-navigator was tried and removed at the user's request (2026-11-12).
+- plover-vim-tutor was removed with Plover (2026-11-17).
+- No Claude (or other AI) grammar check or proofreading: removed
+  2026-11-16 at the user's request.
+- Keep startup light (2026-11-17, measured with `nvim --startuptime`):
+  options are set with `vim.o`, not `vim.opt`; zen-mode is set up at the
+  first `Space p` and typetrack.lua is loaded at the first `:Type*` or
+  `Space t`/`T`, not at start. init.lua went from about 5.0 to 3.1 ms.
+  The biggest remaining cost is Vim's own markdown syntax, which pulls in
+  HTML, CSS, JavaScript and VBScript highlighting (about 6 ms per .md
+  file opened); left as it is.
+- Say plainly what was and wasn't tested. Commit and push changes to
+  main in the dotfiles repo.
+
+## Ideas offered but not taken
+
+- A starter steno dictionary of ~20 Vim command strokes (Esc, save,
+  undo, ciw, gq...). Offered by the steno research, not requested yet.

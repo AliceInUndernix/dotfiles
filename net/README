@@ -1,0 +1,246 @@
+net: Riseup VPN, Tor and a kill switch
+======================================
+
+For Gentoo with OpenRC. Set up as root with:
+
+    su -c '~/dotfiles/install.sh net'
+
+then reboot (or: rc-service vpnfw start && rc-service vpn start).
+
+
+What happens at boot
+--------------------
+
+1. vpnfw (boot runlevel, before the network is up) loads the kill
+   switch: no IPv6 at all, and IPv4 only from root to Riseup's
+   servers. Nothing else can get out, so nothing leaks while the rest
+   starts.
+2. vpn (default runlevel) picks a server. Zones beat speed: the zones
+   are in /etc/vpn/countries (white, then gray, then black). In the
+   first zone with any working server, up to 3 random servers are
+   speed-tested through the tunnel (5 MB or 6 seconds each, from the
+   mirrors in /etc/vpn/mirrors), and the fastest one is used (when it
+   was the last one tested, its tunnel stays up: one connection less).
+   Nothing depends on where you are.
+3. OpenVPN connects to that server. If the certificate expires
+   within 14 days or the server list is a week old, both are renewed,
+   through the tunnel.
+4. Tor starts, after OpenVPN, so it goes out through the VPN. The
+   clock is set from two mirrors' answers through Tor (each on its own
+   circuit, both asked at once), when they agree; never NTP. Only if Tor can't get going
+   (a clock far off stops it) is it set through the tunnel once, and
+   Tor started again. In level 0 and the sandbox it is set through
+   Tor too.
+5. /etc/resolv.conf says "nameserver 127.0.0.1" and is locked (chattr
+   +i): every DNS lookup goes to Tor. DNS sent to any other server is
+   sent to Tor too.
+
+If the tunnel drops, vpn connects to the same server again; if that
+fails 3 times it picks again once. If it still doesn't work, or it
+drops 3 times in 10 minutes, it stops and you stay offline: your
+prompt shows VPN, and you choose what to do (vpn).
+
+A black country is only used when no white or gray server works, and
+then everything goes through Tor (level 3).
+
+
+Levels
+------
+
+    -1       everything off: kill switch, VPN and Tor gone, the system
+             files as before install.sh net, nothing at boot (vpn on,
+             or any other level, installs it all again)
+    0        "bare": your own IP, no VPN (DNS 1.1.1.1, for names
+             Tor's DNS can't resolve)
+    1        "vpn": everything through the VPN (Riseup's own DNS, in
+             the VPN)
+    2        "tor dns": the VPN, and DNS through Tor (the usual one)
+    3        "tor": the VPN, and every TCP connection goes through Tor;
+             anything else (UDP) is dropped
+    sandbox  your own IP, but only programs started with "vpn run" (and
+             Tor) can reach the network; nothing else goes out by
+             accident
+    offline  nothing goes out
+
+"vpn level 3" switches until reboot (between 1, 2 and 3 without a new
+connection); "vpn default 3" sets the level used at boot. In every
+level Tor runs for proxychains and the browser, IPv6 is off, nothing
+comes in that wasn't asked for, and .onion addresses work.
+
+The prompt shows VPN when something is wrong, or the level when it
+isn't 2 (L0, L1, L3, SANDBOX). It reads only /run/vpn, never the
+network; in ksh93 it is updated each time you press Enter (a prompt
+that runs code is garbled by ksh93 when a new window is resized).
+
+
+Commands
+--------
+
+    vpn status          state and level (anyone)
+    vpn status -v       server, country, Tor, DNS, firewall, clock,
+                        what it is doing now and the test results
+    vpn                 the screen: everything, one key each (below)
+    vpn watch           the short status, updated every second (anyone)
+    vpn log [N]         what happened and why: each server tried, its
+                        speed or why it failed, why a zone was given up
+    vpn rescue          no internet? saves a log to your home, fixes
+                        what it can step by step (DHCP, the cards' own
+                        MAC, a new server, level 0), else turns it all
+                        off; says what worked, offers a reboot
+    vpn report          everything needed to find a problem (MAC
+                        addresses hidden; read it before you send it)
+    vpn selftest        tries every level and feature one by one, then
+                        goes back; falls back to level -1 if it can't
+    vpn off, vpn on     level -1, and back
+    vpn level L         -1 0 1 2 3 sandbox offline, until reboot
+    vpn default L       the level at boot
+    vpn retry           pick a server again and connect
+    vpn refresh         a new server list and certificate from Riseup
+    vpn lan on|off      reach your local network (router, printer) or
+                        not; off by default, outgoing only
+    vpn firewall-off    no kill switch at all, until vpn firewall-on
+    vpn run PROGRAM     a program that may go online in the sandbox
+    proxychains PROGRAM run a program through Tor, on a port of its
+                        own (below)
+    proxychains -l      which program has which port
+
+Every command but "vpn status", "vpn watch" and "vpn run" asks for your own
+password (not root's): vpnauth checks it and runs vpn as root. You
+must be in group vpnctl (install.sh net puts you there; log in again).
+vpn run needs group vpnallow, also set up by install.sh net.
+
+Tor ports. Each SOCKS port has its own Tor circuits and exits, so a
+site can't link what comes through one port to what comes through
+another:
+
+    9200-9299  proxychains PROGRAM: each program gets one for itself,
+               the first time it runs, and keeps it (the list is
+               ~/.system/state/proxychains/ports; delete a line to
+               free a port). What the program starts uses its port too.
+    9150       IceCat      } set the browser's SOCKS5 proxy to
+    9151       Chromium    } 127.0.0.1 and its port, with DNS
+    9152 9153  any other   } through the proxy
+    9050       proxychains4 itself, or proxychains -f FILE
+    9059       vpn's clock
+
+Tor's settings (net/torrc): only a client, vanguards-lite (a fixed
+set of second relays for onion circuits, against guard discovery),
+padding to the guard, and Tor in its own seccomp sandbox (install.sh
+net builds tor with USE=seccomp for it). Bridges are
+ready in torrc but off: they need a transport program (lyrebird).
+
+When the VPN can't be reached at all, "vpn refresh" offers to open the
+firewall for root only, to DNS and HTTPS, to fetch a new list and
+certificate (your ISP and your router's DNS see that you ask Riseup;
+they see that you use Riseup anyway). When Riseup's HTTPS certificate
+can't be checked, it tells you and asks whether to go on without the
+check.
+
+
+The screen
+----------
+
+"vpn" opens vpntop, a full screen that looks like btop, in Habamax
+colours (24-bit). Boxes:
+
+    vpn          the traffic graph (download up, upload down) and, on
+                 the right, the state, the level, what is happening
+                 now (and for how many seconds), the server, uptime;
+                 the clock in the top border, the levels in the bottom
+                 one (the current one selected)
+    connection   address, speed at the test, Tor, clock, certificate
+    protection   firewall, DNS (Tor? locked?), IPv6, LAN, MAC
+    servers      how many each zone has, which zone is being tested
+                 (server 4 of 12, tested 2 of 3), and each server
+                 tried: its speed as a meter, or why it failed; the
+                 one in use selected
+    log          the newest lines of vpn log, failures in red
+
+Green is fine, brown worth knowing, red a problem. The keys are in the
+borders, as in btop, the key itself in blue; nothing needs Enter:
+
+    0 1 2 3 s o   level       - everything off (asks first)
+    r reconnect (pick again)  n new server list and certificate
+    l LAN on/off              f kill switch off (asks first) / on
+    t selftest                e the whole log (j k space b g G, q back)
+    ? help                    q quit (Ctrl+C too)
+
+It redraws once a second, on the second, and at once when the vpn
+service writes something new (inotify on /run/vpn); only what changed
+goes to the terminal, and the log is read again only when it grew. It
+uses the whole window (at least 70x20).
+
+"vpn watch" shows the same screen to anyone, without the details and
+keys. Without vpntop (or without a terminal) vpn shows a plain screen.
+
+What it keeps to (a checklist for terminal programs):
+
+- redraws by itself, every second, without flicker; never hangs
+  waiting for something
+- every key it takes is on the screen; a wrong key says so
+- every action answers on the screen; long ones show their progress
+  and seconds so far
+- it says why when something fails, and what to do next
+- asks before anything dangerous (firewall off, going out without
+  the VPN)
+- the terminal comes back as it was on q, Ctrl+C or any exit
+- fits 80x24, uses more rows when there are more; ASCII only
+- everything in it is also a plain command (vpn level 3, vpn log)
+- without a terminal (in a pipe) it prints the status once
+
+
+Privacy
+-------
+
+- Your ISP sees only that you use Riseup. Riseup sees your IP and that
+  you use Tor, not what you do in it. Tor's first relay sees Riseup's
+  address, not yours.
+- dhcpcd sends no hostname (its anonymous mode, RFC 7844), and each
+  network card gets a random MAC address at boot (and at vpn on),
+  before it is up (not while connected: that breaks Wi-Fi). To keep
+  the real one: touch /etc/vpn/keep-mac. USB cards (docks, adapters)
+  get one only with their chip's own driver (ax88179_178a, r8152,
+  asix), not with the generic cdc_ncm or cdc_ether, which then get no
+  DHCP answer; if DHCP still fails, vpn gives the cards their own MACs
+  back after 30 s. The hostname is "host" and the system's time zone
+  is UTC, so programs can't give away either: browsers, git commits
+  and mail headers all say UTC. Only dwm's bar and tmux's clock
+  show your own time, from ~/.system/config/tz (see x/xinitrc and
+  tmux/tmux.conf); that file is not in the repo. A screenshot of
+  the whole screen (or of a tmux window) shows it.
+- The clock is set through Tor, so no time server learns your
+  address or when you start the machine.
+- Nothing is logged for long: the status, the events (vpn log),
+  OpenVPN's and Tor's warnings are in /run/vpn, which is gone after
+  a reboot.
+- The server list and certificate are Riseup's anonymous ones: no
+  account.
+
+Limits: proxychains can't wrap statically linked programs. In level 3
+UDP doesn't work (voice calls, some games). Programs can still learn
+things about you by other means (a browser's fingerprint).
+
+
+Files
+-----
+
+    net/vpn           /usr/local/bin/vpn
+    net/vpnauth.c     /usr/local/bin/vpnauth (setuid root, group vpnctl)
+    net/vpntop.c      /usr/local/bin/vpntop (the screen of vpn)
+    net/vpnfw.initd   /etc/init.d/vpnfw (boot)
+    net/vpn.initd     /etc/init.d/vpn (default)
+    net/openvpn.conf  /etc/vpn/openvpn.conf
+    net/countries     /etc/vpn/countries: edit here, install.sh net
+    net/mirrors       /etc/vpn/mirrors
+    net/torrc         /etc/tor/torrc (with the old User, DataDirectory)
+    net/proxychains.conf  /etc/proxychains.conf, and one copy per
+                      port in /etc/proxychains.d (9200.conf ...)
+    net/proxychains   /usr/local/bin/proxychains (a port per program)
+    net/sysctl.conf   /etc/sysctl.d/vpn.conf (IPv6 off)
+
+From Riseup, in /etc/vpn: gateways (one server per line: IP, country,
+place, host, ports), ca.crt, client.crt, client.key. lan exists when
+the local network is on, level holds the boot level.
+
+The way the list and certificate are fetched comes from BarbossHack's
+RiseupVPN-OpenVPN (generate.sh); vpn is our own POSIX sh version.

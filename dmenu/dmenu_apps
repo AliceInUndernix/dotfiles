@@ -1,0 +1,35 @@
+#!/bin/sh
+# dmenu_apps: launch a program from my own list instead of everything in
+# $PATH. The list is ${XDG_CONFIG_HOME:-~/.config}/dmenu/apps (dmenu/apps
+# in the dotfiles repo), one entry per line:
+#
+#   name<TAB>command      shows name, runs command
+#   command               shows and runs command
+#
+# Empty lines and lines starting with # are skipped. Entries are fuzzy
+# matched, case-insensitive, and sorted by how often they were chosen.
+# Shift+Return runs exactly what was typed, even if it is not in the list.
+# Up/Down go through what was run before, like a shell: type a few letters
+# first and only entries starting with them come up. Ctrl+p/n move in the
+# list. History: ${XDG_CACHE_HOME:-~/.cache}/dmenu_apps.hist
+# Extra arguments go to dmenu (dwm passes -m for the monitor).
+
+list=${XDG_CONFIG_HOME:-$HOME/.config}/dmenu/apps
+if [ ! -r "$list" ]; then
+	echo "dmenu_apps: cannot read $list" >&2
+	exit 1
+fi
+
+hist=${XDG_CACHE_HOME:-$HOME/.cache}/dmenu_apps.hist
+# test first: mkdir is a separate program, the test is built into sh
+[ -d "${hist%/*}" ] || mkdir -p "${hist%/*}"
+
+# One awk each way instead of grep | cut: fewer programs to start
+# before dmenu shows up. Lines that are empty or start with # are skipped.
+name=$(awk -F '\t' '!/^[ \t]*(#|$)/ { print $1 }' "$list" |
+	dmenu -i -P -H "$hist" "$@") || exit 0
+[ -n "$name" ] || exit 0
+
+cmd=$(awk -F '\t' -v n="$name" '!/^[ \t]*(#|$)/ && $1 == n {
+	print (NF > 1 ? $2 : $1); exit }' "$list")
+exec ${SHELL:-/bin/sh} -c "${cmd:-$name}"

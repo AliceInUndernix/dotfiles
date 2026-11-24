@@ -1,0 +1,243 @@
+#!/bin/sh
+# termcheck: find out why a new terminal shows no prompt until Ctrl+C.
+# Run it from a terminal that works:   sh ~/dotfiles/ksh/termcheck
+# or, to open new windows and look inside them: sh ~/dotfiles/ksh/termcheck new
+# or, to see what ksh sends to new windows: sh ~/dotfiles/ksh/termcheck bytes
+# Everything goes to ~/termcheck.txt (send it); nothing is changed.
+# Each test gives up after 10 seconds, so it can't hang itself.
+
+out=$HOME/termcheck.txt
+state=${XDG_STATE_HOME:-$HOME/.system/state}
+
+# termcheck bytes: st says "erresc: unknown sequence ESC 0x20" only in
+# windows whose ksh reads .kshrc. This opens a window for each part of
+# .kshrc on its own, records every byte ksh sends to the screen (with
+# script), and which windows made st complain.
+if [ "${1:-}" = bytes ]; then
+    out=$HOME/termcheck-bytes.txt
+    d=$HOME/termcheck-bytes.d
+    rm -rf "$d"
+    mkdir -p "$d"
+    rm -f "$out"
+    echo 'set -o emacs' > "$d/emacs"
+    printf '%s\n' '. "$HOME/.kshrc"' 'set +o multiline' > "$d/nomulti"
+    printf '%s\n' '. "$HOME/.kshrc"' 'trap - KEYBD' > "$d/notrap"
+    printf '%s\n' 'set -o emacs' 'set +o multiline' > "$d/emacs-nomulti"
+    bwin() {    # bwin <number> <ENV file> <what>
+        echo "== window $1: $3"
+        ENV=$2 st -t "termcheck $1" -e script -q -f -c 'ksh -i' \
+            "$d/screen.$1" 2>"$d/st.$1" &
+        spid=$!
+        sleep 3
+        kill "$spid" 2>/dev/null
+        sleep 1
+        if grep -q erresc "$d/st.$1"; then
+            echo "-> st complained:"; cat "$d/st.$1"
+        else
+            echo "-> st did not complain"
+        fi
+        echo "-> what ksh sent to the screen, byte by byte:"
+        od -c "$d/screen.$1" | head -n 30
+        echo
+    }
+    echo "Opening 6 windows, one at a time, 4 s each (about 25 s)."
+    echo "Don't type in them. Note which ones stay blank."
+    {
+        echo "termcheck bytes, $(date -u '+%Y-%m-%d %H:%M:%S') UTC"
+        echo "TERM=$TERM"
+        echo "== what tput gives ksh (cuu1, ed, then the termcap names)"
+        for c in cuu1 ed up cd; do
+            printf '%s: ' "$c"
+            tput "$c" 2>&1 | od -c | head -n 2 | tr '\n' ' '
+            echo
+        done
+        command -v tput; ls -l "$(command -v tput)"
+        echo
+        bwin 1 "$HOME/.kshrc" "your .kshrc, as always"
+        bwin 2 "$d/nomulti" ".kshrc, then set +o multiline"
+        bwin 3 "$d/notrap" ".kshrc without the Up/Down trap"
+        bwin 4 "$d/emacs" "only set -o emacs"
+        bwin 5 "$d/emacs-nomulti" "set -o emacs and set +o multiline"
+        bwin 6 /dev/null "nothing (no line editing)"
+    } >> "$out" 2>&1
+    printf 'Which windows stayed blank (their numbers, 1 to 6)? '
+    read -r a
+    echo "Blank windows, you said: $a" >> "$out"
+    rm -rf "$d"
+    echo "Saved: $out (send it)"
+    exit 0
+fi
+
+# termcheck new: open new st windows one after another, the way
+# Mod+Shift+Enter does, and write down what runs inside each one 3 s
+# later. A window that shows its prompt has ksh waiting for the keyboard
+# (read on the terminal); a blank one shows what it waits for instead,
+# and what Ctrl+C in it would stop. Run it from inside X.
+if [ "${1:-}" = new ]; then
+    out=$HOME/termcheck-new.txt
+    arch=$(uname -m)
+    # name of a Linux syscall number (x86_64 only), else the number
+    scname() {
+        if [ "$arch" != x86_64 ]; then echo "syscall $1"; return; fi
+        case $1 in
+        0) echo "read" ;; 7) echo "poll" ;; 23) echo "select" ;;
+        35) echo "nanosleep" ;; 61) echo "wait4 (waits for a child)" ;;
+        73) echo "flock (waits for a lock)" ;; 130) echo "rt_sigsuspend" ;;
+        202) echo "futex" ;; 230) echo "clock_nanosleep" ;;
+        257) echo "openat (a fifo or slow file?)" ;; 270) echo "pselect6" ;;
+        271) echo "ppoll" ;; running) echo "running (using the CPU)" ;;
+        *) echo "syscall $1" ;;
+        esac
+    }
+    kids() {    # every process under $1, $1 first
+        echo "$1"
+        for k in $(ps -o pid= --ppid "$1" 2>/dev/null); do kids "$k"; done
+    }
+    show() {    # one process in detail
+        p=$1
+        [ -d "/proc/$p" ] || return 0
+        ps -o pid=,ppid=,pgid=,tpgid=,stat=,etime=,tty=,args= -p "$p" \
+            | cut -c1-150
+        sc=$(cut -d' ' -f1 "/proc/$p/syscall" 2>/dev/null)
+        a=$(cut -d' ' -f2 "/proc/$p/syscall" 2>/dev/null)
+        [ -n "$sc" ] || sc=unknown
+        echo "    waits in: $(scname "$sc"), fd/arg $a," \
+            "kernel: $(cat "/proc/$p/wchan" 2>/dev/null)"
+        echo "    open files:"
+        ls -l "/proc/$p/fd" 2>/dev/null | sed 1d | \
+            sed 's/.* \([0-9]*\) -> /      \1 -> /'
+    }
+    win() {     # win <number> <what> [st arguments]
+        n=$1 what=$2
+        shift 2
+        echo "== window $n: $what (st $*)"
+        st -t "termcheck $n" "$@" 2>>"$out" &
+        spid=$!
+        sleep 3
+        all=$(kids "$spid")
+        echo "   pid    ppid   pgid  tpgid stat elapsed tty   command"
+        for p in $all; do show "$p"; done
+        # the shell: the first one under st that leads its own session
+        sh_pid=
+        for p in $(echo "$all" | sed 1d); do
+            case $(ps -o stat= -p "$p" 2>/dev/null) in
+            *s*) sh_pid=$p; break ;;
+            esac
+        done
+        if [ -n "$sh_pid" ]; then
+            fg=$(ps -o tpgid= -p "$sh_pid" | tr -d ' ')
+            echo "-> Ctrl+C in this window would go to process group $fg:"
+            ps -o pid=,stat=,args= -g "$fg" 2>/dev/null | cut -c1-150
+            sc=$(cut -d' ' -f1 "/proc/$sh_pid/syscall" 2>/dev/null)
+            a=$(cut -d' ' -f2 "/proc/$sh_pid/syscall" 2>/dev/null)
+            if [ "$arch" != x86_64 ]; then
+                echo "-> (not x86_64: read 'waits in' above by hand)"
+            elif [ "$fg" = "$sh_pid" ] && {
+                [ "$sc" = 0 ] || [ "$sc" = 7 ] || [ "$sc" = 23 ] ||
+                [ "$sc" = 270 ] || [ "$sc" = 271 ]; }
+            then
+                echo "-> OK: the shell waits for the keyboard (at its prompt)"
+            else
+                echo "-> NOT AT THE PROMPT: see 'waits in' above"
+            fi
+        else
+            echo "-> st has no shell under it (it ended or never started)"
+        fi
+        kill "$spid" 2>/dev/null
+        sleep 1
+        echo
+    }
+    rm -f "$out"
+    echo "Opening 8 windows, one at a time, each for 3 s (about 35 s)."
+    echo "Don't type in them. Count them: note which ones stayed blank"
+    echo "(7 has no prompt on purpose; 8 shows one line of text)."
+    {
+        echo "termcheck new, $(date -u '+%Y-%m-%d %H:%M:%S') UTC, $arch"
+        echo "SHELL=$SHELL ENV=$ENV TERM=$TERM DISPLAY=$DISPLAY"
+        echo
+        for i in 1 2 3 4 5; do win $i "as Mod+Shift+Enter"; done
+        win 6 "ksh without .kshrc" -e env ENV=/dev/null ksh -i
+        rm -f "$HOME/termcheck-trace.txt"
+        win 7 "ksh -x, no prompt here: it goes to the trace" -e sh -c \
+            'exec ksh -x -i 2>>"$HOME/termcheck-trace.txt"'
+        win 8 "no shell, only text" -e sh -c 'echo st draws text; sleep 9'
+    } >> "$out" 2>&1
+    echo
+    printf 'Which windows stayed blank (numbers, or "none")? '
+    read -r a
+    echo "Blank windows, you said: $a" >> "$out"
+    echo "Saved: $out (send it, and $HOME/termcheck-trace.txt)"
+    exit 0
+fi
+
+# t <seconds> <command>: run it with a time limit, say how long it took
+t() {
+    s=$(date +%s)
+    timeout -k 2 "$1" sh -c "$2"
+    rc=$?
+    e=$(( $(date +%s) - s ))
+    if [ $rc -eq 124 ] || [ $rc -eq 137 ]; then
+        echo "-> HUNG: stopped after $e s"
+    else
+        echo "-> done in $e s (exit $rc)"
+    fi
+}
+
+{
+    echo "termcheck, $(date -u '+%Y-%m-%d %H:%M:%S') UTC"
+    echo
+    echo "== versions"
+    ls -l /bin/ksh /bin/sh 2>&1
+    ksh -c 'echo "ksh: ${.sh.version}"' 2>&1 </dev/null
+    echo "SHELL=$SHELL ENV=$ENV TERM=$TERM"
+    nvim --version 2>&1 | head -n 1
+    st -v 2>&1 | head -n 1
+    echo
+    echo "== files the shell reads"
+    ls -l ~/.profile ~/.kshrc 2>&1
+    echo
+    echo "== history file (a huge or broken one can make ksh slow)"
+    ls -l "$state/ksh/" 2>&1
+    wc -c -l "$state/ksh/history" 2>&1
+    echo
+    echo "== 1. ksh without .kshrc, no terminal"
+    t 10 'ENV=/dev/null ksh -i -c exit </dev/null'
+    echo
+    echo "== 2. ksh with .kshrc, no terminal (trace of the last lines)"
+    t 10 'ksh -x -i -c exit </dev/null 2>/tmp/termcheck.$$; \
+        tail -n 25 /tmp/termcheck.$$'
+    rm -f /tmp/termcheck.$$
+    echo
+    echo "== 3. each part of .kshrc on its own"
+    t 10 'mkdir -p "$HOME/.system/state/ksh"'
+    t 10 'id -u'
+    t 10 'cat /run/vpn/state'
+    t 10 'ls -l /run/vpn/state'
+    echo
+    echo "== processes now"
+    ps -eo pid,ppid,stat,etime,tty,args --forest | tail -n 60
+} > "$out" 2>&1
+
+echo "Saved: $out"
+echo
+echo "Now the test that needs this terminal (about 10 s): an interactive"
+echo "ksh with your .kshrc. If its prompt shows, type exit. If nothing"
+echo "shows, wait: it is stopped after 10 s by itself."
+printf 'Start it? [Y/n] '
+read -r a
+case $a in n|N) exit 0 ;; esac
+{
+    echo
+    echo "== 4. ksh with .kshrc, in this terminal (trace)"
+} >> "$out"
+s=$(date +%s)
+timeout --foreground -k 2 10 ksh -x -i 2>/tmp/termcheck-tty.$$
+rc=$?
+{
+    echo "-> exit $rc after $(( $(date +%s) - s )) s (124: hung)"
+    tail -n 40 /tmp/termcheck-tty.$$
+} >> "$out"
+rm -f /tmp/termcheck-tty.$$
+stty sane 2>/dev/null
+echo
+echo "Saved: $out (send it)"

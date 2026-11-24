@@ -1,0 +1,20 @@
+Copyright (c) 2026 AliceInUndernix.
+
+This software is available under the terms of Croco's Individualistic
+Free Software License, version 0.251225, by Andrey V. Stolyarov: see
+the file LICENSE (its home is http://thalassa.croco.net/license.html).
+In short: free of charge for everyone, but free to study, change and
+pass on only for individuals acting on their own behalf; organizations
+may only build and run it unmodified. Changed versions must be
+published openly, under the same license, before they are given to
+anyone.
+
+These parts were written by others and keep their own licenses:
+
+  dwm/, st/, dmenu/, slock/   the suckless tools, MIT/X (their LICENSE),
+                              and the patches in their patches/
+                              directories, by their authors
+  seal/crypto.c               parts of Monocypher 4.0.2, CC0 1.0 or the
+                              2-clause BSD license (see the file)
+  archive/                    the untouched upstream tarballs, each under
+                              its own license (archive/README.md)

@@ -1,0 +1,197 @@
+# Minimal Neovim config
+
+Two files: `nvim/init.lua` (the config) and `nvim/lua/typetrack.lua`
+(optional, the book typing checker). It keeps Neovim close to default
+and adds a colour column at 80, line numbers, a dark theme and a prose
+mode for writing with stenography.
+
+`HANDOFF.md` next to this file records the history, decisions and open
+issues, for anyone (or any Claude) picking the work up.
+
+## Install
+
+In the dotfiles repo, `./install.sh nvim` links this directory to
+`~/.system/config/nvim`; the steps below are the manual way. Paths below that
+mention `nvim-config/nvim` now mean this `nvim/` directory.
+
+1. You need Neovim **0.11 or newer** (`nvim --version`).
+2. Back up any old config: `mv ~/.system/config/nvim ~/.system/config/nvim.bak`
+3. Link this directory: `ln -s ~/dotfiles/nvim ~/.system/config/nvim`
+4. Unpack the 5 plugins from the repo's `archive/nvim-plugins/` into
+   `~/.system/share/nvim/site/pack/plugins/opt/` (one directory each).
+   Neovim never downloads them itself: a missing one is reported and
+   left out.
+
+## Keys
+
+| Key | What it does |
+|---|---|
+| `Space p` / `:Prose` | Prose mode on and off |
+| `Space s` | Spell check on and off |
+| `Space t` | Book typing check on and off |
+| `Space T` | Book typing with ghost text on and off |
+| `Space w` | Save |
+| `Space Space` | Open a file by typing part of its name |
+| `Space /` | Search text in all files (needs `rg` or a git directory) |
+| `Space b` | Pick one of the open files |
+| `Space h` | Search Neovim's help |
+| `saiw"` / `sd"` / `sr"'` | Add / delete / replace quotes or brackets around |
+| `Space` and wait | A box lists the keys that can follow (which-key) |
+| `Esc` | Clear search highlight |
+
+## Two modes
+
+**Code mode** is the normal state: relative line numbers with the real
+number on your current line, a vertical guide at column 80, no wrapping.
+
+**Prose mode** (`Space p` or `:Prose`, same key to leave): the text sits
+in a centred 80-column view, numbers, the guide and the status bar
+disappear, lines break automatically at 80. A single Enter starts a new
+line and stays there (book-style paragraphs); after editing the middle
+of a paragraph, `gqip` re-wraps it. If a paragraph is one long line,
+`j` / `k` and the arrows move one screen line at a time; with a count
+(`5j`) they move real lines. Code mode keeps normal movement.
+
+Markdown and `.txt` files wrap at 80 even outside prose mode. Spell
+check is off by default because steno handles spelling; `Space s` turns
+it on.
+
+Useful prose keys: `gqip` re-wraps the current paragraph, `]s` / `[s` jump
+between misspellings, `z=` suggests a fix, `zg` adds a word to your
+dictionary.
+
+## Symbols from steno (— – “ ” …)
+
+steno types every symbol as the character itself (through X), so
+nothing is needed in the terminal or here. By hand: `Ctrl-k - M` types
+—, `Ctrl-k - N` types –.
+
+## Plugins
+
+| Plugin | Why |
+|---|---|
+| zen-mode.nvim | The distraction-free centred view |
+| vim-pencil | Proper hard wrapping at 80 for prose |
+| mini.pick | Fuzzy finder for files, text, buffers, help |
+| mini.surround | Add, delete, replace quotes and brackets |
+| which-key.nvim | Shows what keys can follow after a pause |
+
+To update one, put a newer tarball in `archive/nvim-plugins/` (see
+`archive/README.md`), delete its directory in
+`~/.system/share/nvim/site/pack/plugins/opt/` and run
+`./install.sh nvim`. Syntax colours come from Vim's
+built-in syntax files (no Tree-sitter plugin).
+
+## Tabs and whitespace
+
+The Tab key types 4 spaces, and Backspace removes 4 at once, so they
+feel like one tab. Real tab characters in existing files are left alone
+(dwm, st and dmenu keep theirs) and show as a dim `→` filling 4 columns.
+Trailing spaces show as dim `·` (not while you type), no-break spaces
+as `␣`, and `›` / `‹` mark lines that go past the screen edge.
+`:s/old/new` shows its changes live while you type.
+
+## Terminal theme
+
+Habamax is built into Neovim (no plugin). st, dwm, dmenu, slock and tmux
+use the same colours (background `#1c1c1c`, text `#c7c7c7`, greys for
+borders, toned-down Habamax accents), and st has Habamax's full
+16-colour palette.
+
+## Clipboard
+
+`y` and `p` use the system clipboard (`clipboard=unnamedplus`), so text
+moves between Neovim and the browser. Neovim needs xclip for that;
+`./install.sh --deps` installs it.
+
+## What Neovim remembers between sessions
+
+Everything is kept in `~/.system/state/nvim/`, out of your project directories:
+
+- `undo/`: full undo history per file, so `u` works even after a restart.
+- `view/`: your folds and cursor position per file.
+- `shada/`: last cursor position, marks, registers and command history.
+
+Close a file, reopen it, and the cursor, folds and undo history are where
+you left them. Line breaks from wrapping at 80 are real line breaks saved
+in the file itself, so they are always in the same place. Swap files are off.
+
+## Type a book out (optional)
+
+Read a book in Sioyek and type it out in a text file in Neovim. Neovim
+checks every word against the book as you type. It needs
+`lua/typetrack.lua` (see Install) and `unzip` for EPUB books, or
+`pdftotext` (`app-text/poppler`) for PDFs. Sioyek itself is not needed
+for the checking.
+
+Two modes:
+
+- **Ghost mode** (`:TypeGhost ~/books/book.epub`, then `Space T`): the
+  rest of the book's paragraph is shown in grey after your cursor, to
+  its end. Once you have typed its last letter, the whole next
+  paragraph appears; the window scrolls up to make room, as far as it
+  can. The grey text is not in your file and cannot be edited; you type
+  over it. Paragraph breaks in the book show as a blank line. To show
+  at most N lines below the one you type on, add
+  `require("typetrack").opts.ghost_lines = N` to init.lua.
+- **Check mode** (`:TypeTrack ~/books/book.epub`, then `Space t`): the
+  same checks, no grey text.
+
+What you see in both:
+
+- A wrong letter turns **red** (underlined) as soon as you type it.
+- A word that is not in the book turns red.
+- A letter you left out appears crossed out in red where it belongs.
+- A book word you **skipped** appears crossed out in red, in front of
+  the word you typed after it. A skipped word shows up once you have
+  typed the word after it (until then it looks like a typo).
+
+Choosing where to start: the first time, a list of the book's chapters
+(from its table of contents) opens, so you can pick "Chapter 1" and skip
+the cover, copyright page and foreword. `:TypeChapter` opens the list
+again. For a PDF the list has one entry per page. In check mode the list
+also offers "Find the place from what I type", which looks for your
+first five words in the book. If the file already has text, it lines up
+from where that text is in the chosen chapter; otherwise what you type
+next starts at the chapter.
+
+The book, the mode and the start are remembered per text file, so
+`Space t` / `Space T` carry on next time. `:TypeTrackStop` stops it.
+
+How it judges: capitals and punctuation count; curly and straight
+quotes, `...` and `…`, and `--` and `—` count as the same. To check
+letters only, add `require("typetrack").opts.strict = false` to
+init.lua. The ghost lines wrap at 'textwidth' (80 in prose files).
+
+Colours: the groups are `TypeTrackBad`, `TypeTrackMissing` and
+`TypeTrackGhost` (grey, like comments). For example
+`vim.api.nvim_set_hl(0, "TypeTrackGhost", { fg = "#5f5f5f" })`.
+
+Good to know:
+
+- Ghost text sits in front of the cursor at the end of the file, so
+  type at the end; fixing an earlier word works as usual.
+- Ghost text needs Neovim 0.10 or newer to sit in the line (0.11 is
+  fine). It was tested headless; how it looks while typing in st has not
+  been seen yet, so tell Claude if it lines up wrong.
+
+### Marking the words in Sioyek too (off)
+
+The old Sioyek part is still there but off, because Sioyek's development
+version crashed doing it. With `require("typetrack").opts.sioyek_marks =
+true` and a **development** Sioyek (Gentoo GURU's `app-text/sioyek-9999`;
+release 2.0.0 cannot do it), Sioyek also highlights each book word green
+(right) or red (wrong or skipped). Installing sioyek-9999 on Gentoo:
+
+    # as root (su -):
+    emerge -qv app-eselect/eselect-repository
+    eselect repository enable guru
+    emaint sync -r guru
+    echo "app-text/sioyek **" > /etc/portage/package.accept_keywords/sioyek
+    emerge -qv --update --deep --changed-use @world =app-text/sioyek-9999
+
+Text already in the file is not sent to Sioyek the first time unless you
+start with `:TypeTrack!`. Colours are Sioyek's highlight types `g` and
+`r` (`highlight_color_g 0.30 0.80 0.35` in
+`~/.system/config/sioyek/prefs_user.config`). Marks are real Sioyek highlights
+and stay in the book; this has never been tried with a real Sioyek.

@@ -1,0 +1,421 @@
+steno - Plover's typing engine in C, for the Moonlander
+=======================================================
+
+SYNOPSIS
+
+    steno [-qv] [-c CONFIG] [-p PORT]  read the keyboard, type into X
+    steno -T                           paper tape
+    steno -S                           suggestions
+    steno -TS                          both, side by side (-ST: the
+                                       suggestions on the left)
+    steno -l WORD|OUTLINE              look it up
+    steno -a OUTLINE TRANSLATION       add a stroke
+    steno -A                           add strokes, asking for each
+    steno -W                           add a word: its sound, the
+                                       outlines made for it, stroke
+                                       yours (a dwm scratchpad, Mod+y)
+    steno -G WORD|-                    the same as text (- : a word a
+                                       line on stdin)
+    steno -C DIR FILE...               Plover's dictionaries in steno's
+                                       format, into DIR
+    steno -t [-c CONFIG]               strokes from stdin, print what
+                                       would be typed (for tests)
+
+DESCRIPTION
+
+steno does what Plover does while you type, and nothing else: it reads
+strokes from the Moonlander's Gemini PR serial port, looks them up in
+Dotterel's dictionaries and types the text into X. It follows Plover
+5.4.2's own code step by step (translator, formatter, orthography), so
+the same strokes give the same text; on random corpora of 9,000
+strokes the output is the same as Plover's, byte for byte.
+
+It is one static binary (about 5 MB, Plover's word list included) and
+needs nothing but the kernel and a running X: no Python, no Qt, no
+libX11 (it speaks the X protocol itself, through XTEST). It starts in
+about 0.06 s and uses about 13 MB, where Plover takes about 0.7 s and
+110 MB; a stroke takes a few microseconds.
+
+What Plover's plugins did for Dotterel is built in:
+
+    Gemini PR, reconnecting by itself when the keyboard comes back
+    plover-modal-dictionary (.mode files)
+    plover-stitching, plover-last-translation ({*+}, {*!} ...)
+    Dotterel's UK/US switch (#SU)
+
+and so are three of Dotterel's dictionaries, which are more program
+than words: their data is C (dotterel.c), so nothing is read or
+parsed for them. A dict line names them without an extension:
+
+    dotterel-movement   movement mode (dotterel-movement.modal)
+    dotterel-modifiers  KHR, SH, THRA, KPW and the rest
+                        (dotterel-modifiers.py); the keys come from
+                        dotterel-punctuation, -commands,
+                        -fingerspelling, -numbers and -movement, as
+                        in the list (or their .dict files)
+    dotterel-raw        raw mode, RA*U (dotterel-raw.json)
+
+The dictionaries are Dotterel's, in steno's own plain format:
+./install.sh steno clones the dotterel repo into
+~/.system/share/steno/dotterel and updates it every run. steno needs
+nothing of Plover's: to use Plover dictionaries of your own, turn them
+into steno's format once with steno -C.
+
+    steno            in a terminal: types, and shows the status screen
+    steno &          in the background: types, and says nothing but
+                     problems, on stderr
+    steno -v         also say each stroke
+
+STATUS SCREEN
+
+Started in the foreground of a terminal, steno shows what it is doing
+in a small screen, in the look of btop:
+
+    +-+steno+-------------------------------------------------------+
+    | keyboard    connected  /dev/ttyACM0                           |
+    | X           connected  :0                                     |
+    | doing       typing                                            |
+    | last        KAT  cat                                          |
+    | since start 212 strokes, 10 dictionaries, 130831 entries      |
+    +-+q quit+-+o output+-+t tape+-+s suggestions+-+b both+-+A add..+
+    +-+dictionaries+------------------------------------------------+
+    |> 1 on  ~/.system/share/steno/user.dict    3  dict, -a adds .. |
+    |  2 on  dotterel-base.dict            113816  dict             |
+    |  3 off dotterel-affixes.dict            602  dict             |
+    |  ...                                                          |
+    +--+j/k choose+-+J/K move+-+space on/off+-+a add+-+d remove+----+
+    +-+messages+----------------------------------------------------+
+    | keyboard on /dev/ttyACM0                                      |
+    +---------------------------------------------------------------+
+
+"doing" is typing, output off, raw mode, movement mode (Dotterel's
+.mode dictionary) or nothing (no keyboard). The messages are what
+steno would say on stderr.
+
+    j k, Up Down   choose a dictionary (g, G: the first, the last)
+    J K, Shift+Up Shift+Down
+                   move it up or down: the higher one wins
+    space          turn it on or off (in raw mode: for when it ends)
+    a              add one: a name in the dictionaries directory, or
+                   a path; it goes last (Enter adds, Esc stops)
+    d              take it out of the list (y to be sure); the file
+                   stays
+    r              read again the dictionary files that changed
+    A              add a stroke: type its outline, Enter (the messages
+                   say what it gives now), then its text, Enter; it
+                   goes into the user dictionary, as steno -a (Esc
+                   stops)
+    o              output on or off, as PLOVER:TOGGLE
+    t, s, b        open the tape, the suggestions or both in a window
+                   of their own (steno -T, -S, -TS in the "terminal"
+                   setting), to put next to what you write
+    q, Ctrl+C      quit steno
+
+Every change to the list is written to the settings file at once (its
+dict and user lines, in the new order, where the first of them was;
+the rest of the file stays). ~/.system/config/steno/config is a link into
+this repo, so the change shows in git diff; the link stays a link.
+
+OPTIONS
+
+    -c FILE   settings (default ~/.system/config/steno/config)
+    -p PORT   the serial port; auto (default) tries /dev/ttyACM0 to
+              ttyACM9, every second until the keyboard is there
+    -T        show the paper tape
+    -S        show the suggestions
+    -TS       show both, the tape on the left (also -T -S)
+    -ST       show both, the suggestions on the left (also -S -T)
+    -l X      what outline X gives in each dictionary, and how text X
+              is written (shortest first); for an outline of several
+              strokes, what each stroke writes alone, which is why it
+              is written so (high + draw + lick: hydraulic). STROKE?
+              is a stroke that writes nothing alone; an outline
+              that is no entry but still types something (KAT/-S:
+              cats, a suffix on a word) says what it types. Text is
+              found as you'd type it: don't finds the U+2019 one, " the
+              quotes, and a symbol the entry that writes it (. finds
+              {.}, ( finds {~|(^}). A word no dictionary has gets the
+              ways to write it that work, as in the suggestions
+              (unboxing: UPB/PWOBGS/-G; color: KHROR/#SU; 250:
+              #-B/#-PB/#E)
+    -a O T    add outline O -> T to the user dictionary; says first
+              what O gives now and how T is written already (or that
+              they are new), then what it added and where. As in
+              Dotterel, straight quotes in T are saved typographic
+              (' as U+2019, " as U+201C or U+201D), but in a bare
+              symbol, {#key}, {&...} or =...
+    -A        the same, asking for one outline and translation after
+              another (empty outline: done). To stroke the outline,
+              turn on raw mode (RA*U) and back off for the text.
+    -W        the word adder, below
+    -G W      what -W shows for word W, as text: syllables, sounds,
+              each outline made for it, why, and what it types now
+    -C D F..  make steno's files in directory D from Plover's: .json
+              -> .dict, .modal -> .mode, uk_to_us.json -> uk_to_us.txt
+              (the three built-in ones are skipped)
+    -t        test mode: one stroke or outline a line on stdin; prints
+              B n (backspaces), S text, K combo
+    -q        no status screen, even in a terminal
+    -v        verbose: say each stroke
+    -h        help
+
+SETTINGS
+
+One a line, # for comments (see config, which install.sh links to
+~/.system/config/steno/config):
+
+    port auto|PATH           the keyboard
+    dictionaries DIR         where dict names are looked for
+    user FILE [off]          a dictionary, and where -a and -A write;
+                             made empty when it isn't there
+    dict NAME [off]          a dictionary (.dict or .mode, below,
+                             or a built-in one); the first wins
+    data DIR                 Dotterel's data (uk_to_us.txt); default
+                             DIR/../data of dictionaries
+    undo N                   strokes * can undo (100)
+    start_capitalized yes|no
+    start_attached yes|no
+    command NAME SHELL...    {PLOVER:NAME} runs SHELL with /bin/sh
+    terminal COMMAND         what t, s and b on the status screen open
+                             steno -T, -S, -TS with (st -e)
+
+The commands Plover itself knows: {PLOVER:TOGGLE}, RESUME, SUSPEND
+(each also forgets what was typed, for undo) and QUIT.
+
+A dictionary that changes on disk (steno -a, or an edit by hand) is
+read again at the next stroke; one that can't be read keeps its old
+contents.
+
+DICTIONARIES
+
+Plain text, one entry a line: the text, a tab, then every outline that
+writes it, separated by spaces. No JSON, nothing nested:
+
+    cat         KAT
+    {^}.ca      #KRA #KRA* KRA*
+
+(a tab after the text, not spaces). In the text, \t is a tab, \n a
+newline, \r a carriage return and \\ a backslash; empty lines are
+skipped. When an outline is on two lines, the last one wins.
+
+    NAME.dict   TEXT <tab> OUTLINES
+    NAME.mode   option <tab> exclude_entry|exit_on_mismatch|
+                    exit_on_match|ignore_folding <tab> yes|no
+                entry|dict|exit <tab> TEXT <tab> OUTLINES
+                (plover-modal-dictionary's tables and switches)
+
+Dotterel's are in its repo, in steno/ (made from the JSON by its
+steno/make.sh, which runs steno -C). ./install.sh steno links them
+into ~/.system/share/steno, or, when they are older than the JSON,
+makes them there and says so.
+
+PAPER TAPE AND SUGGESTIONS
+
+Each is its own box, drawn as btop draws them: steno -T is the tape,
+steno -S the suggestions, steno -TS both, side by side (one above the
+other in a terminal under 60 columns), the tape first; steno -ST puts
+the suggestions first. So they can go in one window
+or in two, wherever there is room.
+
+    +-+tape+--------------------------++-+suggestions+----------------+
+    |         O     PB        on      ||on                            |
+    |  T   H                  this    ||  -PB  AUPB  OPB              |
+    |                                 ||on this                       |
+    |                                 ||  THOPB                       |
+    +---------------------------------++--+quit+-+clear+-+tape+-+sugg..+
+
+The tape: each stroke in the steno order's columns and what it wrote,
+as it is in your document (Could, not could, after a full stop; a
+return as a U+21B5 arrow). A stroke that writes no text says what
+it does: (capital next), (small letter next), (join), the keys it
+pressed (Control_L(BackSpace)). When a later stroke makes one outline
+of the strokes before it, their text goes and the last one shows the
+word, so you see what was
+written:
+
+    H AO EU     high          H AO EU
+    TK  RA U    draw    ->    TK  RA U
+                              HR EU B G   hydraulic
+
+An undone stroke and its * leave the tape (or stay, dim, with u),
+and what it had cleared comes back. A suffix stroke (-D, -G ...)
+shows the word it made: PRE/SKRAOEUB, -D gives prescribed on the -D
+line, the earlier lines cleared as in an outline (and SKRAOEUBD, the
+suffix in the stroke, shows scribed, not scribe {^ed}). The same for
+strokes that change what is there: #* (KAT: cath), SP-LS (cat hat:
+cathat) and #SU (colour: color) clear the lines they changed and show
+the word on their own line; a prefix stroke ({for^}) shows for, and
+the next word shows the word they made (forsending), # (repeat) shows
+what it wrote again, and a stroke that does nothing shows no text. One
+* takes back what steno takes back: a stroke that writes nothing (KPA,
+which only capitalises the next word) goes together with the stroke
+before it, and so do the tape's lines. Fingerspelling the same way, as
+you spell: the newest letter's line shows the word so far (s, so, som,
+some ...) and the letters before it are cleared.
+
+The suggestions: the words you typed, and under each every outline
+that writes them, shortest first (fewest strokes, then fewest keys);
+each words once (typed again, they move to the bottom). The newest is
+at the bottom in both. A word is what the strokes that wrote it
+wrote, from a space, a quote or a bracket on: o'clock is one word,
+We've after an opening quote is one, a prefix ({for^}) waits for the
+word it joins, and strokes that are no entry give none.
+
+Every word keeps, in bold, the outline you wrote it with: green when
+no outline of that text has fewer strokes (the same number is right
+too), red when one has. It is in the list where its length puts it
+(added when the dictionaries don't have it), and the mark stays until
+you write that word again. It is the strokes that wrote the word,
+whatever the dictionary has: KAT/-S for cats (red: KATS), KAT for Cat
+after KPA, KHROR/#SU for color.
+
+A word no dictionary has gets the ways to write it that work instead:
+a word and a suffix (TPEURG/-Z, or the suffix in the stroke: TPEURGZ),
+a prefix and a word (TPOR/SEPBD), or letter by letter (P*P/R*/*EU
+...), and an American spelling the British word and the UK/US switch
+(KHROR/#SU). Each is tried in a copy of steno, so only ones that type
+the word are shown, and your undo history isn't touched.
+
+When a stroke takes the word before in (pre, then prescribe), puts a
+suffix on it, is a fingerspelled letter (each step in place of the one
+before) or a *, the lines for the words that are gone go too.
+
+    q, Ctrl+C          quit
+    t                  show or hide the tape
+    s                  show or hide the suggestions
+    c                  clear both
+    j k, Down Up       scroll a line (the title says how far up)
+    Ctrl+D Ctrl+U,     half a screen
+    PageDown PageUp
+    G g, End Home      the newest (follow again), the oldest
+    mouse wheel        scrolls the box under it, 3 lines
+                       (Shift and the mouse still select text)
+    u                  undone strokes and their * gone from the tape
+                       (the start), or there and dim, as in Plover
+    Tab                with both: which one scrolls (its title is lit)
+    x                  with both: swap them (left and right, or top
+                       and bottom)
+    l, /               look up a word or outline: type it, Enter; the
+                       box shows each outline and why (steno -l) and
+                       the keys are the window's again: l looks up
+                       another, Esc closes it
+    a                  add a stroke: type its outline, Enter (the box
+                       says what it gives now, or that it is no
+                       outline, to mend), then its text, Enter;
+                       it goes into the user dictionary, as steno -a
+                       (Esc stops)
+    any other key draws it again
+
+At least one box stays. Into a pipe, it writes the lines instead
+(suggestions start with "= " when the tape is there too).
+
+The engine sends them through two FIFOs, $XDG_STATE_HOME/steno/tape
+and suggest (mode 0600, in a 0700 directory; steno -W adds outline,
+ask and lastword), each only while a viewer
+has it open; with the suggestions hidden or not shown anywhere, it
+doesn't look for them. One viewer of each at a time. Nothing is
+written to disk. Whatever you type passes through them, so they are
+yours only; don't show them where others see the screen.
+
+ADDING WORDS (steno -W)
+
+Mod+y in dwm (the Word key on the Moonlander's dwm layer) opens it as
+a scratchpad: st -t stenoword -e steno -W. It asks the running engine
+for the last word you wrote, so fingerspell a word, open it and the
+word is there, looked up. A capital that only starts a sentence goes
+(She: she) unless data/word-homes.txt says it is a proper noun;
+^K switches the case.
+
+    +-word------------------------------------------------------------+
+    | > beautiful                                                     |
+    | adjective    goes to dotterel-base.dict    common #578          |
+    +-sound-----------------------------------------------------------+
+    | written       beau|ti|ful    3 syllables                        |
+    | UK  spoken    /'bu: | tI | f@l/   BU:-ti-fel    beau | ti | ful |
+    | US  spoken    /'bu | t@ | f@l/                                  |
+    | meaning       adjective delighting the senses ...               |
+    +-made by the rules---------++-lapwing-----++-your dictionaries---+
+    |PWAOU/TEU/TPUL  write-out  ||PWAOUFL      ||PWAOUFL   old-base   |
+    |PWAOUT/-FL      yours ...  ||PWAOUT/-FL   ||PWAOUT/-FL old-base  |
+    +---------------------------++-------------++---------------------+
+    +-why PWAOU/TEU/TPUL----------------------------------------------+
+    | beau -> PWAOU  long u, oo: AOU                                  |
+    +-outline: stroke it----------------------------------------------+
+    | > _                                                             |
+    +-----------------------------------------------------------------+
+
+(the real screen has Habamax colours, IPA and Cyrillic). The sounds
+are RP (Britfone) and American (CMUdict); a word only CMUdict has gets
+its RP made from the American, one neither has is guessed from the
+spelling, and the box says so. The outlines made by the rules come
+from the sound and the spelling, as Dotterel and Lapwing write them:
+long vowels by sound, short ones by spelling, the chords on the right,
+then the shorter ways (folded clusters, -le, R, L, E and T folding, a
+dropped vowel, a word plus an ending, two words with a star). Each
+says why and whether it is free; one already taken gets an AE or a
+star version too.
+
+While the outline box has the focus, your strokes come here instead
+of being typed: the engine sends them through the FIFO "outline"
+while steno -W holds it open (the window has to have X's focus: st
+tells it). Then:
+
+    Enter          save the outline (none stroked: the chosen one)
+                   and quit; a stroke that writes Enter does it too
+    Esc            back to the word, to type another (Esc again quits)
+    * or ^W        take the last stroke back
+    ^U             clear       ^Y  take the chosen outline
+    Up/Down, ^N/^P choose      Tab, Shift+Tab  the next list
+    ^T             another dictionary for it
+    ^D             take the chosen outline out of your dictionary
+    ^K             the other case (Bill, bill)
+
+It saves into dotterel-NAME.dict in the dictionaries directory, NAME
+from data/word-homes.txt (base, proper-nouns, affixes, punctuation,
+numbers, commands, fingerspelling; a word not in it: proper-nouns
+with a capital, affixes for {^...}, else base), or user.dict (^T).
+steno reloads it at once.
+
+PRIVACY
+
+No network, no log file, no history kept on disk: what you typed lives
+in memory for undo (100 strokes) and is gone when steno stops. -v
+prints strokes to stderr; leave it off where stderr is kept.
+
+KNOWN DIFFERENCES FROM PLOVER
+
+    {=...} (Plover's custom transformers) and retro currency
+        ({*($c)}) are not there.
+    Upper and lower case of letters outside Latin-1, Latin
+        Extended-A, Greek and Cyrillic are left as they are.
+    A word longer than 500 bytes is cut.
+    TOGGLE, RESUME and SUSPEND forget the history (Plover keeps it).
+
+FILES
+
+    main.c       settings, commands, the serial port, the main loop
+    dict.c       strokes, dictionaries, modal and modifier dictionaries
+    dotterel.c   Dotterel's movement, modifiers and raw mode, as data
+    translate.c  Plover's translator: longest match, undo, macros
+    format.c     Plover's formatter: spacing, case, metas
+    ortho.c      orthography: a small regex engine and Plover's rules
+    x11.c        the X protocol: XTEST, the keymap, spare keys
+    tools.c      the tape and suggestion feeds, -l, -a, -A, and what
+                 -W asks the engine for
+    gen.c        -G: sounds, syllables and outlines made by the rules
+    word.c       -W: the word adder's screen
+    view.c       -T, -S, -TS: the boxes
+    tui.c        the status screen
+    screen.c     drawing boxes in the terminal, for both
+    mkwords.c    builds words.c from words.txt at build time
+    words.txt    Plover's American English word list (for orthography)
+                 (dict.c also reads Plover's JSON, only for -C)
+    test/        make test: a small corpus checked against Plover
+
+LICENCE
+
+steno is a port of Plover's code (https://github.com/openstenoproject/
+plover), so it is under Plover's licence, the GNU GPL version 2 or
+later. Plover's copyright belongs to its authors, who are named in
+Plover's own sources; the port is by the owner of this repo. words.txt
+is Plover's american_english_words.txt, unchanged.

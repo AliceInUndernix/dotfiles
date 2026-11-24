@@ -1,0 +1,27 @@
+# suckless build output
+*/*.o
+*/*.tar.gz
+dwm/dwm
+st/st
+dmenu/dmenu
+dmenu/stest
+slock/slock
+# vpn password helper build output
+net/vpnauth
+net/vpntop
+# clean build output
+clean/*.o
+clean/clean-bin
+# seal build output
+seal/*.o
+seal/seal
+seal/test/vectors
+# diary build output
+diary/*.o
+diary/diary
+# steno build output
+steno/*.o
+steno/steno
+steno/mkwords
+steno/words.c
+steno/test/out

@@ -1,0 +1,727 @@
+                                                   Andrey "Croco" Stolyarov
+                                                           Belgrade, Serbia 
+                                                          December 25, 2025
+
+
+              CROCO'S INDIVIDUALISTIC FREE SOFTWARE LICENSE
+               version 0.251225;  draft, subject to change
+
+
+                            Redistribution of this document is unlimited,
+                            but any modified version must have a completely
+                            different title so as to make it impossible to
+                            confuse the modified version for the original
+                            text.
+
+
+== 0. Informal preamble (non-normative)
+
+Many years ago Richard Stallman started the Free Software movement.  Being
+a huge step in an obviously right direction, the software freedom as defined
+by Stallman (and the movement) has proven to be insufficient for a software
+user to really be free.
+
+Even if you have the full source code of a certain program, the permission
+to modify it in whatever manner you want and even the knowledge of a good
+programmer needed to perform such modifications, it all gives you no real
+freedom (and actually remains completely useless for you) if the program in
+question is complicated enough so that only large corporations have
+sufficient resources to actually modify it.  Furthermore, in a vast
+majority of real-world cases, such complicateness is not needed for
+anything really useful, but, again, corporations invent more and more
+complicated hardware, network protocols and data formats, having only one
+real goal: to make independent software developers unable to deal with all
+that mess.
+
+Corporations tend to infiltrate their representatives into various
+non-profit organizations related to free software, as well as to control
+such organizations by funding them.  The good old principle ``if you can't
+beat them, join them'' is well-known to all these corporate people.  All
+these processes have nothing to do with any freedom.
+
+For decades, GNU GPL was known as the most restrictive license for free
+software.  This License, titled as Croco's Individualistic Free Software
+License, is far more restrictive as it actually limits most of its
+permissions to individuals, only allowing any non-individual entity to
+run the licensed software on their computers, unmodified, but not to modify
+nor to redistribute the software.  And this license has a ``viral nature''
+just like GNU GPL does: if any piece of the code of a program is licensed
+with this license, the whole program must be licensed with the same
+license, too.
+
+Freedom is for individuals.  And individuals are for freedom.
+
+And one more thing: this license demands any source code to be published
+openly on the Internet before any distribution of the software takes place,
+meaning that any source code of any program that is used by anyone else
+than the author, must be made available not only to the users but to the
+general public.  There is no point for individuals to keep their sources
+private, unless there's something very bad or even criminal inside.  For
+corporations, the things are different, but it's their problem.
+
+
+
+== 1. The scope of the license
+
+This license (hereinafter referred to as "this License") applies to any
+software (hereinafter referred to as "the Work") that bears the appropriate
+notice indentifying the License.
+
+The software (the Work) may either be a complete computer program or a code
+library.  Conditions imposed by this license for complete programs differ
+significantly from the conditions set for code libraries.  The term "the
+Program" is used hereinafter to refer to a Work which is a complete
+computer program, while the term "the Library" is used to refer to a Work
+which is a software library.
+
+The text of this License is written in the assumption that the Work is
+written in a compiled programming language, so that the Work itself may be
+represented in a form of its source code and in a translated (binary) form,
+suitable for executing by a computer.  To avoid confusion, this License
+should not be applied to Works created in interpreted programming
+languages, but if for any reason it is applied to such a Work, it must be
+kept in mind that the thing referred to as "distribution in binary form" is
+technically impossible for Works written in interpreted languages, so the
+respective parts of this License may not be executed, but the rest of the
+text of this License still remains in effect.
+
+No one has any obligations to accept the terms and conditions of this
+License, but the software that comes with this License (the Work) is
+copyrighted and protected by the respective local and international laws,
+so this License may be (and usually is) the only source of one's right to
+do anything with the Work.  Hence, if one disagrees with the conditions
+offered by the License, then that one must either refrain from dealing with
+the Work anyhow, or must contact the copyright holder and negotiate other
+conditions beforehand, in written.  Please note that the copyright holder
+has no obligations to grant anyone any additional permissions or even to
+communicate with anyone.
+
+In case someone starts using the Work (in one way or another), the mere
+fact of such usage indicates one's complete and unconditional consent with
+the terms and conditions of this License; otherwise, such usage would be a
+copyright violation.
+
+Every person or entity using the Work with the permissions granted by this
+License, automatically becomes a licensee, while the copyright holder of
+the Work (or holders, if there are more than one of them) becomes (become)
+the licensor (the licensors).
+
+
+
+== 2. Warranty disclaimer
+
+THERE IS NO WARRANTY FOR THE WORK, BE IT A PROGRAM OR A LIBRARY.  EXCEPT
+WHEN OTHERWISE STATED IN WRITTEN, THE COPYRIGHT HOLDERS AND/OR OTHER
+PARTIES PROVIDE THE WORK "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER
+EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.  THE ENTIRE RISK
+AS TO THE QUALITY AND PERFORMANCE OF THE WORK IS WITH THE USER (THE
+LICENSEE).  SHOULD THE WORK PROVE DEFECTIVE, THE USER ASSUMES THE COST OF
+ALL NECESSARY SERVICING, REPAIR, CORRECTION OR REPLACEMENT.
+
+IN NO EVENT UNLESS AGREED TO IN WRITTEN, WILL ANY COPYRIGHT HOLDER, OR ANY
+OTHER PARTY WHO MAY MODIFY AND/OR REDISTRIBUTE THE WORK AS PERMITTED BY
+THIS LICENSE, BE LIABLE ANY OF THE LICENSEES FOR DAMAGES, INCLUDING ANY
+GENERAL, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE
+USE OR INABILITY TO USE THE WORK (INCLUDING BUT NOT LIMITED TO LOSS OF
+DATA, OR DATA BEING RENDERED INACCURATE, OR LOSSES SUSTAINED BY LICENSEES
+OR THIRD PARTIES, OR A FAILURE OF THE WORK TO OPERATE WITH ANY OTHER
+SOFTWARE), EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGES.
+
+This warranty disclaimer is an integral part of this License and its terms
+and conditions.  Disagreeing with this disclaimer in a whole or in a part,
+as well as any attempts to dispute it, automatically and immediately
+terminates this License and any permissions granted by the License to any
+disagreeing/disputing party.
+
+
+
+== 3. The two types of licensees
+
+This License defines two types of licensees, granting them completely
+different sets of permissions: full licensees and end-user licensees.
+
+Every person, organization or an entity of any other type are eligible to
+be end-user licensees provided that they agree with the License's terms and
+conditions, unless they take (or took in the past) any actions explicitly
+mentioned in this License as terminating the License and making the entity
+no longer eligible to be an end-user licensee.
+
+In contrast, only an individual, which means a physically existing human
+being, may be eligible for being a full licensee in terms of this License,
+provided that the individual in question is acting here and now on his/her
+own behalf and in his/her own interests, or on behalf of another
+individual but NOT on behalf of a non-individual third party, and
+provided that the individual fully understands and accepts all terms and
+conditions imposed by this License.  It does not matter whether the
+individual is engaged in commercial activities or acts to satisfy his/her
+personal needs.
+
+Organizations of any kind, companies, corporations, legal entities, be they
+commercial or non-profit, governmental or private, formal or informal, as
+well as any teams, groups, workgroups, consortiums, commitees, political
+parties, churches, foundations, movements, and any other subjects that are
+not individual human beings, are NOT eligible to be full licensees under
+the terms of this License.  This means that any entities other than
+physically existing human beings can only use the Work according to the
+permissions this License gives to end-user licensees; all these permissions
+are explicitly enumerated in the section 4 of this License.
+
+Individuals employed by an organization of any kind are considered to be
+acting on behalf of their employer during their work hours and/or when they
+use their workplaces provided by the employer, as well as when they do any
+work for their employer, hence, not being eligible as full licensees in
+terms of this License; in the spare time (being out of duty), however,
+every individual regardless of his/her employment status is eligible as a
+full licensee under terms of this License, provided that they don't do any
+work for their employer here and now.
+
+Self-employed individuals, such as individual enterpreneurs or freelancers,
+as well as volunteers, are NOT considered to act on anyone's behalf even
+when they perform some work on someone's order, regardless of whether the
+work is done in exchange for a fee or not; individuals who are not
+employees of an organization are only considered to act on behalf of the
+organization if they are doing a job that, by its nature, implies to act on
+behalf of the organization (as it is for attorneys, agents and the like).
+
+
+
+== 4. Permissions granted to the end-user licensees
+
+Only complete programs, by their nature, can be used by end-users; software
+libraries can not, technically, have end-users, because they are only used
+by programmers to create other software works.  This is why this License
+only grants end-user licensees permission to use such Works covered by
+this License that are complete computer programs, not code libraries.  Any
+such Work is referred to as "the Program".
+
+This License grants end-user licensees the permission:
+
+ a) to acquire and store the Program in both source code form and in the
+    form of binary executables;
+
+ b) to use the source code of the Program for the purpose of building
+    binary executables;
+
+ c) to install the Program in its executable form on the licensee's own
+    computers as well as on the computers rented from third parties, such
+    as dedicated or virtual servers, provided that such installation is not
+    indended as an act of transferring the Program (in any of its forms) to
+    any third parties;
+
+ d) to run the Program on the licensee's own computers as well as on the
+    computers rented from third parties, for any purposes the licensee may
+    have, including the purpose of providing some services to third parties,
+    provided that this doesn't lead to redistribution of the Program nor to
+    transferring the Program to third parties, in any of its forms, in the
+    whole or in parts.
+
+On the other hand, this License DOES NOT ALLOW (and, furthermore,
+explicitly forbids) end-user licensees to take any actions on the Program
+other than explicitly mentioned in the list above, including, but not
+limited to, reading and otherwise examining the source code by any of the
+licensee's employees and, generally, any use of the Program in its source
+code form for any purposes other than for building executable binaries of
+the same Program or, in case the Program is written in an interpreted
+language, for running the Program in an interpreter; making any
+modifications to the Program, neither in its source nor in its binary form;
+transferring the Program to any third parties, neither in the source nor in
+binary form, neither as verbatim copies nor modified, neither alone nor as
+a part of a larger whole; making any works derived from the Program.
+
+Employees of an end-user licensee, being individuals, may be eligible as
+full licensees in terms of this License.  As long as an organization or any
+other entity uses, or is going to use, any software covered with this
+License, thus being an end-user licensee in terms of this License, it is
+explicitly forbidden for them, being someone's employer, to order their
+employees to use any of the permissions granted to them by this License, as
+well as to ask them to do so in their spare time, even if such usage
+doesn't directly serve the employer's interests.  Doing so immediately and
+permanently terminates this License for this particular end-user licensee
+for any software and other works covered by this License, and makes the
+organization or other entity no longer eligible as an end-user licensee
+in terms of this License, for any Work covered by this License.
+
+The rest of the License's text and any permissions mentioned thereinafter
+only apply to the full licensees as defined in the section 3 of this
+License.  Entities not eligible to be full licensees are only granted the
+permissions explicitly mentioned in the list given in this section (see
+above), and can only get any other rights, permissions or conditions for
+using the Program by acquiring an explicit written permission of the
+Program's copyright holder, or all copyright holders if there are more than
+one of them.
+
+
+
+== 5. Permissions granted to the full licensees
+
+Permissions granted to the end-user licensees as stated in the section 4 of
+this License, are granted to the full licensees, too.  Besides that, full
+licensees, provided that they accept and obey all the conditions stated in
+the rest of this License's text, are also granted the following
+permissions:
+
+ a) to distribute verbatim copies of the Work in its source form to any
+    third parties under the terms and conditions of this License, imposing
+    no additional restrictions, provided that the Work remains publicly
+    available on the Internet, either at the site it was originally
+    received from, or being published at any other site by anyone who has
+    the right to do so, e.g., by this or any other full licensee;
+
+ b) to distribute verbatim copies of the Work which is a complete computer
+    program (the Program) in its binary form to any third parties under the
+    terms and conditions of this License, provided that such distribution
+    meets the requirements stated in the section 6 of this License;
+
+ c) to modify the Work, thus creating works derived from the original
+    Work, and use the modified version;
+
+ d) to create works derived from the original Work in other ways, such as
+    by including the Work into a larger whole;
+
+ e) to distribute works derived from the original Work, provided that the
+    derived works are distributed under exactly the same License, and all
+    terms and conditions stated in this License for such a distribution
+    are strictly and unconditionally obeyed.
+
+
+This License only permits binary distribution for unmodified Work (which
+must be a complete program).  However, in case a full licensee creates a
+work derived from the Work and publishes that derived work according to
+the terms and conditions of this License, the derived work is considered a
+separate work covered by this License, and its binary distribution becomes
+permitted as the distribution of an unmodified version of that (derived)
+work.
+
+Since only full licensees have the right to distribute any Work covered
+with this License, it is hereby explicitly clarified that it is NOT ALLOWED
+to distribute the Work through package repositories, application stores and
+other software distribution facilities owned and/or being run by entities
+not eligible as full licensees under the terms of this License.  This means
+in particular (but is not limited to) that the Work can not be included
+into distributions of Linux or other operating systems unless the
+distribution is run by an individual.
+
+On the other hand, a full licensee may distribute the Work through
+his/her own web site, ftp site and the like, even if the site is served by
+a server machine and/or uses bandwidth and other infrastructure that
+belongs to organizations or other entities not eligible as full licensees.
+Provided that the publishing facility, such as a web site or an ftp site,
+is as such owned and run by a full licensee, the facility's owner is
+considered the entity distributing the Work.
+
+A full licensee is also permitted to distribute the work through his/her
+personal space within someone else's site, such as a personal page at a
+social media site, or a personal directory at an ftp site.  This is only
+allowed provided that it is made clear for general public that the full
+lincensee individually controls the content of the personal space and is
+entirely responsible for the act of distributing the Work, while the whole
+site's owner only makes it technically possible.
+
+
+
+== 6. Conditions for distribution of the Program in binary form
+
+This License only allows non-source distribution of the Work provided that
+the Work is a complete computer program (the Program).  This License does
+NOT grant anyone (including the individuals eligible as full licensees) any
+permission to distribute in a form other than the form of the source code
+any Work which is not a complete computer program (typically a code
+library); so, any Work which is not a complete program, must only be
+distributed by full licensees and only in the form of source code.
+
+A full licensee is allowed to distribute verbatim copies of the Program in
+its binary form (executable files) to any third party.  It does not
+matter whether the executable files being distributed are prepared (built)
+by the licensee who distributes them, or by a party the licensee got the
+Program from, including the original copyright holder.  The following
+conditions must be met in case of such distribution:
+
+ a) neither the act of building binary executables from the source code,
+    nor the act of transferring them may change the legal status of the
+    Program in any way, including its licensing policy; the Program remains
+    copyrighted to the original copyright holders, and remains licensed
+    under the terms and conditions of this License; the licensee who
+    distributes the executables must not claim any rights over the Program
+    nor its copies being made during the distribution;
+
+ b) no copyright notices, nor notices related anyhow to the copyright law,
+    patent law, trademark law or any other so-called ``intellectual
+    property'' laws must be added to what the program originally beared
+    and/or displayed; on the other hand, as this section applies to
+    distribution of unmodified versions, it is implied that all original
+    notices are kept intact;
+
+ c) all parties receiving the copy of the Program in its binary form
+    (executable files), must be properly notified about the legal status
+    of the Program, supplied with a copy of this License and advised about
+    the possibility to receive the Program in its source form as well;
+
+ d) any distribution of the Work, including, but not limited to,
+    distribution of an unmodified version of the Work which is a complete
+    computer program (the Program) in its binary form, may only take place
+    provided that the full source code of the Program (or a Work) is
+    published on the Internet beforehand, openly, and remains published
+    thereof for at least three years after the last act of distribution in
+    binary form took place; the particular conditions for publishing the
+    source code are defined in the section 9 of this License;
+
+ e) before the distribution takes place, the licensee who performs the
+    distribution must make sure he or she has a copy of the full source
+    code of the Program, in the particular version used to build binaries
+    being distributed; the copy must be stored carefully for at least three
+    years after the last copy of the Program in binary form was transferred
+    to any third party;
+
+ f) as long as the source code of the Program, in the particular version
+    used to build binaries being distributed, remains properly published
+    by a third party, e.g., the original copyright holder or the party
+    the Program was originally received from by the licensee who
+    distributes it, there's no need for that licensee to publish the source
+    code on his/her own; if, however, the original publication becomes
+    unavailable and remains unavailable for three days or longer, then all
+    licensees who distributed at least one copy of the Program's executable
+    files during the last three years, must immediately take all necessary
+    steps to make their own copies of the source code publicly available;
+
+ g) the distribution of the Program in binary form may only take place
+    provided that every entity receiving the binaries is technically able
+    to get the sources and reproduce the binaries being distributed,
+    without the need to pay for any software (such as a proprietary
+    compiler or any other software component needed to reproduce the
+    binaries), without the need to obtain any additional licenses (such as
+    a developer license for a particular platform) and without the need to
+    ask anyone's permission both to produce the binaries and to execute the
+    binaries on devices that belong to users who are willing to do so.
+
+
+It is hereby explicitly clarified that it is NOT ALLOWED:
+
+ - to distribute the Work in the form of a binary executable produced by a
+   proprietary compiler and/or other proprietary software tools, unless it
+   is legally possible for every willing person to get and use all the
+   necessary tools free of charge;
+
+ - to distribute the Work in the form of a ``signed'' binary for a platform
+   which disallows to run ``unsigned'' binaries, unless it is technically
+   and legally possible for every willing person to provide the necessary
+   ``signature'' on his/her own, free of charge, and without asking
+   anyone's permission.
+
+
+
+== 7. Copyright policy for modifications made to the Work
+
+
+ 7.1. Separate objects for different copyright status and different
+      licensing policies
+
+Any software source code, being considered as a copyrighted work, is merely
+a text that consists of files, and each file can have its own copyright
+holder, or several of them.  For the purpose of this policy it is assumed
+that no parts of a single file can be copyrighted separately, although the
+copyright law allows even that.  However, should someone for any reason
+want to place a separate copyright on one's code which is a part of a
+larger file, there are no technical obstacles to move the code in question
+into a separate file and place the copyright on that file.
+
+A complete program, as long as it is represented as the source code, may
+also be considered as consisting of its main part and the code libraries.
+For the purpose of this policy, a library is always a set of files clearly
+separated from the rest of the code, logically integrated as a whole and
+self-containing in the sense that it must be clearly shown that the library
+can be, as a whole, used in other (unrelated) programs just as good as it
+is used in this particular program.  For instance, a library can not and
+must not depend on any code that resides in the main part of the program;
+it is also strongly discouraged (but still allowed) to let libraries depend
+on each other.
+
+The important thing about libraries is that each of the libraries used in a
+program can effectively have its own licensing policy.  Sometimes this
+affects the whole program, even in its binary representation, in the sense
+that the program must display the copyright status for the library along
+with any copyright notices displayed for the program itself.  For example,
+the well-known GNU Lesser General Public License requires this for binaries
+that contain the object code of libraries licensed under it, but doesn't
+require it for the case when the library in question is linked in runtime
+as a dynamically-loadable library.  This practice encourages the use of
+dynamic linking, which is questionable.  For the most of permissive free
+software licenses, however, this is not the case; for many libraries, their
+licensing policy doesn't impose any conditions regarding how the whole
+program must behave.
+
+For any Work covered with this License, separate files must be kept the
+minimal units that can have their own copyright status, and libraries must
+be kept as minimal units that have their own licensing policy.  If the Work
+is a complete program, its main part must all be covered with this License,
+but some of the libraries included into the source tree may have their own
+licenses, as long as this doesn't conflict with licensing of the program as
+a whole under this License.  If the Work is a code library, it must be
+put under this License altogether, or not licensed under this License at
+all.
+
+
+ 7.2. Copyright status for works derived from the one licensed under
+      this License
+
+Under the copyright law, any minor modifications may be subject to be
+copyrighted.  This License imposes a certain limit on this.
+
+Whenever a person being a full licensee in terms of this License makes any
+modifications to a Work, these modifications must be clearly marked so that
+the original author will not be accused for possible errors and regressions
+made by such modifications.  However, in many cases such modifications must
+not change the copyright status of a Work as a whole nor of a particular
+modified file, because the copyright for modifications is (as a condition
+imposed by this License) automatically transferred to the original author.
+This automatic copyright transfer applies to:
+
+ - minor modifications; any modifications that affect less than 10% of a
+   particular file must be considered minor for the purpose of this
+   condition;
+
+ - any modifications, regardless of their volume, on which their author
+   didn't place the appropriate copyright notice.
+
+In both cases the original author becomes the copyright holder of all
+modifications to the full extent, including, but not limited to, the right
+to publish or otherwise distribute the whole Work under any other license.
+
+In case the individual who modifies the Work as permitted by this License
+to full licensees, makes significant (that is, not minor as it is defined
+above) changes to the code, and wishes to keep the copyright on the work
+done thereof, that person must do one of the following:
+
+ - either place all significant pieces of the code which are to have a
+   different copyright status into separate files and place the appropriate
+   copyright notices in these files (typically in a commentary at the
+   beginning of the file); in case the Work has a separate file that
+   summarizes the copyright status for all parts of the Work, it is
+   allowed (and may be necessary) to change that file to reflect the fact
+   that certain files from now on have a different copyright status;
+
+ - or add to existing files a copyright notice that starts with the words
+   "portions copyright"; this is only allowed if the file already has a
+   copyright notice of the original author (copyright holder);
+
+ - in case the Work in question isn't used to have copyright notices for
+   each file, but instead summarizes its copyright status in a dedicated
+   file, it is allowed to modify that file to reflect the changes; it is up
+   to the person who made the modification to refrain from adding copyright
+   notices into individual files, or to do so despite of the practice
+   adopted for the rest of the Work.
+
+In case the Work is a complete program and the Program displays a copyright
+notice when it runs, then:
+
+ - the best possible thing is to negotiate with the original author what
+   is to be displayed as the copyright notice by the modified version, so
+   the author of modifications MUST at least try to contact the original
+   author (or authors) and negotiate the question;
+
+ - it is always allowed to leave the original copyright notice unchanged,
+   provided that it is accompanied by an additional notice which informs
+   the user that this is a modified version (like "slightly modified by
+   John Doe");
+
+ - in case more than 10% of the source code of the Program in its modified
+   version is written by the new author, such author is permitted to add
+   to the original copyright notice displayed by the Program his/her own
+   copyright notice that starts with the words "portions copyright"; this
+   permission does not depend on the opinion of the original copyright
+   holder and may be used in cases when it is either impossible to contact
+   the original author, or the negotiations with the original author didn't
+   lead to a result that satisfies all parties;
+
+ - in case the Program derived from the original Work contains less than
+   50% (of the whole Program's volume) of a code that comes from the
+   original Work, it is allowed to replace the original copyright notice
+   with a copyright notice of the new author, accompanied by a notice like
+   "based on the work...", identifying the original Work and its author
+   (authors); displaying of the original copyright notice in this case is
+   encouraged, but optional.
+
+
+ 7.3. Copyright notices for a Program that uses a Library covered by this
+      License
+
+If a source code of any program contains a Library covered by this License,
+such a program is a derived work of that Library and as such must either be
+kept private, or be distributed under the terms and conditions of this
+License.  Besides that, the appropriate credits must be given within the
+source code to the creators of the Library.
+
+However, in case the resulting program is distributed in its binary form
+according to the License (which implies, but is not limited to, that the
+full source code is published openly beforehand), and the Library is
+published by its autor (authors) as a code library (which means it is
+clearly stated by the original author(s) that the work is a code library
+and nothing else), there is no obligation for a binary of the whole program
+to display any copyrights of the Library, nor other notices related to the
+fact the program uses the Library.  On the other hand, displaying of such
+notices is certainly not prohibited; it is up to the authors of the program
+whether to mention in the messages displayed by their program the fact the
+program uses a Library covered by this License.
+
+The permissions given in this section of the License don't depend on the
+volume of the Library, nor on the volume of the main part of the Program,
+nor on their ratio.
+
+
+ 7.4. Clearly separated libraries
+
+If a work derived from the Work covered by this License contains
+identifiable sections (sets of source files) that can be reasonably
+considered independent and separate works in themselves, and, being so
+considered, are not derived from the original Work, which means they don't
+contain any of the code from the original Work and don't depend on such
+code, then authors of such sections may, at their option, clearly declare
+the code sections as separate code libraries, with their own copyright and
+licensing policies, provided that such policies don't contradict with
+inclusion of the libraries into the derived work as a whole.
+
+
+
+
+== 8. Conditions for distribution of derived Works
+
+Any software work, made by modifying the Work covered by this License, or
+otherwise derived from such Work, provided that the derived Work is made by
+an eligible full licensee, must either be kept private, or distributed
+under the terms and conditions of this License.  It is not legally possible
+for any work derived from a Work covered by this License to be relicensed
+to any terms and conditions different from those stated by this License,
+nor to be distributed otherwise than under this License, unless such
+relicensing and distribution is explicitly permitted in written by every of
+the original Work's copyright holders.
+
+Before any distribution of a derived work starts, be it a distribution in
+the source or in binary form, the party (full licensee) who intends to
+perform the distribution, must publish the source code of the Work on
+the Internet, openly, and the conditions defined in the section 9 of this
+License must be met for such publication.
+
+
+
+== 9. Conditions for publishing the source code of the Work being
+      distributed
+
+Before any distribution of the Work covered by this License starts, the
+complete source code of the Work must be published on the Internet,
+fulfilling the following conditions:
+
+ a) the source code must be published on a site which doesn't require any
+    registration and imposes no limitations on downloading the published
+    source code, which means that any party who has Internet connectivity
+    in any part of the world must be able to download the code; in case
+    access to the site gets blocked by authorities of a particular country,
+    location, community or the like, the publisher is encouraged, but is
+    not obliged to take measures to publish elsewhere; however, the site
+    must not block access from any specific locations on its own;
+
+ b) it must be possible to download the source code in batch mode (e.g.,
+    from a script) without human intervention with well-known programs such
+    as wget, lftpget, curl and so on; in particular, this means the access
+    must not be restricted by any CAPTCHA tests or the like; furthermore, it
+    must not be required to have a working interpreter of JavaScript nor of
+    any other language, and it must not be required even to have a web
+    browser capable of rendering HTML;
+
+ c) the access to the published source code must be provided with either
+    the FTP protocol, as defined in RFC959, or the HTTP protocol of versions
+    1.1, 1.0 or 0.9, or the HTTPS protocol, which is strongly discouraged,
+    but is still acceptable; publishing the source code on a server that
+    only supports "later" protocols such as HTTP/2, HTTP/3, SPEEDY and the
+    like, regardless of their current standardizing status and adoption, and
+    refuses to give away the content to clients that don't support such
+    protocols, does NOT fulfill the requirement for publishing the source
+    code;
+
+ d) the source code of the Work must be published as a single archive file
+    in one of the common formats, which by the time of the publication has
+    existed for at least 20 years, is widespread in the world, has an open
+    and clearly written specification, which is available completely
+    royalty-free and for which there are open source, freely available
+    implementations written in ANSI C; .zip, .tar, .tar.gz and .tar.bz2 are
+    examples of such formats;
+
+ e) for the case of distribution of the Program in the form of compiled
+    binary executables, the party who intends such distribution must
+    publish the exact version of the source code which was used to build
+    the binaries going to be distributed, and a detailed instruction must
+    be provided on how to build exactly the same binaries;
+
+ f) in case the distribution of the Program in binary form took place at
+    least once, the complete source code of the Program must remain
+    available on the Internet, fulfilling all the conditions above, for at
+    least three years after the last copy of the binaries was given away to
+    any party; it is the duty of the party who performed the binary
+    distribution to guarantee the availability of the published source
+    code.
+
+
+
+== 10. Prohibition of corporate and other non-individual copyright holders
+
+In case someone eligible as a full licensee under the terms of this License
+significantly modifies the Work, this may lead to the situation when the
+modified version of the Work (a derived work) has two (or more) copyright
+holders: one of them holds the copyright for the original Work, and the
+other has the copyright for the changes that led to nascense of the derived
+work.
+
+It is in most cases legally impossible to disallow anyone to transfer their
+copyrights to any parties.  However, in case one of the copyright holders
+of the Work covered by this License (or several such copyright holders, but
+not all) transfers his/her copyright (copyrights) to any party which is not
+an individual human being, this automatically and immediately terminates
+this License for all parts of the Work for which the copyright is still not
+transferred to such party, thus in most cases making the Work as a whole
+undistributable and unusable, until the copyright term for the whole work
+is over (which is usually impractical to wait for).
+
+The same happens in case the copyright for any part of the Work (but still
+not for the whole Work) is assigned to any non-individual party in any way,
+such as by conditions of any contract or other agreement, by a court
+judgement, in the order of inheritance, or whatsoever else.
+
+The license termination only affects works that contain parts on which the
+copyright is actually transferred to any non-individual holder; the License
+remains in effect for all works that don't contain such parts, e.g., the
+original Work or other works derived from the same original.
+
+The prohibition defined in this section of the License does not apply when
+a part of the derived work, which in itself is not derived from the
+original Work anyhow, is clearly separated into a library as explained in
+the section 7.4.  Such library can have non-individual copyright holders
+without termination of any license rights, provided that:
+
+ - the library is distributed under a license which doesn't contradict
+   with inclusion of the library into a work covered, as a whole, by this
+   License, and
+
+ - the library is officially published as a completely separate work,
+   openly, by its copyright holders or other parties having the right to do
+   so, and the publication took place before the whole Work (which is
+   covered by this License and includes the library as its part) was
+   published.
+
+
+
+== 11. Prohibition of the distribution in case it is legally impossible to
+      satisfy the conditions of the License
+
+If, as a consequence of a court judgment or allegation of patent
+infringement or for any other reason (not limited to patent issues),
+conditions are imposed on a full licensee (whether by court order,
+agreement or otherwise) that contradict the conditions of this License,
+they do not excuse the licensee from the conditions of this License. If the
+licensee can not distribute the Work so as to satisfy simultaneously
+his/her obligations under this License and any other pertinent obligations,
+then as a consequence the licensee may not distribute the Work at all.
+
+If any portion of this section is held invalid or unenforceable under any
+particular circumstance, the balance of the section is intended to apply
+and the section as a whole is intended to apply in other circumstances.
+

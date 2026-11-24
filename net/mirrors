@@ -1,0 +1,9 @@
+# Files for vpn's speed test (the first 5 MB, or 6 seconds) and, from
+# the first two lines, the clock (their answers' Date, when the two
+# agree). Plain HTTP, free-software sites run by different people, so
+# if one is down or blocks us the next is used. Each must be a file
+# of 5 MB or more. Installed as /etc/vpn/mirrors.
+http://distfiles.gentoo.org/snapshots/portage-latest.tar.xz
+http://ftp.gnu.org/gnu/gcc/gcc-13.2.0/gcc-13.2.0.tar.xz
+http://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.6.tar.xz
+http://deb.debian.org/debian/ls-lR.gz

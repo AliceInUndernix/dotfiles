@@ -1,0 +1,16 @@
+#!/sbin/openrc-run
+# Riseup VPN, then Tor (net/ in the dotfiles). Starts "vpn daemon" in
+# the background: it picks a server, connects, sets the clock, starts
+# Tor, and watches the tunnel. Installed as /etc/init.d/vpn.
+
+description="Riseup VPN, then Tor, at the level chosen with vpn"
+command=/usr/local/bin/vpn
+command_args=daemon
+command_background=yes
+pidfile=/run/vpn.pid
+retry="TERM/20/KILL/5"
+
+depend() {
+    need vpnfw
+    after net
+}

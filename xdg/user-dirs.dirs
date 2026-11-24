@@ -1,0 +1,11 @@
+# Where programs put downloads, pictures, music and so on
+# (linked to ~/.system/config/user-dirs.dirs). All of them are just your home
+# directory: no Downloads, Pictures or "Public Share" directories.
+XDG_DESKTOP_DIR="$HOME"
+XDG_DOWNLOAD_DIR="$HOME"
+XDG_TEMPLATES_DIR="$HOME"
+XDG_PUBLICSHARE_DIR="$HOME"
+XDG_DOCUMENTS_DIR="$HOME"
+XDG_MUSIC_DIR="$HOME"
+XDG_PICTURES_DIR="$HOME"
+XDG_VIDEOS_DIR="$HOME"

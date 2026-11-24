@@ -1,0 +1,242 @@
+seal - turns a directory into one encrypted file, and back
+==========================================================
+
+SYNOPSIS
+
+    seal [-knqsv] [-o FILE] DIR       DIR -> DIR.seal, then DIR goes
+    unseal [-fknqsvL] [-d DIR] FILE   FILE -> RAM, with a link to it
+    unseal -t [-fqs] FILE             check FILE, list what it holds
+    seal -l                           what is unsealed in RAM
+    seal -a [-nqsv]                   seal all of it back
+    seal -c [-q]                      take away dead links
+    seal -h                           help
+
+unseal is the same program (a link to seal; seal -u is unseal too).
+
+DESCRIPTION
+
+Disk encryption protects everything while the computer is off. Once
+it is on and you are logged in, every file is open to whatever runs
+as you. seal keeps the files you don't need every day locked even
+then: one command turns a directory into one encrypted file, and one
+command gives it back.
+
+It asks for the password on the terminal, with nothing echoed: twice
+when sealing (a typo would lock the files away for good), once when
+unsealing. It says what it did:
+
+    baba -> baba.seal (3 directories, 12 files, 1 link, 40.2 MiB)
+
+OPTIONS
+
+    -o FILE   seal: the file to write (default DIR.seal; for a
+              directory from RAM, the file it was unsealed from). It
+              must not exist yet.
+    -d DIR    unseal onto the disk, into DIR, and remove FILE
+    -k        keep: seal leaves DIR, unseal -d leaves FILE
+    -L        unseal: make no link next to FILE
+    -n        dry run: check everything, say what would happen, change
+              nothing. seal -n needs no password: it reads DIR and
+              finds what can't be sealed. unseal -n asks for it and
+              reads and checks all of FILE.
+    -t        unseal: check FILE and list what is in it (-n -v)
+    -f        unseal: go on when FILE is damaged or the password
+              seems wrong (see below)
+    -s        read the password from standard input (one line), for
+              scripts: pass show baba | seal -s baba. Only from a pipe
+              or a file: on a terminal it would be echoed, so seal
+              stops and says so.
+    -q        say nothing but errors (and -t's list)
+    -v        name each file as it goes in or comes out
+    -l        seal: list the directories unsealed in RAM, where they
+              came from and their links
+    -a        seal: seal all of them back (a password for each)
+    -c        seal: take away the links whose directory is gone
+    -u        seal -u is unseal
+    -h        help (also --help)
+    --        end of options: seal -- -odd
+
+Options go before the name. A wrong one, or one that doesn't fit
+(seal -d, unseal -o, unseal -k without -d), stops it before anything
+is done.
+
+EXIT STATUS
+
+    0   done
+    1   it failed, and says why (and what it left as it was)
+    2   wrong options; nothing was done
+
+EXAMPLES
+
+    seal baba                  baba/ -> baba.seal, then baba/ goes
+    seal -n baba               would it work? (no password, no change)
+    seal -o holiday.mp4 baba   any name: baba/ -> holiday.mp4
+    unseal baba.seal           -> into RAM: /run/user/UID/seal/baba,
+                               and the link baba -> it, next to the file
+    seal baba                  (the link) back into baba.seal; the RAM
+                               copy and the link go
+    seal -a                    everything unsealed back into its file
+    unseal -d . baba.seal      -> ./baba on the disk, baba.seal goes
+    unseal -t baba.seal        check it and list what it holds
+
+CHANGED OPTIONS
+
+So that a letter means the same in seal and clean: unseal -n (no link)
+is now -L, and -n is the dry run in both programs. New: -n, -v, -h.
+seal -s keeps its meaning (the password from standard input); clean's
+old -s is now -H.
+
+
+Unsealing into RAM
+------------------
+
+By default unseal puts the directory into RAM, never onto the disk:
+into $XDG_RUNTIME_DIR/seal, /run/user/UID/seal or /dev/shm/seal-UID
+(the first that is a tmpfs; only yours, mode 700). The plain files
+never touch the disk, and they are gone at shutdown. Work in it as
+in any directory, then seal it again: it goes back into the file it
+came from, which is replaced only once the new one is written and
+checked. Until then the sealed file stays as it was, so a crash or a
+reboot loses only what changed since unsealing.
+
+So you can find it where it was, unseal leaves a link next to the
+sealed file, named like the directory: unseal baba.seal makes
+baba -> /run/user/UID/seal/baba. Work in baba as usual; seal baba
+seals the directory behind the link, and takes the link away. seal -a
+does it for every unsealed directory at once. (If something named
+baba is already there, unseal says so and makes no link; -L makes
+none.)
+
+Each link is written down in ~/.system/state/seal/links before it is
+made. After a crash or a reboot RAM is empty and the links point
+nowhere: seal -c takes them away, and so does every login (~/.profile
+runs seal -c -q). So someone who takes the disk finds no plain files,
+only, until the next login, links pointing nowhere. The list holds the
+links' names while they exist: they are the directories' names, which
+the sealed files otherwise hide.
+
+unseal -d puts it onto the disk instead, when it should stay open.
+
+
+What it does, step by step
+--------------------------
+
+seal DIR:
+ 1. asks for the password twice;
+ 2. packs DIR into a file next to the output, under a hidden name,
+    encrypting as it goes;
+ 3. reads that file back, decrypts it and compares every name, type,
+    mode, link and byte with DIR;
+ 4. only then gives it its name, and only then removes DIR, and only
+    what it sealed: a file that changed or appeared meanwhile is left,
+    and named.
+If anything goes wrong before step 4, nothing has changed.
+
+unseal FILE unpacks into a hidden directory first and gives it its
+name at the end. A wrong password, or a file that was changed, stops
+it at once, and what was unpacked so far is removed.
+
+
+The encryption
+--------------
+
+One fixed set, the same in every sealed file, nothing to choose or
+negotiate:
+
+    password -> key   Argon2id: 32 MiB of memory, 2 passes, a random
+                      16-byte salt per file (so the same password
+                      gives a new key each time)
+    encryption        XChaCha20-Poly1305, in chunks of 64 KiB
+
+Argon2id makes each guess at the password cost 32 MiB and some time,
+so guessing many passwords is slow even on graphics cards. It takes
+about 0.05 s on a new computer and, estimated, 1-2 s on an old netbook
+(an Eee PC 900); the rest runs at about disk speed.
+
+Each chunk carries a mac: any changed byte, a chunk cut off, added,
+swapped or left out is found, and said where. The last chunk is marked
+as the last, so a file cut short at a chunk's end is found too.
+
+The file is the salt and then the chunks: no header, no magic, no
+version, no name of seal. It looks like random bytes from its first
+byte to its last, so any name works, holiday.mp4 as well as baba.seal.
+The directory's name, the names in it and their sizes are all inside
+the encryption.
+
+The code is taken from Monocypher 4.0.2 (public domain), only the
+parts needed, rewritten in C89 into crypto.c. make test checks it
+against libsodium and the Argon2 reference.
+
+What goes in: names, contents, rwx permissions (0777) and symbolic
+links (as links, never followed). What doesn't: owners, groups, times
+(unsealed files get the time of unsealing), setuid bits, hard links
+(each name gets its own copy). A device, pipe or socket in the
+directory stops seal before it changes anything.
+
+unseal never writes outside the directory it unpacks: names with ..,
+/ at the start, or a directory part that is a link are refused, so
+even a file made by someone else can't reach your other files.
+
+
+-f: going on anyway
+-------------------
+
+A wrong password and a damaged file look the same at the first chunk:
+unseal says "wrong password, or it is not a sealed file". With -f it
+unpacks what it can anyway: a damaged chunk is decrypted without its
+check, which gives back everything else and garbage in the damaged
+64 KiB. It says each place, keeps the sealed file and exits with 1.
+With a really wrong password nothing can be read, -f or not.
+
+
+What it can't do
+----------------
+
+- Removing is not wiping. When seal removes DIR, the old contents can
+  stay in the free blocks of the disk until something writes over
+  them; on an SSD, overwriting doesn't even reach the same blocks.
+  Disk encryption covers that while the computer is off; while it is
+  on, root (or a program with access to the raw disk) could find them.
+  Best: make secret files inside an unsealed directory in RAM from the
+  start, so they are never on the disk unencrypted.
+- The name fools a look, not an expert. holiday.mp4 won't play (a
+  player says it is broken), but anyone who looks finds random bytes,
+  not a video, and its size says roughly how much is inside.
+- The password is typed where programs can see it. In X, every program
+  of yours can read the keyboard, so a keylogger would get it. For the
+  most secret ones, seal and unseal on a text console (Ctrl+Alt+F2),
+  where X programs can't listen.
+- While a directory is unsealed in RAM, it is a normal directory: open
+  to every program of yours, until you seal it again. tmpfs can go to
+  swap when memory runs low: keep swap encrypted too (or have none).
+- seal keeps the password and the key out of swap and core dumps, and
+  stops other programs of yours from reading its memory, but a program
+  running as root can.
+- Forget the password and the files are gone: there is no way back.
+  Keep a copy of the important ones elsewhere.
+
+
+Build and install
+-----------------
+
+Plain C (C89), only libc, static. install.sh builds it into
+~/.system/bin, with unseal as a link to seal (no root needed):
+
+    ~/dotfiles/install.sh seal
+
+By hand:
+
+    make
+    make test          the crypto against references, then seal itself
+    make PREFIX=$HOME/.system install
+
+Files: seal.c (the commands, the password, RAM), common.c (helpers
+shared with diary), pack.c (the archive, its chunks, checking,
+unpacking), crypto.c (Argon2id, XChaCha20-Poly1305, from Monocypher),
+test/vectors.c (the crypto against libsodium and the Argon2
+reference), test/run.sh (the tests).
+
+crypto.c is by Loup Vaillant, Michael Savage and Fabio Scotoni
+(Monocypher: public domain under CC0, with a 2-clause BSD licence as a
+fallback; the licence is at the top of crypto.c). The untouched
+Monocypher is in archive/monocypher.

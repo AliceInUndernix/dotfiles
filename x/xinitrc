@@ -1,0 +1,90 @@
+#!/bin/sh
+# Started by startx (linked to ~/.system/config/x/xinitrc by install.sh;
+# ~/.profile points XINITRC at it).
+
+# Wallpaper: Habamax's background colour, same as st, tmux and Neovim.
+xsetroot -solid "#1c1c1c"
+
+# Sound: start PipeWire and WirePlumber (Gentoo without systemd; with
+# systemd they start by themselves as user services).
+if [ ! -d /run/systemd/system ] && command -v gentoo-pipewire-launcher >/dev/null 2>&1; then
+	gentoo-pipewire-launcher &
+fi
+
+# Idle lock. 0 = never blank, lock or turn off the screen on its own.
+# Set a number of minutes (e.g. 10) to blank and lock after that long idle.
+# Restart X (Mod+Shift+q, then startx) for a change to take effect.
+IDLE_LOCK_MINUTES=0
+
+if [ "$IDLE_LOCK_MINUTES" -gt 0 ]; then
+	idle=$((IDLE_LOCK_MINUTES * 60))
+	xset s "$idle" "$idle"
+	xset +dpms dpms "$idle" "$idle" "$idle"
+else
+	xset s off
+	xset -dpms
+fi
+
+# xss-lock runs slock when the screen blanks (only if the idle lock above
+# is on) and always before the laptop suspends, so waking needs the
+# password. Mod+Shift+o locks by hand, Mod+Ctrl+Shift+z suspends.
+xss-lock -- slock &
+
+# Trackball: stop false double clicks and change buttons (see
+# ballfix/README). Add -m FROM=TO to change a button, e.g. -m side=middle.
+if command -v ballfix >/dev/null 2>&1; then
+	ballfix &
+fi
+
+# Status text on the right of dwm's bar (Mod+b shows the bar): the date
+# and time, updated at the start of every minute. Off by default (the bar
+# is hidden, and the loop wakes up every minute for nothing): set
+# STATUS_CLOCK=true to turn it on. See date(1) for the % codes in
+# STATUS_DATE. Off, the bar just says dwm-6.8. Restart X for a change to
+# take effect.
+STATUS_CLOCK=false
+STATUS_DATE="%H:%M %Z, %A, %d %B %Y"
+# The bar shows your own time; everything else stays in UTC (the system
+# zone), so no program can send your time zone anywhere. Put your zone's
+# name (a file under /usr/share/zoneinfo, e.g. Europe/Paris) in
+# ~/.system/config/tz. That file is yours only and not in this repo. Without it
+# the bar shows UTC.
+STATUS_TZ=$(cat "${XDG_CONFIG_HOME:-$HOME/.config}/tz" 2>/dev/null)
+[ -n "$STATUS_TZ" ] && [ -f "/usr/share/zoneinfo/$STATUS_TZ" ] ||
+	STATUS_TZ=UTC
+while $STATUS_CLOCK; do
+	xsetroot -name "$(TZ=$STATUS_TZ date +"$STATUS_DATE")"
+	sleep $((60 - $(date +%S | sed 's/^0//')))
+done &
+
+# Started at login (startrules in dwm/config.h), all on tag 9: btop,
+# the vpn screen and steno (its status screen, in st). Opened by hand
+# later, they open on the tag you are on like any other app. The vpn
+# screen asks your password for the full view; without it (Ctrl+C) it
+# shows the short one. They wait until dwm is up, so the desktop does
+# not wait for them.
+(
+	i=0
+	if command -v xprop >/dev/null 2>&1; then
+		while [ $i -lt 50 ] &&
+		    ! xprop -root _NET_SUPPORTING_WM_CHECK 2>/dev/null |
+		    grep -q 'window id'; do
+			sleep 0.1
+			i=$((i + 1))
+		done
+	else
+		sleep 1
+	fi
+	st -c btop -e btop &
+	if command -v vpn >/dev/null 2>&1; then
+		st -c vpntop -e sh -c 'vpn || vpn watch' &
+	fi
+	if command -v steno >/dev/null 2>&1; then
+		st -c steno -e steno &
+	fi
+) &
+
+# dwm runs until you quit it (Mod+Shift+q), which ends the X session.
+# dwm restart (or Mod+Ctrl+Shift+r) restarts dwm in place, as the same
+# process, so this needs no loop and X keeps running.
+exec dwm

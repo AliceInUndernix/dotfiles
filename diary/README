@@ -1,0 +1,196 @@
+diary - a private diary in one encrypted file
+=============================================
+
+SYNOPSIS
+
+    diary              open the diary: password, then the screen
+    diary -n           make a new diary (password twice)
+    diary -c CMD       run CMD in the open diary instead of the screen
+    diary -f FILE      another diary file than ~/.diary
+    diary -s           the password from standard input, for scripts
+    diary -h           help
+
+DESCRIPTION
+
+The diary is one file, ~/.diary, encrypted like seal's files (it is
+one: unseal opens it too). diary asks for the password, unpacks it
+into RAM (a tmpfs only you can read) and shows it. Everything you
+write is saved back into ~/.diary after each edit, and when you quit
+(q) the copy in RAM is overwritten with zeros and removed. There is no
+plain copy anywhere else, on the disk or in RAM.
+
+It holds:
+
+    your days            a page a day, written in Neovim
+    your plans           one day, several days, weekly, monthly, yearly
+    people and places    a note, more notes (appearance, schedule, ...),
+                         their own days, their plans, attached files
+    mentions             @mira in any text is about Mira, #bakery about
+                         the bakery: it shows on their calendar
+
+Attached files go through clean (../clean) first: their metadata goes
+and they get a hash of their own. A file clean doesn't know is
+attached only if you say so, and is marked "as-is".
+
+THE SCREEN
+
+The left side is the diary, the right side what is chosen in it, or
+the editor (Neovim, else Vim) while you write. Colours are Habamax's,
+boxes like btop's.
+
+    1 days      your calendar (green: you wrote that day, teal: plans),
+                your days, and what is coming up in the next 60 days
+    2 people    everyone; enter opens one: their calendar (their days,
+                their plans and every day of yours that mentions
+                them), their notes and their files
+    3 places    the same for places
+    4 search    everything, as you type; enter edits at that line
+
+On a day, the right side shows that day's page, then the plans on it
+(yours and everyone's), then what you wrote about others that day.
+
+KEYS
+
+Moving is with the arrows, never letters (the keyboard is not
+QWERTY). Moving between the boxes is tmux's: Ctrl-b, then tmux's own
+key for its panes and windows, so the Moonlander's tmux layer works.
+
+    Ctrl-b up, down, o    the box above, below, the next one
+    Ctrl-b right, left    into the editor, back to the left side
+    Ctrl-b n p 1-4        the next, last screen, a screen
+    Ctrl-b l              the screen you were on before
+    Ctrl-b Ctrl-b         a Ctrl-b for the editor
+
+    1 2 3 4     the screens            home end        first, last
+    up down     in a list; on a        pgup pgdn       ten lines; on a
+                calendar a week                        calendar a month
+    left right  a day back, forward    shift-left      a month back,
+                                       shift-right     forward
+    t           today                  shift-up        scroll the right
+                                       shift-down      side
+    enter, e    write or edit          n               new person,
+                                                       place or note
+    p           a plan on that day     v               mark a day: p
+                                                       then plans from
+                                                       there to here
+    a           attach a file          o               open it
+    r           rename it              D               delete (asks)
+    esc         back to the list       /               search
+    w           save now               !               a shell in the
+                                                       diary
+    Ctrl-\      to the editor and back, while it is open
+    ?           help                   q               save, wipe, quit
+
+In the editor, :wq (or :q) gives the right side back, and diary
+saves. While the editor is open, Ctrl-b left (or Ctrl-\) goes to the
+left side and Ctrl-b right back, without closing it.
+
+Inside tmux, tmux takes the first Ctrl-b itself: press it twice there
+(tmux sends the second one on), as for any program in tmux.
+
+THE FILES IN IT
+
+All plain text, so the shell (!) and grep work on it too:
+
+    days/2026-11-21                 your day
+    events                          your plans
+    people/mira/note                "key: value" lines, "--", text
+    people/mira/notes/appearance    more notes, any name
+    people/mira/days/2026-11-28     her day: what you know of it
+    people/mira/events              her plans
+    people/mira/files/              attachments (their own names)
+    people/mira/attached            name, a tab, clean/text/as-is
+    places/bakery/...               the same
+
+No endings (.txt): it is all text. A diary from before is renamed
+when it opens.
+
+The short name (mira) is the directory's name; @mira finds her. The
+note's "name:" line is the full name, and the other "key: value"
+lines before "--" show on her box (met, birthday, address, ...).
+
+Plans, one a line in events (# starts a comment):
+
+    2026-11-25 dentist at 10:00                one day
+    2026-11-25..2026-11-28 riding trip         several days
+    weekly mon,thu chess at 18:00              every week
+    monthly 15 rent                            every month
+    yearly 03-14 birthday                      every year
+
+A plan that mentions @mira shows on her calendar too.
+
+SETTINGS
+
+~/.system/config/diary/config (linked to diary/config in the dotfiles): the
+file, the editor (it falls back to nvim, vim, vi when the one set
+isn't there), the programs that open attachments (feh, Sioyek, mpv),
+the clean program, the shell. The file explains each.
+
+SAVING, AND WHAT IF IT CRASHES
+
+Each save: a new random salt and key (Argon2id from the password,
+which stays in locked memory while the diary is open), the whole
+diary written to a hidden file next to ~/.diary, read back and
+compared, then the old one becomes ~/.diary.old (one save older,
+encrypted too) and the new one ~/.diary. Until then ~/.diary is as it
+was.
+
+    diary killed, terminal closed   the copy stays in RAM. The next
+                                    diary says so and asks: open it,
+                                    save it, or wipe it
+    the terminal is closed (HUP)    diary saves and wipes first
+    power cut, reboot               RAM is gone; ~/.diary is the last
+                                    save (at most the edit in progress
+                                    is lost)
+    a crash while saving            ~/.diary is untouched
+    diary in two terminals          the second one says the diary is
+                                    open, and stops
+
+A wrong password, or a damaged file, opens nothing. unseal -f gets out
+what can be read of a damaged one (see seal/README).
+
+THE ENCRYPTION
+
+seal's: Argon2id (32 MiB, 2 passes, a new salt each save) and
+XChaCha20-Poly1305 in 64 KiB chunks, from Monocypher. The file looks
+like random bytes from first to last: no header, no names. Fixed
+forever, so unseal can always open it.
+
+WHAT IT CAN'T DO
+
+- While it is open, the diary is a normal directory in RAM: every
+  program of yours can read it. Quit when you are done.
+- The editor keeps things of its own. With "private yes" (the
+  default) diary runs it with -i NONE (no history of what was typed,
+  searched or yanked) and puts its undo files, views, backups and swap
+  files in RAM next to the diary (XDG_STATE_HOME, and for nvim and vim
+  undodir, viewdir, backupdir, directory), wiped when it closes. Undo
+  works while the diary is open, but not after you open it again. A
+  plugin that writes elsewhere on its own isn't covered.
+- Viewers keep things too: Sioyek remembers the files it opened (their
+  paths and names), mpv may as well.
+- The password is typed where X programs could read it; for the most
+  care, open the diary on a text console.
+- Forget the password and the diary is gone. Keep a copy of
+  ~/.diary somewhere (it is encrypted).
+- tmpfs can go to swap when memory runs low: keep swap encrypted, or
+  have none.
+
+BUILD AND INSTALL
+
+Plain C (C89), only libc, static. It uses seal's code from ../seal
+(the archive, the crypto, common helpers), not a copy. install.sh
+builds it into ~/.system/bin:
+
+    ~/dotfiles/install.sh diary
+
+By hand:
+
+    make
+    make test          (make -C ../seal first, for the unseal test)
+    make PREFIX=$HOME/.system install
+
+Files: main.c (options, settings), vault.c (opening, saving, wiping,
+crashes), data.c (reading the diary's files, dates, plans), ui.c (the
+screen, keys), term.c (the small terminal the editor runs in),
+test/run.sh (the tests).

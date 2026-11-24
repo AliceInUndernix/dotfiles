@@ -1,0 +1,20 @@
+# To do
+
+## Status
+
+- **Finished:** dwm, dmenu, st, slock (keep as it is), tmux, Neovim,
+  install.sh (runs as you; asks for root via su -c only where needed).
+- **Later, the owner configures them or asks:** mpv, Sioyek,
+  Flameshot, wiremix, btop, feh.
+- **Not started:** IceCat and Chromium settings.
+
+## Decided, left for later
+
+- **Notification daemon.** Pick one (dunst is the one suckless lists on
+  its "rocks" page) and set it up in Habamax colours, started from
+  `x/xinitrc`.
+- **Fewer hidden files in `~`.** Done for what this repo manages:
+  programs, their settings, data, state and caches are in
+  `~/.system`; only `~/.system`, and the links `~/.profile` and
+  `~/.config`, remain. Programs that ignore XDG (browsers' `~/.pki`,
+  `~/.mozilla`, ssh, gnupg) still make their own directories.

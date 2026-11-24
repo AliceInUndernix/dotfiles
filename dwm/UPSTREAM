@@ -1,0 +1,85 @@
+Upstream: https://git.suckless.org/dwm
+Tag:      6.8
+Commit:   f63cde9354504ee9cfecc07517c03736d0f90c26 (2026-01-30)
+Copied:   2026-11-11, upstream tree at the tag without .git
+
+config.h started as a copy of config.def.h. Edit config.h; keep
+config.def.h as upstream so new releases can be compared against it.
+
+One change from upstream in config.def.h too: MODKEY is Mod4Mask (Super)
+instead of Mod1Mask (Alt), to match the Moonlander dwm layer.
+
+Patches (originals from dwm.suckless.org/patches, kept in patches/,
+applied in this order; dwm.c already has them, so don't apply again):
+  alwayscenter       dwm-alwayscenter-20200625-f04cac6.diff
+  attachbelow        dwm-attachbelow-6.2.diff (updategeom hunk by hand)
+  scratchpad         dwm-scratchpad-20240321-061e9fe.diff
+  combo              dwm-combo-6.1.diff
+  noborder           dwm-noborderselflickerfix-2022042627-d93ff48803f0.diff
+                     (solitary() prototype by hand)
+  pertag             dwm-pertag_with_sel-20231003-9f88553.diff
+                     (by hand: the bar is left out, so Mod+b is the same
+                     on every tag; comboview goes through view() so a
+                     combo uses the settings of its first tag)
+  movestack          dwm-movestack-20211115-a786211.diff (movestack.c only)
+  doubledeck         dwm-deck-double-6.2.diff
+  restart            local, not from suckless.org (the idea of restartsig
+                     and preserveonrestart, written for this dwm):
+                     Mod+Ctrl+Shift+r (Mod+Shift+r before cfacts) or
+                     `dwm restart` in a terminal execs dwm again in
+                     place. Before that, every window gets its tags,
+                     monitor, order and floating geometry as an X
+                     property, and the root window each monitor's tags in
+                     view and pertag settings (layouts, mfact, nmaster,
+                     focused window); the new dwm reads them back. `dwm
+                     restart` sends a _DWM_RESTART ClientMessage to the
+                     root window. patches/dwm-restart-local.diff.
+  resizecorners      local, the idea of the suckless resizecorners patch:
+                     Mod+right-drag resizes from the corner nearest the
+                     pointer and the opposite corner stays put (size
+                     hints applied before the edge moves, so terminals
+                     don't drift). Corner cursors for each direction.
+                     patches/dwm-resizecorners-local.diff.
+  sticky             local, the idea of the suckless sticky patch:
+                     Mod+s pins the focused window on its own tags,
+                     Mod+Shift+s on every tag of its monitor; either
+                     floats it, and the same key again unpins it.
+                     Mod+j/k, tag changes and closing windows never
+                     focus a pinned window; click it to. Kept over dwm
+                     restart. patches/dwm-sticky-local.diff is the first
+                     version (every tag only, on Mod+s); dwm.c has the
+                     current one. Suspend moved from Mod+Shift+s to
+                     Mod+Ctrl+Shift+z for it.
+  snapwindows        local: moving (Mod+left-drag) and resizing
+                     (Mod+right-drag) snap window edges to the edges of
+                     other visible windows when they come within winsnap
+                     pixels (config.h, 16), as upstream snaps to the
+                     screen edges within snap (32). Each edge snaps to
+                     both sides of a window it is level with: top to
+                     bottom, left to left, and so on. Resizing also snaps
+                     the dragged edges to the screen edges, and a snapped
+                     edge ignores size increments so it lines up exactly.
+                     patches/dwm-snapwindows-local.diff.
+  masterdeck         local, the reverse of doubledeck: the master
+                     windows lie on top of each other at full master
+                     size (the focused one shows), the stack is tiled
+                     as in tile. Symbol D[], Mod+e. With nmaster 1 it
+                     looks like tile; Mod+i/d change how many windows
+                     are in the master pile.
+  startrules         local: startrules[] in config.h, rules that place
+                     only the first matching window in the first minute
+                     after login (for apps x/xinitrc starts).
+  cfacts             local, the idea of the suckless cfacts patch: each
+                     window has a height weight in its column (tile, and
+                     the stack of masterdeck). Mod+Shift+h/l move the
+                     border under the focused window up/down by 1/40 of
+                     the column (the last window moves the border above
+                     it); only the two windows at that border change,
+                     and none gets less than 1/20. Kept over dwm restart.
+                     resetcfacts (equal again) has no key yet. Lock moved
+                     from Mod+Shift+l to Mod+Shift+o for it, and st from
+                     Mod+Shift+Return to Mod+Shift+u, and restart from
+                     Mod+Shift+r to Mod+Ctrl+Shift+r, so Shift on a
+                     Moonlander dwm-layer key never does something else.
+Their config.def.h hunks are not applied (config.def.h stays upstream);
+the settings are in config.h.

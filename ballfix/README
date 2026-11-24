@@ -1,0 +1,42 @@
+ballfix - stops false double clicks of a trackball, and changes buttons
+======================================================================
+
+SYNOPSIS
+
+    ballfix [-v] [-d DEVICE] [-t MS] [-m FROM=TO] ...
+
+DESCRIPTION
+
+The Kensington SlimBlade Pro (USB 047d:80d7) has fixed firmware that
+cannot be flashed, unlike the Moonlander's. A worn switch bounces: one
+press reaches the computer as press, release, press. ballfix reads the
+ball, and passes everything on through a new device named "ballfix".
+
+A release is held back for MS milliseconds. If the same button is
+pressed again within that time, the release and the press are both
+thrown away: the button stays down, as your finger kept it. A click
+costs MS ms of delay on its release, nothing on its press.
+
+OPTIONS
+
+    -d DEVICE  the ball's event device (default: its name under
+               /dev/input/by-id, "-event-mouse")
+    -t MS      the time above (default 40; 0 turns it off). Raise it if
+               false clicks go on, lower it if fast real clicks are lost.
+    -m FROM=TO button FROM acts as button TO. Names: left right middle
+               side extra forward back task. May be given many times.
+    -v         say on stderr every button event, every change and every
+               bounce. Use it to learn which name is which button.
+
+It grabs the ball, so the system sees only the new device. It needs
+access to /dev/uinput and to the ball's event file (groups plover and
+input here). When it ends, the ball is released.
+
+EXAMPLE
+
+    ballfix -v                       find the names of the buttons
+    ballfix -t 60 -m side=middle &   side button clicks the middle
+
+BUILD
+
+    make; make install PREFIX=~/.system   (or ./install.sh ballfix)

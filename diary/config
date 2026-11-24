@@ -1,0 +1,33 @@
+# diary's settings (linked to ~/.system/config/diary/config). One setting a
+# line: a name, a space, the value. Lines starting with # are comments.
+# Left out, a setting has the value shown.
+
+# the diary file
+#file ~/.diary
+
+# the editor in the right pane, with its options. When it isn't there,
+# diary takes nvim, else vim, else vi.
+#editor nvim
+
+# private yes: the editor runs with -i NONE, so it keeps no history of
+# what you typed, searched or yanked in the diary (shada/viminfo), and
+# its undo files, views, backups and swap files go into RAM next to
+# the diary, not onto the disk. They work as set while the diary is
+# open, and are wiped when it closes.
+#private yes
+
+# programs for o (open an attachment): the endings, then the program
+# and its options. Text (.txt, .md) opens in the editor. Once any
+# viewer line is here, only the ones here count.
+#viewer jpg,jpeg,png,gif,webp,bmp,tif,tiff,svg,heic,avif feh
+#viewer pdf,epub,djvu,cbz,mobi sioyek
+#viewer mp4,mkv,webm,mov,avi,mp3,ogg,opus,flac,wav,m4a,aac mpv
+
+# the program that takes the metadata out of attachments
+#clean clean
+
+# the shell for ! (else $SHELL)
+#shell ksh
+
+# utf8 no: show only ASCII; other bytes become ?
+#utf8 yes

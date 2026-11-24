@@ -1,0 +1,49 @@
+# steno's settings (~/.system/config/steno/config is a link to this file).
+# One setting a line; # starts a comment. See steno/README.
+
+# The keyboard: auto tries /dev/ttyACM0 to ttyACM9 until the Moonlander
+# answers, and again whenever it is unplugged.
+port auto
+
+# Dotterel's dictionaries in steno's plain format: the dictionaries/
+# of steno's clone of the dotterel repo (./install.sh steno updates it
+# and links them here).
+dictionaries ~/.system/share/steno/dictionaries
+
+# The first dictionary wins, as at the top of Plover's list. user is
+# where steno -a and -A add strokes; it is made empty the first time.
+# Point it at a file in the dotterel repo to add to the theory instead.
+user ~/.system/share/steno/user.dict
+# Your own base, proper nouns and punctuation, filled as you go
+# (steno -W puts each word in the right one), each with the old one
+# (dotterel-old-*) right under it, for every word not in yours yet;
+# turn an old one off on the status screen with space. Then Dotterel's
+# affixes, commands, fingerspelling and numbers, as they were.
+dict dotterel-base.dict
+dict dotterel-old-base.dict
+dict dotterel-proper-nouns.dict
+dict dotterel-old-proper-nouns.dict
+dict dotterel-punctuation.dict
+dict dotterel-old-punctuation.dict
+dict dotterel-affixes.dict
+dict dotterel-commands.dict
+dict dotterel-fingerspelling.dict
+dict dotterel-numbers.dict
+# built into steno (no file): raw mode, movement, modifiers
+dict dotterel-raw
+dict dotterel-movement
+dict dotterel-modifiers
+
+# uk_to_us.txt, Dotterel's UK/US list (default: ../data next to the
+# dictionaries)
+#data ~/.system/share/steno/data
+
+undo 100
+start_capitalized no
+start_attached no
+
+# t, s and b on the status screen open the tape and suggestions with
+terminal st -e
+
+# {PLOVER:NAME} runs a shell command, for example:
+#command LOOKUP st -e steno -A

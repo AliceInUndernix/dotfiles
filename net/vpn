@@ -1,0 +1,2183 @@
+#!/bin/sh
+# vpn: Riseup VPN, Tor and a kill switch, for Gentoo with OpenRC.
+# Installed as /usr/local/bin/vpn by "install.sh net" (net/README).
+#
+#   vpn status          state and level (anyone can ask)
+#   vpn status -v       and the server, Tor, DNS, firewall (root)
+#   vpn watch           the status, updated every second (anyone)
+#   vpn                 the same, with one-key choices for all below
+#   vpn log [N]         what happened and why: each server tried,
+#                       each failure, why a zone was given up (root)
+#   vpn report          everything to find a problem (root)
+#   vpn rescue          no internet? saves a log to your home, fixes
+#                       what it can step by step, else turns it all
+#                       off; offers a reboot at the end (root)
+#   vpn off, vpn on     level -1, and back (root)
+#   vpn selftest        try every level and feature, then go back (root)
+# A command marked root asks for your password when you aren't root
+# (vpnauth, for members of group vpnctl).
+#   vpn level L         switch until reboot (root). L is one of:
+#                        -1  everything off, as if vpn weren't installed
+#                            (stays off after reboot; vpn on: back on)
+#                         0  "bare": your own IP, no VPN (DNS 1.1.1.1)
+#                         1  "vpn": all through the VPN (Riseup's DNS in it)
+#                         2  "tor dns": the VPN, DNS through Tor (usual)
+#                         3  "tor": the VPN, and everything through Tor
+#                         sandbox  like 0, but only programs started
+#                                  with "vpn run" (and Tor) are online
+#                         offline  nothing is online
+#   vpn default L       the level used at boot (root)
+#   vpn retry           pick a server again and connect (root)
+#   vpn refresh         new server list and certificate (root)
+#   vpn lan on|off      your local network reachable or not (root)
+#   vpn firewall-off    no kill switch at all, until firewall-on (root)
+#   vpn firewall-on
+#   vpn run PROGRAM...  start a program that may go online in the
+#                       sandbox (anyone in group vpnallow)
+#
+# Used by the system: vpn daemon (the vpn service), vpn boot (the
+# vpnfw service: kill switch, random MAC addresses), vpn firewall MODE,
+# vpn up-hook and vpn down-hook (OpenVPN).
+#
+# At boot the firewall lets nothing out but Riseup's servers. Then up
+# to 3 random servers of the best zone in /etc/vpn/countries (white,
+# then gray, then black) are speed-tested through the tunnel, the
+# fastest is used, the clock is set through it, and Tor starts after
+# it. A black country is only used with everything through Tor.
+#
+# The idea of fetching Riseup's list and certificate comes from
+# BarbossHack's RiseupVPN-OpenVPN generate.sh; this is our own POSIX sh.
+
+set -u
+umask 022
+PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+ETC=/etc/vpn
+RUN=/run/vpn
+API=https://api.black.riseup.net/3
+CA_URL=https://black.riseup.net/ca.crt
+TESTS=3                 # servers speed-tested in a zone
+TEST_BYTES=5242880      # 5 MB per test ...
+TEST_SECS=6             # ... or 6 seconds, whichever comes first
+UP_SECS=30              # how long a tunnel may take to come up
+DROPS=3                 # this many drops ...
+DROP_WINDOW=600         # ... in 10 minutes: stop and tell
+LAN_NETS="10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16"
+BARE_DNS=1.1.1.1        # level 0 and the sandbox: not Tor, for when
+                        # Tor's DNS can't resolve a name
+TOR_DNS=9053            # Tor's DNSPort (torrc)
+TOR_TRANS=9040          # Tor's TransPort (torrc)
+ONION_NET=10.192.0.0/10 # Tor's VirtualAddrNetworkIPv4 (torrc)
+TOR_CLOCK=9059          # Tor's SocksPort for vpn's clock (torrc)
+
+say() { printf '%s\n' "$*"; }
+warn() { printf 'vpn: %s\n' "$*" >&2; }
+die() { warn "$*"; exit 1; }
+
+need_root() {
+    [ "$(id -u)" -eq 0 ] ||
+        die "this needs root: log in as root (another TTY) and run vpn $*"
+}
+
+# --- status ---------------------------------------------------------
+# /run/vpn/status: key=value lines for "vpn status -v", root's only
+# (servers, IPs, country). /run/vpn/public: only state, level and the
+# problem, for "vpn status"; /run/vpn/state: "<state> <level>" for the
+# shell prompt. Those two are readable by everyone. All gone after a
+# reboot.
+
+S_STATE=starting S_LEVEL=2 S_PROBLEM= S_NOTE= S_ZONE= S_CC= S_LOC= S_IP=
+S_SPEED= S_SINCE= S_CLOCK= S_CERT= S_TOR= S_TESTS= S_STEP= S_ZONES=
+S_PROG=
+
+# One date and no chmod (the umask gives the modes): put runs often
+# while a server is picked, and each program it starts costs time on a
+# slow machine.
+put() {
+    S_STATE=$1
+    S_PROBLEM=${2:-}
+    [ -d "$RUN" ] || mkdir -p "$RUN"
+    pt=$(date -u '+%s %H:%M:%S')
+    [ "$S_STEP" != new ] || S_STEP=${pt%% *}
+    pt=${pt#* }
+    umask 077
+    {
+        say "state=$S_STATE"
+        say "level=$S_LEVEL"
+        say "problem=$S_PROBLEM"
+        say "note=$S_NOTE"
+        say "zone=$S_ZONE"
+        say "country=$S_CC"
+        say "location=$S_LOC"
+        say "server=$S_IP"
+        say "speed=$S_SPEED"
+        say "since=$S_SINCE"
+        say "clock=$S_CLOCK"
+        say "certificate=$S_CERT"
+        say "tor=$S_TOR"
+        say "tests=$S_TESTS"
+        say "step=$S_STEP"
+        say "zones=$S_ZONES"
+        say "progress=$S_PROG"
+        say "updated=$pt"
+    } > "$RUN/status.new"
+    umask 022
+    printf 'state=%s\nlevel=%s\nproblem=%s\nupdated=%s\n' "$S_STATE" \
+        "$S_LEVEL" "$S_PROBLEM" "$pt" > "$RUN/public.new"
+    say "$S_STATE $S_LEVEL" > "$RUN/state.new"
+    mv -f "$RUN/status.new" "$RUN/status"
+    mv -f "$RUN/public.new" "$RUN/public"
+    mv -f "$RUN/state.new" "$RUN/state"
+}
+
+now_utc() { date -u '+%Y-%m-%d %H:%M UTC'; }
+
+# note <text>: what is being done now; the screen counts the seconds
+# (from the time the next put writes it down).
+note() {
+    S_NOTE=$*
+    S_STEP=new
+}
+
+# ev <text>: one line in /run/vpn/events (root only), what happened
+# and why, newest last; vpn log shows it, the screen its last lines.
+# The lines are counted only every 25th time (and the first).
+EVENTS_MAX=300
+EV_CALLS=0
+ev() {
+    [ -d "$RUN" ] || mkdir -p "$RUN"
+    [ -e "$RUN/events" ] || { : > "$RUN/events"; chmod 600 "$RUN/events"; }
+    printf '%s %s\n' "$(date -u +%H:%M:%S)" "$*" >> "$RUN/events"
+    EV_CALLS=$((EV_CALLS % 25 + 1))
+    [ $EV_CALLS -eq 1 ] || return 0
+    n=$(wc -l < "$RUN/events")
+    if [ "$n" -gt $((EVENTS_MAX + 50)) ]; then
+        tail -n $EVENTS_MAX "$RUN/events" > "$RUN/events.new"
+        chmod 600 "$RUN/events.new"
+        mv -f "$RUN/events.new" "$RUN/events"
+    fi
+}
+
+valid_level() {
+    case $1 in -1|0|1|2|3|sandbox|offline) return 0 ;; esac
+    return 1
+}
+
+cur_level() {
+    for f in "$RUN/level" "$ETC/level"; do
+        [ -r "$f" ] || continue
+        read -r l < "$f" || l=
+        if valid_level "$l"; then say "$l"; return; fi
+    done
+    say 2
+}
+
+cert_end() {
+    openssl x509 -enddate -noout -in "$ETC/client.crt" 2>/dev/null |
+        sed 's/^notAfter=//'
+}
+
+# --- the firewall (nftables) ----------------------------------------
+# One table, "inet vpn", made again from nothing for each mode:
+#   closed   nothing out but root to Riseup's servers (and DHCP)
+#   pick     that, and root through the tunnel (tests, clock, refresh)
+#   vpn      everything through the tunnel
+#   torvpn   only Tor through the tunnel, every TCP connection into
+#            Tor, everything else dropped
+#   direct   everything straight out (level 0)
+#   sandbox  straight out, but only programs in group vpnallow (vpn
+#            run) and Tor; nothing else can reach the network
+#   refresh  closed, and root straight out to DNS and HTTPS
+# Always: IPv6 dropped, nothing comes in that wasn't asked for, .onion
+# addresses go into Tor, and the local network only with "vpn lan on".
+
+tor_uid() { id -u tor 2>/dev/null || say 65534; }
+
+ALLOW_GROUP=vpnallow
+allow_gid() {
+    getent group "$ALLOW_GROUP" 2>/dev/null | cut -d: -f3 | grep . ||
+        say 65534
+}
+
+nft_rules() {
+    mode=$1
+    tor=$(tor_uid)
+    gws=
+    if [ -r "$ETC/gateways" ]; then
+        gws=$(awk '$1 ~ /^[0-9.]+$/ { printf "%s%s", s, $1; s = ", " }' \
+            "$ETC/gateways")
+    fi
+    lan_out= lan_skip=
+    if [ -e "$ETC/lan" ]; then
+        lan_out="ip daddr { $LAN_NETS } oifname != \"tun*\" accept"
+        lan_skip="ip daddr != { $LAN_NETS }"
+    fi
+    out= nat=
+    # every TCP connection of everyone but Tor goes into Tor
+    trans="meta skuid != $tor ip daddr != 127.0.0.0/8 ip daddr != @gw"
+    trans="$trans $lan_skip meta l4proto tcp redirect to :$TOR_TRANS"
+    # DNS to any server goes to Tor (not root's: its tests use the VPN's)
+    dns="meta skuid != 0 meta skuid != $tor"
+    case $mode in
+    closed|refresh) ;;
+    pick) out="oifname \"tun*\" meta skuid 0 accept" ;;
+    vpn) out="oifname \"tun*\" accept" ;;
+    torvpn) out="oifname \"tun*\" meta skuid $tor accept" ;;
+    direct) out="accept" ;;
+    sandbox) out="meta skgid $(allow_gid) accept
+        meta skuid $tor accept" ;;
+    *) die "unknown firewall mode: $mode" ;;
+    esac
+    [ "$mode" != refresh ] ||
+        out="meta skuid 0 oifname != \"tun*\" meta l4proto { tcp, udp } \\
+            th dport { 53, 443 } accept"
+    case $mode in
+    torvpn) nat="$trans" ;;
+    esac
+    cat <<EOF
+add table inet vpn
+delete table inet vpn
+table inet vpn {
+    set gw {
+        type ipv4_addr
+$([ -z "$gws" ] || say "        elements = { $gws }")
+    }
+    chain input {
+        type filter hook input priority 0; policy drop;
+        iif lo accept
+        meta nfproto ipv6 drop
+        ct state established,related accept
+        udp sport 67 udp dport 68 accept
+    }
+    chain forward {
+        type filter hook forward priority 0; policy drop;
+    }
+    chain output {
+        type filter hook output priority 0; policy drop;
+        meta nfproto ipv6 drop
+        oif lo accept
+        ip daddr 127.0.0.0/8 accept
+        udp sport 68 udp dport 67 accept
+        $lan_out
+        meta skuid 0 ip daddr @gw accept
+        $out
+    }
+    chain nat {
+        type nat hook output priority -100; policy accept;
+        ip daddr $ONION_NET meta l4proto tcp redirect to :$TOR_TRANS
+        ip daddr 127.0.0.1 meta l4proto { tcp, udp } th dport 53 \
+            redirect to :$TOR_DNS
+$(case $mode in vpn|torvpn|closed|pick)
+    [ "$S_LEVEL" = 1 ] ||
+    say "        $dns meta l4proto { tcp, udp } th dport 53 \\
+            redirect to :$TOR_DNS"
+esac)
+        $nat
+    }
+}
+EOF
+}
+
+# firewall <mode> [--check]: load the rules (or only check them).
+firewall() {
+    mkdir -p "$RUN"
+    if [ "${2:-}" = --check ]; then
+        nft_rules "$1" | nft -c -f -
+        return
+    fi
+    # IPv6 off in the kernel too (also in /etc/sysctl.d/vpn.conf)
+    sysctl -qw net.ipv6.conf.all.disable_ipv6=1 >/dev/null 2>&1
+    sysctl -qw net.ipv6.conf.default.disable_ipv6=1 >/dev/null 2>&1
+    say "$1" > "$RUN/fwmode"
+    # "vpn firewall-off" holds until "vpn firewall-on"
+    [ ! -e "$RUN/fw-off" ] || return 0
+    nft_rules "$1" > "$RUN/rules.nft"
+    nft -f "$RUN/rules.nft"
+}
+
+# set_resolv <ip>: /etc/resolv.conf says only "nameserver <ip>" and is
+# locked (chattr +i), so dhcpcd and others can't change it.
+set_resolv() {
+    want="nameserver $1"
+    [ -L /etc/resolv.conf ] && rm -f /etc/resolv.conf
+    if [ "$(cat /etc/resolv.conf 2>/dev/null)" != "$want" ]; then
+        chattr -i /etc/resolv.conf 2>/dev/null
+        say "$want" > /etc/resolv.conf
+        chmod 644 /etc/resolv.conf
+    fi
+    chattr +i /etc/resolv.conf 2>/dev/null ||
+        S_NOTE="could not lock /etc/resolv.conf (chattr)"
+}
+
+# --- Riseup's server list and certificate ---------------------------
+
+# json_flat: JSON on stdin as "path<TAB>value" lines, e.g.
+# "gateways.0.ip_address	1.2.3.4". Only to read Riseup's answer; we
+# keep nothing in JSON.
+json_flat() {
+    awk '
+    function ws() {
+        while (i <= n && index(" \t\r\n", substr(s, i, 1)) > 0) i++
+    }
+    function str(   c, out) {
+        i++
+        out = ""
+        while (i <= n) {
+            c = substr(s, i, 1)
+            if (c == "\\") {
+                c = substr(s, i + 1, 1)
+                i += 2
+                if (c == "u") { out = out "?"; i += 4 }
+                else if (c == "n" || c == "t" || c == "r") out = out " "
+                else out = out c
+                continue
+            }
+            i++
+            if (c == "\"") return out
+            out = out c
+        }
+        return out
+    }
+    function val(path,   c, k, idx) {
+        ws()
+        c = substr(s, i, 1)
+        if (c == "{") {
+            i++
+            ws()
+            if (substr(s, i, 1) == "}") { i++; return }
+            while (i <= n) {
+                ws()
+                k = str()
+                ws()
+                i++
+                val(path == "" ? k : (path "." k))
+                ws()
+                c = substr(s, i, 1)
+                i++
+                if (c != ",") return
+            }
+        } else if (c == "[") {
+            i++
+            ws()
+            if (substr(s, i, 1) == "]") { i++; return }
+            idx = 0
+            while (i <= n) {
+                val(path == "" ? idx : (path "." idx))
+                idx++
+                ws()
+                c = substr(s, i, 1)
+                i++
+                if (c != ",") return
+            }
+        } else if (c == "\"") {
+            print path "\t" str()
+        } else {
+            k = i
+            while (i <= n && index(",}] \t\r\n", substr(s, i, 1)) == 0) i++
+            print path "\t" substr(s, k, i - k)
+        }
+    }
+    { s = s $0 " " }
+    END { n = length(s); i = 1; val("") }
+    '
+}
+
+# gateways_from_flat: json_flat lines to our server list, one per line:
+#   <ip> <country code> <location> <host> <tcp ports, comma separated>
+gateways_from_flat() {
+    awk -F '\t' '
+    { split($1, p, ".") }
+    p[1] == "gateways" && p[3] == "ip_address" { ip[p[2]] = $2 }
+    p[1] == "gateways" && p[3] == "location" { loc[p[2]] = $2 }
+    p[1] == "gateways" && p[3] == "host" { host[p[2]] = $2 }
+    p[1] == "gateways" && p[3] == "capabilities" && p[4] == "transport" {
+        t = p[2] "." p[5]
+        if (p[6] == "type") type[t] = $2
+        if (p[6] == "ports") ports[t] = ports[t] "," $2
+        if (p[6] == "protocols") proto[t] = proto[t] "," $2
+    }
+    p[1] == "locations" && p[3] == "country_code" { cc[p[2]] = $2 }
+    END {
+        for (g in ip) {
+            if (ip[g] !~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) continue
+            all = ""
+            for (t in type) {
+                split(t, q, ".")
+                if (q[1] != g || type[t] != "openvpn") continue
+                if (proto[t] != "" && proto[t] !~ /tcp/) continue
+                all = all ports[t]
+            }
+            sub(/^,/, "", all)
+            gsub(/[^0-9,]/, "", all)
+            if (all == "") continue
+            c = toupper(cc[loc[g]])
+            if (c !~ /^[A-Z][A-Z]$/) c = "??"
+            l = loc[g]; gsub(/[^A-Za-z0-9._-]/, "_", l); if (l == "") l = "?"
+            h = host[g]; gsub(/[^A-Za-z0-9._-]/, "_", h); if (h == "") h = "?"
+            print ip[g], c, l, h, all
+        }
+    }' | sort
+}
+
+# FETCH_DNS empty: curl as the system resolves; else through that DNS
+# server only (for when /etc/resolv.conf's Tor isn't running yet).
+FETCH_DNS=
+
+fetch() {
+    if [ -n "$FETCH_DNS" ]; then
+        dnscurl "$FETCH_DNS" "$@"
+    else
+        curl "$@"
+    fi
+}
+
+# dnscurl <dns ip> <curl args>: curl that sees "nameserver <dns ip>" as
+# /etc/resolv.conf (in its own mount namespace: nothing else does).
+# DNSCURL_ID tells two at the same time apart ($$ is the same in both).
+DNSCURL_ID=0
+dnscurl() {
+    r=$RUN/resolv.$$.$DNSCURL_ID
+    printf 'nameserver %s\n' "$1" > "$r"
+    shift
+    unshare -m sh -c 'mount --bind "$0" /etc/resolv.conf && exec curl "$@"' \
+        "$r" "$@"
+    rc=$?
+    rm -f "$r"
+    return $rc
+}
+
+# provider_fetch [-k]: get the list and a new certificate into /etc/vpn.
+# Returns curl's exit code when a download fails (60: TLS check).
+provider_fetch() {
+    t=$RUN/fetch
+    rm -rf "$t"
+    mkdir -p "$RUN"
+    (umask 077; mkdir "$t") || return 1
+    for x in "ca.crt $CA_URL" "eip.json $API/config/eip-service.json" \
+        "cert.pem $API/cert"
+    do
+        set -- $x
+        fetch -sS --fail ${k:-} --connect-timeout 10 --max-time 60 \
+            --retry 2 --max-filesize 1000000 -o "$t/$1" "$2" </dev/null
+        rc=$?
+        if [ $rc -ne 0 ]; then rm -rf "$t"; return $rc; fi
+    done
+    json_flat < "$t/eip.json" | gateways_from_flat > "$t/gateways"
+    sed -n '/-BEGIN [A-Z ]*PRIVATE KEY-/,/-END [A-Z ]*PRIVATE KEY-/p' \
+        "$t/cert.pem" > "$t/client.key"
+    sed -n '/-----BEGIN CERTIFICATE-----/,/-----END CERTIFICATE-----/p' \
+        "$t/cert.pem" > "$t/client.crt"
+    if [ ! -s "$t/gateways" ] || [ ! -s "$t/client.key" ] ||
+        [ ! -s "$t/client.crt" ] || ! grep -q 'BEGIN CERTIFICATE' "$t/ca.crt"
+    then
+        warn "Riseup's answer had no servers or no certificate"
+        rm -rf "$t"
+        return 1
+    fi
+    mkdir -p "$ETC"
+    for f in ca.crt client.crt gateways; do
+        chmod 644 "$t/$f"
+        mv -f "$t/$f" "$ETC/$f"
+    done
+    chmod 600 "$t/client.key"
+    mv -f "$t/client.key" "$ETC/client.key"
+    rm -rf "$t"
+    S_CERT=$(cert_end)
+    return 0
+}
+
+# router_dns: the DNS servers dhcpcd was given (your router or ISP).
+router_dns() {
+    for i in $(ip -4 route show default 2>/dev/null |
+        sed -n 's/.* dev \([^ ]*\).*/\1/p')
+    do
+        dhcpcd -U "$i" 2>/dev/null |
+            sed -n "s/^domain_name_servers='\{0,1\}\([0-9.]*\).*/\1/p"
+    done | head -n 1
+}
+
+# --- OpenVPN --------------------------------------------------------
+
+OVPN_PID=
+
+# mkconf <file> <ip> <ports>: /etc/vpn/openvpn.conf with that server.
+mkconf() {
+    {
+        cat "$ETC/openvpn.conf"
+        for p in $(say "$3" | tr ',' ' '); do say "remote $2 $p"; done
+    } > "$1"
+    chmod 600 "$1"
+}
+
+# start_ovpn <conf>: start OpenVPN, wait until its up-hook ran (looked
+# at 5 times a second: each connection is ready that much sooner). On
+# failure OVPN_WHY says why (OpenVPN's last words, or the time).
+OVPN_WHY=
+start_ovpn() {
+    rm -f "$RUN/up"
+    OVPN_WHY=
+    l0=$(wc -l 2>/dev/null < "$RUN/openvpn.log") || l0=0
+    openvpn --config "$1" --log-append "$RUN/openvpn.log" \
+        </dev/null >/dev/null 2>&1 &
+    OVPN_PID=$!
+    say "$OVPN_PID" > "$RUN/openvpn.pid"
+    n=0
+    while [ $n -lt $((UP_SECS * 5)) ]; do
+        [ -f "$RUN/up" ] && return 0
+        if ! kill -0 "$OVPN_PID" 2>/dev/null; then
+            OVPN_WHY="OpenVPN quit: $(ovpn_last "$l0")"
+            break
+        fi
+        sleep 0.2
+        n=$((n + 1))
+    done
+    [ -n "$OVPN_WHY" ] ||
+        OVPN_WHY="no tunnel after $UP_SECS s ($(ovpn_last "$l0"))"
+    stop_ovpn
+    return 1
+}
+
+# ovpn_last <lines before>: OpenVPN's last telling log line since then,
+# without the date, short
+ovpn_last() {
+    tail -n +"$(($1 + 1))" "$RUN/openvpn.log" 2>/dev/null |
+        grep -v 'Exiting due to fatal error\|SIGTERM\|process exiting' |
+        grep -i 'error\|fail\|refused\|time.*out\|unreach\|cannot' |
+        tail -n 1 |
+        sed -e 's/^[A-Z][a-z]* [A-Z][a-z]* *[0-9]* [0-9:]* [0-9]* //' \
+            -e 's/^[0-9-]* [0-9:]* //' |
+        cut -c 1-60 | grep . || say "nothing in its log"
+}
+
+stop_ovpn() {
+    p=$OVPN_PID
+    [ -n "$p" ] || p=$(cat "$RUN/openvpn.pid" 2>/dev/null)
+    if [ -n "$p" ]; then
+        kill "$p" 2>/dev/null && wait "$p" 2>/dev/null
+    fi
+    OVPN_PID=
+    rm -f "$RUN/openvpn.pid" "$RUN/up"
+}
+
+# The VPN's DNS server, which OpenVPN's up-hook wrote down.
+vpn_dns() { sed -n 's/^dns=//p' "$RUN/up" 2>/dev/null; }
+# riseup_dns: the DNS of level 1, Riseup's inside the tunnel (10.41.0.1
+# when tested, 2026-11-15); Tor's (127.0.0.1) if the tunnel gave none.
+riseup_dns() { d=$(vpn_dns); echo "${d:-127.0.0.1}"; }
+
+up_hook() {
+    d=
+    i=1
+    while [ $i -le 50 ]; do
+        eval "o=\${foreign_option_$i:-}"
+        [ -n "$o" ] || break
+        case $o in
+        "dhcp-option DNS "*) [ -n "$d" ] || d=${o#dhcp-option DNS } ;;
+        esac
+        i=$((i + 1))
+    done
+    [ -n "$d" ] || d=${route_vpn_gateway:-}
+    case $d in *[!0-9.]*) d= ;; esac
+    mkdir -p "$RUN"
+    printf 'dev=%s\ndns=%s\n' "${dev:-tun0}" "$d" > "$RUN/up.new"
+    mv -f "$RUN/up.new" "$RUN/up"
+}
+
+down_hook() { rm -f "$RUN/up"; }
+
+# --- speed test and picking a server ---------------------------------
+
+mirror_url() {
+    sed 's/#.*//' "$ETC/mirrors" |
+        awk -v n="$1" 'NF { i++; if (i == n) print $1 }'
+}
+
+mirror_count() {
+    sed 's/#.*//' "$ETC/mirrors" | awk 'NF { i++ } END { print i + 0 }'
+}
+
+# speed_test: bytes per second through the tunnel that is up now, from
+# the first mirror that answers (the same one for every server).
+speed_test() {
+    n=$(mirror_count)
+    i=$(cat "$RUN/mirror" 2>/dev/null || say 1)
+    tries=0
+    while [ $tries -lt "$n" ]; do
+        url=$(mirror_url "$i")
+        r=$(dnscurl "$(vpn_dns)" -s -L -o /dev/null \
+            -r "0-$((TEST_BYTES - 1))" \
+            --connect-timeout 5 --max-time $TEST_SECS \
+            -w '%{size_download} %{speed_download}' "$url" </dev/null)
+        size=${r%% *}
+        spd=${r#* }
+        spd=${spd%%.*}
+        if [ "${size:-0}" -ge 1000000 ] 2>/dev/null; then
+            say "$i" > "$RUN/mirror"
+            say "$spd"
+            return 0
+        fi
+        i=$((i % n + 1))
+        tries=$((tries + 1))
+    done
+    return 1
+}
+
+# test_gateway <list line>: connect, measure. The tunnel stays up after
+# a good test (pick keeps it when this one is the fastest: one
+# connection less); the one before it is closed first. TG_SPEED is the
+# speed, or empty and TG_WHY says what went wrong.
+TG_SPEED= TG_WHY=
+test_gateway() {
+    TG_SPEED= TG_WHY=
+    [ -z "$OVPN_PID" ] || stop_ovpn
+    set -- $1
+    mkconf "$RUN/test.conf" "$1" "$5"
+    if ! start_ovpn "$RUN/test.conf"; then
+        TG_WHY=$OVPN_WHY
+        return 1
+    fi
+    if [ -z "$(vpn_dns)" ]; then
+        stop_ovpn
+        TG_WHY="the tunnel came up, but the server gave no DNS"
+        return 1
+    fi
+    note "$TG_ZONE: speed test through $3 $2, $TEST_SECS s at most"
+    put testing
+    s=$(speed_test) || s=
+    case $s in
+    ''|*[!0-9]*)
+        stop_ovpn
+        TG_WHY="tunnel ok, but no mirror sent 1 MB in $TEST_SECS s"
+        return 1 ;;
+    esac
+    TG_SPEED=$s
+}
+
+# candidates <zone>: that zone's servers, in random order. Countries
+# missing from /etc/vpn/countries count as gray.
+candidates() {
+    seed=$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')
+    awk -v z="$1" -v seed="$seed" '
+    BEGIN { srand(seed) }
+    NR == FNR { sub(/#.*/, ""); if (NF >= 2) zone[toupper($2)] = $1; next }
+    NF >= 5 {
+        c = ($2 in zone) ? zone[$2] : "gray"
+        if (c == z) print rand(), $0
+    }' "$ETC/countries" "$ETC/gateways" | sort -n | cut -d ' ' -f 2-
+}
+
+CHOSEN= CHOSEN_ZONE= CHOSEN_SPEED= CHOSEN_UP=
+
+# pick: zones beat speed. The first zone (white, gray, black) with any
+# working server wins; in it, the fastest of up to 3 random ones. Each
+# step and each reason goes to the events (vpn log).
+TG_ZONE=
+pick() {
+    if ! has_net; then
+        PICK_WHY="no network: DHCP gave no address (ip -br addr)"
+        ev "no network to test servers through: $PICK_WHY"
+        S_PROG=none
+        return 1
+    fi
+    firewall pick
+    S_TESTS= CHOSEN_UP=
+    all=$(awk 'NF >= 5' "$ETC/gateways" | wc -l)
+    counts= S_ZONES=
+    for zone in white gray black; do
+        candidates "$zone" > "$RUN/candidates.$zone"
+        c=$(wc -l < "$RUN/candidates.$zone")
+        counts="$counts $c $zone,"
+        S_ZONES="${S_ZONES:+$S_ZONES }$c"
+    done
+    ev "picking a server: $all in the list:${counts%,}"
+    why=
+    for zone in white gray black; do
+        case $zone in white) next=gray ;; gray) next=black ;; *) next= ;; esac
+        TG_ZONE=$zone
+        total=$(wc -l < "$RUN/candidates.$zone")
+        if [ "$total" -eq 0 ]; then
+            ev "$zone: none in the list${next:+, so on to $next}"
+            why="${why:+$why; }$zone: none in the list"
+            continue
+        fi
+        [ "$zone" != black ] ||
+            ev "black: used only because no white or gray server works"
+        best= bspeed=-1 tested=0 tried=0 failed=0 last=
+        while IFS= read -r line; do
+            [ $tested -lt $TESTS ] || break
+            set -- $line
+            tried=$((tried + 1))
+            S_PROG="$zone $tried $total $tested"
+            note "$zone: connecting to $3 $2, server $tried of $total," \
+                "speed-tested $tested of $TESTS"
+            put testing
+            last=
+            if test_gateway "$line"; then
+                last=$line
+                tested=$((tested + 1))
+                S_TESTS="$S_TESTS$3|$2|$1|$((TG_SPEED / 1024))|;"
+                put testing
+                ev "$zone: $3 $2 $1: $((TG_SPEED / 1024)) KB/s"
+                if [ "$TG_SPEED" -gt "$bspeed" ]; then
+                    best=$line bspeed=$TG_SPEED
+                fi
+            else
+                failed=$((failed + 1))
+                S_TESTS="$S_TESTS$3|$2|$1||$(say "$TG_WHY" | tr ';|' ',/');"
+                put testing
+                ev "$zone: $3 $2 $1 FAILED: $TG_WHY"
+            fi
+        done < "$RUN/candidates.$zone"
+        rm -f "$RUN/candidates.$zone"
+        # the fastest was the last one tested: its tunnel is still up
+        if [ -n "$best" ] && [ "$best" = "$last" ] && [ -n "$OVPN_PID" ] &&
+            [ -f "$RUN/up" ] && kill -0 "$OVPN_PID" 2>/dev/null
+        then
+            CHOSEN_UP=1
+        else
+            [ -z "$OVPN_PID" ] || stop_ovpn
+        fi
+        if [ -n "$best" ]; then
+            set -- $best
+            ev "$zone: chose $3 $2, the fastest of $tested tested" \
+                "($failed failed)"
+            CHOSEN=$best CHOSEN_ZONE=$zone CHOSEN_SPEED=$bspeed
+            S_PROG="$zone done $tried $tested"
+            note ""
+            return 0
+        fi
+        ev "$zone: all $tried tried failed${next:+, so on to $next}"
+        why="${why:+$why; }$zone: $tried tried, all failed"
+    done
+    rm -f "$RUN"/candidates.*
+    [ -z "$OVPN_PID" ] || stop_ovpn
+    ev "no zone has a working server ($why)"
+    S_PROG="none"
+    PICK_WHY=$why
+    note ""
+    return 1
+}
+PICK_WHY=
+
+# --- clock -----------------------------------------------------------
+# Set from the Date of two different mirrors' answers, only when they
+# agree within a minute. Through Tor (its own port, each mirror on its
+# own circuit, so one exit can't fake both): nobody learns where the
+# question came from. Only when Tor can't get going (it needs a clock
+# that is roughly right) is it set through the tunnel once instead,
+# and Tor started again. Never NTP.
+
+# date_epoch: the Date line of an HTTP answer (stdin) as seconds
+date_epoch() {
+    h=$(tr -d '\r' | sed -n 's/^[Dd][Aa][Tt][Ee]: *//p' | head -n 1)
+    [ -n "$h" ] && date -u -d "$h" +%s 2>/dev/null
+}
+
+http_epoch() {
+    dnscurl "$(vpn_dns)" -sI --connect-timeout 5 --max-time 10 \
+        "$(mirror_url "$1")" </dev/null | date_epoch
+}
+
+tor_epoch() {
+    curl -sI --socks5-hostname 127.0.0.1:$TOR_CLOCK \
+        --connect-timeout 20 --max-time 30 \
+        "$(mirror_url "$1")" </dev/null | date_epoch
+}
+
+# clock_from <how> <epoch function>: 1 when there was no answer. Both
+# mirrors are asked at the same time (each still on its own circuit):
+# half the wait, and the two answers are from the same moment.
+clock_from() {
+    rm -f "$RUN/clock.1" "$RUN/clock.2"
+    (DNSCURL_ID=1; $2 1 > "$RUN/clock.1") &
+    cp1=$!
+    (DNSCURL_ID=2; $2 2 > "$RUN/clock.2") &
+    wait "$cp1" "$!"
+    a= b=
+    [ ! -s "$RUN/clock.1" ] || read -r a < "$RUN/clock.1"
+    [ ! -s "$RUN/clock.2" ] || read -r b < "$RUN/clock.2"
+    rm -f "$RUN/clock.1" "$RUN/clock.2"
+    if [ -z "$a" ] || [ -z "$b" ]; then
+        S_CLOCK="not checked: no answer $1"
+        return 1
+    fi
+    d=$((a - b))
+    [ $d -ge 0 ] || d=$((-d))
+    if [ $d -gt 60 ]; then
+        S_CLOCK="not set: two servers disagree by $d s"
+        return 0
+    fi
+    d=$(($(date -u +%s) - a))
+    [ $d -ge 0 ] || d=$((-d))
+    if [ $d -gt 30 ]; then
+        date -u -s "@$a" >/dev/null && S_CLOCK="set $1 ($d s off)"
+    else
+        S_CLOCK="ok ($1)"
+    fi
+    return 0
+}
+
+# clock_sync: through the tunnel (only when Tor can't)
+clock_sync() {
+    clock_from "through the tunnel" http_epoch
+    ev "clock: $S_CLOCK"
+}
+
+# clock_tor <state>: through Tor, trying for about 2 minutes while Tor
+# builds its first circuits; 1 when Tor gave no answer
+clock_tor() {
+    note "setting the clock through Tor (waiting for Tor's circuits)"
+    put "$1"
+    n=0
+    while [ $n -lt 4 ]; do
+        if clock_from "through Tor" tor_epoch; then
+            ev "clock: $S_CLOCK"
+            note ""
+            return 0
+        fi
+        n=$((n + 1))
+        sleep 5
+    done
+    ev "clock: no answer through Tor (is Tor up? $RUN/tor.log)"
+    note ""
+    return 1
+}
+
+# --- Tor -------------------------------------------------------------
+
+start_tor() {
+    : > "$RUN/tor.log"
+    chown tor "$RUN/tor.log" 2>/dev/null
+    if rc-service tor restart >/dev/null 2>&1; then
+        S_TOR=running
+    # only when the sandbox itself is why: the torrc fails tor's check
+    # with it and passes without it (a port in use passes both)
+    elif grep -q '^Sandbox 1$' /etc/tor/torrc &&
+        ! tor --verify-config -f /etc/tor/torrc >/dev/null 2>&1 &&
+        sed 's/^Sandbox 1$/#Sandbox 1  # off: tor did not start with it/' \
+            /etc/tor/torrc > "$RUN/torrc.new" &&
+        tor --verify-config -f "$RUN/torrc.new" >/dev/null 2>&1 &&
+        cat "$RUN/torrc.new" > /etc/tor/torrc &&
+        rc-service tor restart >/dev/null 2>&1
+    then
+        S_TOR=running
+        ev "Tor did not start in its seccomp sandbox: Sandbox 1 is off" \
+            "in /etc/tor/torrc"
+    else
+        S_TOR="did not start (see $RUN/tor.log)"
+    fi
+    rm -f "$RUN/torrc.new"
+    ev "Tor: $S_TOR"
+}
+
+stop_tor() {
+    rc-service tor stop >/dev/null 2>&1
+    S_TOR=stopped
+}
+
+# --- the daemon (the vpn service) ------------------------------------
+
+SLEEP_PID= RELEVEL=
+
+on_exit() {
+    [ -z "$SLEEP_PID" ] || kill "$SLEEP_PID" 2>/dev/null
+    stop_ovpn
+    stop_tor
+    [ -e "$ETC/off" ] || firewall closed
+    S_NOTE=
+    ev "vpn service stopped"
+    put stopped
+    exit 0
+}
+
+# idle: nothing more to do until the service is stopped or restarted.
+idle() {
+    while :; do
+        sleep 3600 &
+        SLEEP_PID=$!
+        wait "$SLEEP_PID"
+    done
+}
+
+fail() {
+    ev "STOPPED, offline: $1"
+    note ""
+    stop_ovpn
+    stop_tor
+    firewall closed
+    put problem "$1"
+    idle
+}
+
+# apply_level: DNS and firewall for the level, with the tunnel up. A
+# black country is always level 3.
+apply_level() {
+    S_LEVEL=$(cur_level)
+    S_NOTE=
+    if [ "$S_ZONE" = black ] && [ "$S_LEVEL" != 3 ]; then
+        S_LEVEL=3
+        S_NOTE="black country: everything goes through Tor"
+    fi
+    ev "level $S_LEVEL${S_NOTE:+ ($S_NOTE)}"
+    case $S_LEVEL in
+    1) set_resolv "$(riseup_dns)"; firewall vpn ;;
+    3) set_resolv 127.0.0.1; firewall torvpn ;;
+    *) set_resolv 127.0.0.1; firewall vpn ;;
+    esac
+}
+
+connect_final() {
+    set -- $CHOSEN
+    S_IP=$1 S_CC=$2 S_LOC=$3 S_ZONE=$CHOSEN_ZONE
+    S_SPEED="$((CHOSEN_SPEED / 1024)) KB/s at the test"
+    firewall pick
+    note "connecting to $3 ($2), try $((fails + 1)) of 3"
+    put connecting
+    mkconf "$RUN/riseup.conf" "$1" "$5"
+    if [ -n "$CHOSEN_UP" ] && [ -n "$OVPN_PID" ] && [ -f "$RUN/up" ] &&
+        kill -0 "$OVPN_PID" 2>/dev/null
+    then
+        CHOSEN_UP=
+        ev "connected to $3 ($2) $1 (the tunnel of its speed test)"
+    else
+        CHOSEN_UP=
+        [ -z "$OVPN_PID" ] || stop_ovpn
+        if ! start_ovpn "$RUN/riseup.conf"; then
+            ev "connect to $3 failed (try $((fails + 1)) of 3): $OVPN_WHY"
+            return 1
+        fi
+        ev "connected to $3 ($2) $1"
+    fi
+    # the certificate or list is getting old: renew through the tunnel
+    if ! openssl x509 -checkend 1209600 -noout -in "$ETC/client.crt" \
+        >/dev/null 2>&1 || [ -n "$(find "$ETC/gateways" -mtime +7)" ]
+    then
+        FETCH_DNS=$(vpn_dns)
+        note "renewing the server list and certificate"
+        put connecting
+        if provider_fetch; then
+            ev "renewed the server list and certificate"
+        else
+            ev "could not renew the list and certificate (old ones kept)"
+        fi
+        FETCH_DNS=
+    fi
+    note "starting Tor"
+    put connecting
+    apply_level
+    start_tor
+    # the clock through Tor; when Tor can't get going (a clock far off
+    # stops it), through the tunnel once, then Tor again
+    if [ "$S_TOR" = running ] && ! clock_tor connecting; then
+        clock_sync
+        case $S_CLOCK in "set "*)
+            note "starting Tor again with the right time"
+            put connecting
+            start_tor ;;
+        esac
+    fi
+    S_SINCE=$(now_utc)
+    if [ "$S_TOR" = running ] || [ "$S_LEVEL" = 1 ]; then
+        put ok
+    else
+        put problem "Tor $S_TOR"
+    fi
+    return 0
+}
+
+connect_loop() {
+    drops=
+    repicked=0
+    pick || fail "no Riseup server works ($PICK_WHY)"
+    while :; do
+        fails=0
+        until connect_final; do
+            stop_ovpn
+            fails=$((fails + 1))
+            [ $fails -lt 3 ] || break
+            sleep 5
+        done
+        if [ $fails -ge 3 ]; then
+            [ $repicked -eq 0 ] ||
+                fail "the VPN does not connect, even after a new pick"
+            repicked=1
+            ev "3 tries to $S_LOC failed: picking a server again"
+            pick || fail "no Riseup server works ($PICK_WHY)"
+            continue
+        fi
+        repicked=0
+        # until the tunnel ends; "vpn level" (USR1) only changes DNS
+        # and the firewall
+        while :; do
+            wait "$OVPN_PID"
+            if [ -n "$RELEVEL" ] && kill -0 "$OVPN_PID" 2>/dev/null; then
+                RELEVEL=
+                apply_level
+                put ok
+                continue
+            fi
+            break
+        done
+        OVPN_PID=
+        rm -f "$RUN/openvpn.pid"
+        t=$(date +%s)
+        drops=$(say "$drops $t" | awk -v t="$t" -v w=$DROP_WINDOW \
+            '{ for (i = 1; i <= NF; i++) if (t - $i < w) printf " %s", $i }')
+        set -- $drops
+        [ $# -lt $DROPS ] ||
+            fail "the VPN dropped $# times in $((DROP_WINDOW / 60)) minutes"
+        ev "the tunnel dropped ($# in $((DROP_WINDOW / 60)) min;" \
+            "$DROPS stop it): $(ovpn_last 0)"
+        note "the tunnel dropped; connecting again"
+        put connecting
+    done
+}
+
+daemon() {
+    trap on_exit TERM INT HUP
+    trap 'RELEVEL=1' USR1
+    mkdir -p "$RUN"
+    chmod 755 "$RUN"
+    S_LEVEL=$(cur_level)
+    S_CERT=$(cert_end)
+    ev "--- vpn service started, level $S_LEVEL"
+    put starting
+    case $S_LEVEL in
+    0)
+        set_resolv "$BARE_DNS"
+        firewall direct
+        start_tor
+        [ "$S_TOR" != running ] || clock_tor starting
+        S_SINCE=$(now_utc)
+        put ok
+        idle ;;
+    sandbox)
+        set_resolv "$BARE_DNS"
+        firewall sandbox
+        start_tor
+        [ "$S_TOR" != running ] || clock_tor starting
+        S_SINCE=$(now_utc)
+        put ok
+        idle ;;
+    offline)
+        firewall closed
+        put problem "offline: you chose it (vpn level 2 to go back)"
+        idle ;;
+    esac
+    set_resolv 127.0.0.1
+    firewall closed
+    for f in gateways ca.crt client.crt client.key openvpn.conf mirrors; do
+        [ -s "$ETC/$f" ] ||
+            fail "$ETC/$f is missing: run vpn refresh (or install.sh net)"
+    done
+    openssl x509 -checkend 0 -noout -in "$ETC/client.crt" >/dev/null 2>&1 ||
+        fail "the certificate has expired: run vpn refresh"
+    # wait (up to a minute) for dhcpcd to give us a network; if the
+    # made-up MAC addresses get none, try again with the cards' own
+    note "waiting for an address from DHCP (dhcpcd), up to 60 s"
+    put starting
+    # (looked at twice a second; n counts half seconds)
+    n=0
+    while [ $n -lt 120 ] && ! has_net; do
+        if [ $n -eq 60 ] && [ -s "$RUN/macs" ]; then
+            ev "no address from DHCP in 30 s with made-up MAC addresses:" \
+                "back to the cards' own (vpn log; touch $ETC/keep-mac)"
+            restore_macs
+            dhcpcd -n >/dev/null 2>&1
+            note "waiting for DHCP again, with the cards' own MAC addresses"
+            put starting
+        fi
+        sleep 0.5
+        n=$((n + 1))
+    done
+    if has_net; then
+        ev "network up after $((n / 2)) s"
+    else
+        ev "no address from DHCP after 60 s: is a cable or Wi-Fi" \
+            "connected? (ip -br addr: 169.254.x.x means DHCP gave none)"
+    fi
+    connect_loop
+}
+
+# --- commands --------------------------------------------------------
+
+# cmd_status [-v]: state, level and any problem; with -v (root) also
+# the server, Tor, DNS, firewall, clock and certificate.
+cmd_status() {
+    if [ -e "$ETC/off" ]; then
+        say "state:    OFF (level -1): no kill switch, VPN or Tor"
+        say "(vpn on, or any level, turns it back on)"
+        return 0
+    fi
+    f=$RUN/public
+    [ "${1:-}" != -v ] || f=$RUN/status
+    if [ ! -r "$f" ]; then
+        say "vpn is not running (as root: rc-service vpn start)"
+        return 1
+    fi
+    st= lv= pr= no= zo= cc= lo= ip= sp= si= cl= ce= to= te= ss= up=
+    while IFS='=' read -r k v; do
+        case $k in
+        state) st=$v ;; level) lv=$v ;; problem) pr=$v ;; note) no=$v ;;
+        zone) zo=$v ;; country) cc=$v ;; location) lo=$v ;;
+        server) ip=$v ;; speed) sp=$v ;; since) si=$v ;; clock) cl=$v ;;
+        certificate) ce=$v ;; tor) to=$v ;; tests) te=$v ;; step) ss=$v ;;
+        updated) up=$v ;;
+        esac
+    done < "$f"
+    # how long the step in "note" has taken so far
+    if [ -n "$no" ] && [ -n "$ss" ]; then
+        no="$no ($(($(date +%s) - ss)) s so far)"
+    fi
+    case $lv in
+    0) d="bare: your own IP, no VPN (DNS 1.1.1.1)" ;;
+    1) d="vpn: all through the VPN (Riseup's DNS in it)" ;;
+    2) d="tor dns: the VPN, DNS through Tor" ;;
+    3) d="tor: the VPN, and everything through Tor" ;;
+    sandbox) d="sandbox: own IP, only vpn run programs and Tor online" ;;
+    *) d="offline" ;;
+    esac
+    say "state:    $st (updated ${up:-?} UTC)"
+    [ -z "$pr" ] || field "PROBLEM:" "$pr"
+    [ -z "$no" ] || field "now:" "$no"
+    say "level:    $lv ($d)"
+    if [ "${1:-}" != -v ]; then
+        [ -z "$pr" ] || say "(run vpn to choose what to do)"
+        return 0
+    fi
+    if [ -n "$ip" ] && [ "$lv" != 0 ] && [ "$lv" != sandbox ]; then
+        say "server:   $lo, $cc ($zo), $ip"
+        [ -z "$sp" ] || say "speed:    $sp"
+    fi
+    [ -z "$si" ] || say "since:    $si"
+    [ -z "$to" ] || say "Tor:      $to (SOCKS 9200+ programs, 9150+ browsers)"
+    say "DNS:      $(sed -n 's/^nameserver //p' /etc/resolv.conf | head -n 1)"
+    if [ -e "$ETC/lan" ]; then say "LAN:      on"; else say "LAN:      off"; fi
+    if [ -e "$RUN/fw-off" ]; then
+        say "FIREWALL: OFF (as root: vpn firewall-on)"
+    else
+        say "firewall: on ($(cat "$RUN/fwmode" 2>/dev/null))"
+    fi
+    [ -z "$cl" ] || say "clock:    $cl"
+    [ -z "$ce" ] || say "cert:     valid until $ce"
+    [ -z "$te" ] || field "tests:" "$(say "$te" | tr ';' '\n' |
+        awk -F '|' 'NF { if ($4 != "") s = $4 " KB/s"; else s = "failed"
+            printf "%s%s %s %s", n++ ? ", " : "", $1, $3, s }')"
+    [ -z "$pr" ] || say "(vpn: choose what to do; vpn log: what happened)"
+    return 0
+}
+
+# field <name> <text>: "name:    text", long text folded under it
+field() {
+    say "$2" | fold -s -w 68 | sed 's/ *$//' |
+        awk -v n="$1" '{ printf "%-10s%s\n", NR == 1 ? n : "", $0 }'
+}
+
+# vpn log [N]: the events, what happened and why (root); the last N.
+cmd_log() {
+    need_root log
+    [ -s "$RUN/events" ] || { say "nothing yet (since boot)"; return 0; }
+    case ${1:-} in
+    ''|*[!0-9]*) cat "$RUN/events" ;;
+    *) tail -n "$1" "$RUN/events" ;;
+    esac
+}
+
+daemon_pid() { cat /run/vpn.pid 2>/dev/null; }
+
+# cmd_run <program> [args]: run it with group vpnallow, which the
+# sandbox lets online (its children too). sg asks no password of the
+# group's members. In the other levels it just runs.
+cmd_run() {
+    [ $# -gt 0 ] || die "vpn run PROGRAM [ARGS]"
+    exec sg "$ALLOW_GROUP" -c "exec$(quote "$@")"
+}
+
+# quote <words>: each word in '...' for sh -c, with a space before it.
+quote() {
+    for a in "$@"; do
+        printf " '%s'" "$(say "$a" | sed "s/'/'\\\\''/g")"
+    done
+}
+
+# as_root <vpn args>: commands that change something run as root.
+# As anyone else vpn runs itself again through vpnauth, which asks your
+# own password (you must be in group vpnctl); without vpnauth, su asks
+# root's.
+as_root() {
+    [ "$(id -u)" -ne 0 ] || return 0
+    [ ! -x /usr/local/bin/vpnauth ] || exec /usr/local/bin/vpnauth "$@"
+    exec su root -c "/usr/local/bin/vpn$(quote "$@")"
+}
+
+cmd_level() {
+    need_root level
+    valid_level "${1:-}" || die "levels: -1 0 1 2 3 sandbox offline"
+    if [ "$1" = -1 ]; then cmd_off; return; fi
+    if [ -e "$ETC/off" ]; then
+        say "$1" > "$ETC/level"
+        cmd_on
+        return
+    fi
+    old=$(sed -n 's/^level=//p' "$RUN/status" 2>/dev/null)
+    st=$(sed -n 's/^state=//p' "$RUN/status" 2>/dev/null)
+    zone=$(sed -n 's/^zone=//p' "$RUN/status" 2>/dev/null)
+    mkdir -p "$RUN"
+    say "$1" > "$RUN/level"
+    # between VPN levels with the tunnel up: no new connection needed
+    case "$old $1" in
+    [123]" "[123])
+        p=$(daemon_pid)
+        if [ "$st" = ok ] && [ -n "$p" ] && kill -USR1 "$p" 2>/dev/null; then
+            say "level $1 now (until reboot)"
+            [ "$zone" != black ] || [ "$1" = 3 ] ||
+                say "(the server is in a black country: it stays level 3)"
+            return
+        fi ;;
+    esac
+    say "level $1: starting again (until reboot; vpn status to watch)"
+    rc-service vpn restart >/dev/null 2>&1 || rc-service vpn start
+}
+
+cmd_default() {
+    need_root default
+    valid_level "${1:-}" && [ "$1" != offline ] ||
+        die "default levels: -1 0 1 2 3 sandbox"
+    if [ "$1" = -1 ]; then cmd_off; return; fi
+    mkdir -p "$ETC"
+    say "$1" > "$ETC/level"
+    say "level $1 at boot from now on"
+}
+
+cmd_retry() {
+    need_root retry
+    [ "$(cat "$RUN/level" 2>/dev/null)" != offline ] || rm -f "$RUN/level"
+    rc-service vpn restart >/dev/null 2>&1 || rc-service vpn start
+    say "starting again (vpn status to watch)"
+}
+
+ask() {
+    printf '%s ' "$1"
+    read -r a || a=
+    case $a in y|Y|yes) return 0 ;; esac
+    return 1
+}
+
+# cmd_refresh [--install]: new list and certificate. Through the VPN if
+# it is up; straight out if there is no firewall yet (first install);
+# else only after asking, through your router's DNS.
+cmd_refresh() {
+    need_root refresh
+    opened=no
+    FETCH_DNS=
+    st=$(sed -n 's/^state=//p' "$RUN/status" 2>/dev/null)
+    lv=$(sed -n 's/^level=//p' "$RUN/status" 2>/dev/null)
+    if ! nft list table inet vpn >/dev/null 2>&1; then
+        say "getting Riseup's server list and a certificate..."
+    elif [ "$st" = ok ] && [ "$lv" != sandbox ]; then
+        say "getting them through the connection you have now..."
+    elif [ -f "$RUN/up" ]; then
+        FETCH_DNS=$(vpn_dns)
+        say "getting them through the VPN..."
+    else
+        say "The VPN is not up, so this has to go straight out: your ISP"
+        say "and your router's DNS see that you ask Riseup (they see that"
+        say "you use Riseup anyway). Only root may go out, to DNS and HTTPS,"
+        say "and the firewall closes again right after."
+        ask "Open it for that? [y/N]" || return 1
+        FETCH_DNS=$(router_dns)
+        if [ -z "$FETCH_DNS" ]; then
+            printf 'No DNS server from dhcpcd. Type one (e.g. your router): '
+            read -r FETCH_DNS || return 1
+        fi
+        firewall refresh
+        opened=yes
+    fi
+    k=
+    provider_fetch
+    rc=$?
+    case $rc in
+    35|51|53|58|59|60|77|80|82|83|90|91)
+        say "Riseup's HTTPS certificate could not be checked (curl $rc)."
+        say "Someone may be in between. Continuing gives them nothing"
+        say "secret, but the list or certificate could be fake."
+        if [ "${1:-}" != --install ] && ask "Continue without the check? [y/N]"
+        then
+            k=-k
+            provider_fetch
+            rc=$?
+        fi ;;
+    esac
+    k=
+    [ $opened = no ] || firewall closed
+    FETCH_DNS=
+    if [ $rc -ne 0 ]; then
+        warn "could not get them (error $rc)"
+        return 1
+    fi
+    say "ok: $(wc -l < "$ETC/gateways") servers, certificate until $(cert_end)"
+    [ "${1:-}" = --install ] && return 0
+    if [ "$st" != ok ] && ask "Connect now? [y/N]"; then cmd_retry; fi
+    return 0
+}
+
+cmd_lan() {
+    need_root lan
+    case ${1:-} in
+    on) mkdir -p "$ETC"; : > "$ETC/lan" ;;
+    off) rm -f "$ETC/lan" ;;
+    *) die "vpn lan on|off" ;;
+    esac
+    S_LEVEL=$(sed -n 's/^level=//p' "$RUN/status" 2>/dev/null)
+    [ ! -r "$RUN/fwmode" ] || firewall "$(cat "$RUN/fwmode")"
+    say "local network: $1"
+}
+
+cmd_fw_off() {
+    need_root firewall-off
+    say "This takes the kill switch away: programs can go out without"
+    say "the VPN, DNS can leak, and so on, until vpn firewall-on."
+    printf 'Type yes to turn the firewall off: '
+    read -r a || a=
+    [ "$a" = yes ] || { say "left on"; return 1; }
+    mkdir -p "$RUN"
+    : > "$RUN/fw-off"
+    nft delete table inet vpn 2>/dev/null
+    say "firewall OFF"
+}
+
+cmd_fw_on() {
+    need_root firewall-on
+    rm -f "$RUN/fw-off"
+    S_LEVEL=$(sed -n 's/^level=//p' "$RUN/status" 2>/dev/null)
+    firewall "$(cat "$RUN/fwmode" 2>/dev/null || say closed)"
+    say "firewall on"
+}
+
+# --- level -1: everything off, and back on -----------------------
+# install.sh net keeps the system's own files in /etc/vpn/orig as they
+# were before it changed them. vpn off (level -1) puts them back, takes
+# the kill switch and the VPN out of the runlevels, and leaves only this
+# command, so that vpn on (or any other level) can run install.sh net
+# again. It stays off across reboots.
+
+ORIG=$ETC/orig
+SYS_FILES="/etc/dhcpcd.conf /etc/conf.d/hostname /etc/hostname /etc/hosts
+/etc/timezone /etc/conf.d/hwclock /etc/tor/torrc /etc/proxychains.conf"
+
+# resolv.conf only asks 127.0.0.1 (Tor's DNSPort), or is empty
+resolv_is_tor() {
+    ! grep -v '^nameserver 127\.0\.0\.1$' /etc/resolv.conf 2>/dev/null |
+        grep -q '^nameserver'
+}
+
+cmd_off() {
+    need_root off
+    say "Turning everything of vpn off:"
+    mkdir -p "$ETC"
+    : > "$ETC/off"
+    rc-service vpn stop >/dev/null 2>&1
+    rc-service tor stop >/dev/null 2>&1
+    rc-update del vpn default >/dev/null 2>&1
+    rc-update del vpnfw boot >/dev/null 2>&1
+    say "  the VPN and the kill switch no longer start at boot"
+    nft delete table inet vpn 2>/dev/null
+    rm -f "$RUN/fw-off"
+    say "  firewall: gone"
+    rm -f /etc/sysctl.d/vpn.conf
+    sysctl -qw net.ipv6.conf.all.disable_ipv6=0 >/dev/null 2>&1
+    sysctl -qw net.ipv6.conf.default.disable_ipv6=0 >/dev/null 2>&1
+    say "  IPv6: on again"
+    for f in $SYS_FILES; do
+        if [ -f "$ORIG$f" ]; then
+            cmp -s "$ORIG$f" "$f" 2>/dev/null && continue
+            cp -p "$ORIG$f" "$f"
+            say "  $f: back as it was"
+        elif [ -e "$ORIG$f.absent" ] && [ -e "$f" ]; then
+            rm -f "$f"
+            say "  $f: removed (it wasn't there before)"
+        fi
+    done
+    # no saved dhcpcd.conf: at least take our lines out of it
+    if [ ! -f "$ORIG/etc/dhcpcd.conf" ] &&
+        grep -q '^# vpn (dotfiles' /etc/dhcpcd.conf 2>/dev/null
+    then
+        sed -i '/^# vpn (dotfiles/,/^anonymous$/d' /etc/dhcpcd.conf
+        say "  /etc/dhcpcd.conf: vpn's lines taken out"
+    fi
+    if [ -s "$ORIG/localtime.link" ]; then
+        ln -sfn "$(cat "$ORIG/localtime.link")" /etc/localtime
+    fi
+    chattr -i /etc/resolv.conf 2>/dev/null
+    restore_macs && say "  MAC addresses: the cards' own again"
+    own_macs && say "  more MAC addresses: the cards' own again"
+    # dhcpcd writes resolv.conf again from what the network says
+    if pgrep -x dhcpcd >/dev/null 2>&1; then dhcpcd -n >/dev/null 2>&1; fi
+    say "  /etc/resolv.conf: unlocked, dhcpcd writes it again"
+    # Tor is stopped, so 127.0.0.1 answers nothing: wait up to 20 s for
+    # dhcpcd, then take the DNS servers from its leases by hand
+    n=0
+    while [ $n -lt 20 ] && resolv_is_tor; do sleep 1; n=$((n + 1)); done
+    if resolv_is_tor; then
+        ns=
+        re="s/^domain_name_servers='\{0,1\}\([^']*\)'\{0,1\}$/\1/p"
+        for d in /sys/class/net/*; do
+            i=${d##*/}
+            [ "$i" = lo ] && continue
+            ns="$ns $(dhcpcd -U "$i" 2>/dev/null | sed -n "$re")"
+        done
+        ns=$(echo $ns)
+        if [ -n "$ns" ]; then
+            for a in $ns; do echo "nameserver $a"; done > /etc/resolv.conf
+            say "  /etc/resolv.conf: the network's DNS ($ns)"
+        else
+            say "  /etc/resolv.conf: still 127.0.0.1, and the network gave"
+            say "  no DNS server: run dhcpcd -n, or write one in by hand"
+        fi
+    fi
+    rm -f "$RUN/state" "$RUN/public" "$RUN/status"
+    say ""
+    say "Off. The old hostname comes back at the next boot (Chromium may"
+    say "then say its profile is locked once: delete its Singleton* files)."
+    say "To turn it all back on: vpn on (or pick any level)."
+}
+
+cmd_on() {
+    need_root on
+    repo=$(cat "$ETC/repo" 2>/dev/null)
+    [ -x "$repo/install.sh" ] ||
+        die "can't find the dotfiles ($ETC/repo): run install.sh net"
+    rm -f "$ETC/off"
+    say "Turning vpn back on: $repo/install.sh net"
+    "$repo/install.sh" net || die "install.sh net failed (its log says why)"
+    # vpn off gave the cards their own MACs back, and vpnfw may still
+    # count as started, so it would not make new ones until a reboot
+    random_macs
+    rc-service vpnfw start
+    rc-service vpn start
+    say "on (vpn watch to follow it)"
+}
+
+# --- vpn selftest: every feature, one by one -----------------------
+# For a test machine. Switches through every level, checks that each
+# one does what it says (as user nobody, and as the owner for vpn run),
+# then goes back to the level it found. A check that fails or hangs
+# (every one has a time limit) is noted and the next one runs; if the
+# level can't be put back, it falls back to level -1, so the machine is
+# never left offline. Prints no IP addresses. Results also in
+# /run/vpn/selftest.log.
+
+ST_PASS=0 ST_FAIL=0 ST_START=
+# the Tor Project's own site: DuckDuckGo's onion gave no answer in 90 s
+# while this one did, the same way (2026-11-15)
+ONION=2gzyxa5ihm7nsggfxnu52rck2vv4rvmdlkiu3zzui5du4xyclen53wid.onion
+TOR_CHECK=https://check.torproject.org/api/ip
+WEB=http://example.com/
+
+st_res() {    # st_res <status> <what>
+    if [ "$1" -eq 0 ]; then
+        ST_PASS=$((ST_PASS + 1))
+        say "  PASS  $2" | tee -a "$RUN/selftest.log"
+    else
+        ST_FAIL=$((ST_FAIL + 1))
+        say "  FAIL  $2" | tee -a "$RUN/selftest.log"
+        # what it ran and what it said, for finding out why
+        if [ -n "${ST_CMD:-}" ]; then
+            say "        ran: $ST_CMD" >> "$RUN/selftest.log"
+            sed 's/^/        said: /' "$RUN/st.out" 2>/dev/null |
+                tail -n 6 >> "$RUN/selftest.log"
+        fi
+    fi
+    ST_CMD=
+}
+
+# st <what> <shell command>: PASS when the command succeeds
+st() { ST_CMD=$2; sh -c "$2" > "$RUN/st.out" 2>&1; st_res $? "$1"; }
+# st_not <what> <shell command>: PASS when the command fails
+st_not() {
+    ST_CMD="! $2"
+    sh -c "$2" > "$RUN/st.out" 2>&1
+    if [ $? -ne 0 ]; then st_res 0 "$1"; else st_res 1 "$1"; fi
+}
+
+# st_clock: the clock agrees (within 60 s) with two mirrors' Date,
+# asked through Tor as vpn does at boot; says what each one answered
+st_clock() {
+    ca=$(tor_epoch 1)
+    cb=$(tor_epoch 2)
+    cn=$(date -u +%s)
+    ST_CMD="curl -sI --socks5-hostname 127.0.0.1:$TOR_CLOCK (mirrors 1, 2)"
+    {
+        say "mirror 1 $(mirror_url 1): ${ca:-no answer}"
+        say "mirror 2 $(mirror_url 2): ${cb:-no answer}"
+        say "this clock: $cn"
+    } > "$RUN/st.out"
+    r=1
+    if [ -n "$ca" ] && [ -n "$cb" ]; then
+        d1=$((ca - cn)); [ $d1 -ge 0 ] || d1=$((-d1))
+        d2=$((cb - cn)); [ $d2 -ge 0 ] || d2=$((-d2))
+        [ $d1 -gt 60 ] || [ $d2 -gt 60 ] || r=0
+        say "off by $d1 s and $d2 s" >> "$RUN/st.out"
+    fi
+    st_res $r "the clock is right (two mirrors through Tor agree)"
+}
+
+as_nobody() { printf "su -s /bin/sh nobody -c %s" "'$1'"; }
+
+# wait_ok <seconds>: until vpn says ok (or a problem, or time is up)
+wait_ok() {
+    sleep 3
+    n=0
+    while [ $n -lt "$1" ]; do
+        st_s=
+        [ -r "$RUN/state" ] && read -r st_s st_l < "$RUN/state"
+        [ "$st_s" = ok ] && return 0
+        [ "$st_s" != problem ] || return 1
+        sleep 2
+        n=$((n + 2))
+    done
+    return 1
+}
+
+st_level() {    # st_level <level>: switch, and say whether it came up
+    say "== level $1" | tee -a "$RUN/selftest.log"
+    cmd_level "$1" >/dev/null 2>&1
+    wait_ok 240
+    st_res $? "level $1 comes up (vpn status: $(sed -n 's/^state=//p' \
+        "$RUN/public" 2>/dev/null))"
+}
+
+st_web() { st "$1" "$(as_nobody "curl -s -o /dev/null -m 20 $WEB")"; }
+st_noweb() { st_not "$1" "$(as_nobody "curl -s -o /dev/null -m 10 $WEB")"; }
+
+st_back() {
+    trap - INT TERM HUP
+    say "== back to level $ST_START" | tee -a "$RUN/selftest.log"
+    if [ -e "$ETC/off" ] && [ "$ST_START" != -1 ]; then
+        cmd_on >/dev/null 2>&1
+    fi
+    cmd_level "$ST_START" >/dev/null 2>&1
+    if [ "$ST_START" = -1 ] || wait_ok 240; then
+        say "  back on level $ST_START"
+    else
+        say "  level $ST_START did not come back: falling back to -1 (all off)"
+        cmd_off >/dev/null 2>&1
+    fi
+}
+
+cmd_selftest() {
+    need_root selftest
+    [ ! -e "$ETC/off" ] || die "vpn is off (level -1): vpn on first"
+    owner=$(stat -c %U "$(cat "$ETC/repo" 2>/dev/null)" 2>/dev/null)
+    phys=$(ip -4 route show default 2>/dev/null | grep -v ' dev tun' |
+        sed -n 's/.* dev \([^ ]*\).*/\1/p' | head -n 1)
+    router=$(ip -4 route show default 2>/dev/null | grep -v ' dev tun' |
+        sed -n 's/^default via \([0-9.]*\).*/\1/p' | head -n 1)
+    ST_START=$(sed -n 's/^level=//p' "$RUN/public" 2>/dev/null)
+    valid_level "${ST_START:-}" || ST_START=$(cur_level)
+    : > "$RUN/selftest.log"
+    say "vpn selftest: every level and feature in turn (about 10-15 min)."
+    say "Ctrl+C stops it and goes back to level $ST_START."
+    trap 'st_back; exit 1' INT TERM HUP
+
+    say "== without the network" | tee -a "$RUN/selftest.log"
+    for m in closed pick vpn torvpn direct sandbox refresh; do
+        st "firewall rules for $m load" "$0 firewall $m --check"
+    done
+    st "the hostname is host" '[ "$(hostname)" = host ]'
+    st "dhcpcd sends no hostname (anonymous)" \
+        "grep -q '^anonymous' /etc/dhcpcd.conf"
+    st "dhcpcd does not change the MAC while connected" \
+        "! grep -q '^randomise_hwaddr' /etc/dhcpcd.conf"
+    for d in /sys/class/net/*; do
+        [ -e "$d/device" ] || continue
+        i=${d##*/}
+        if grep -q "^$i " "$RUN/macs" 2>/dev/null; then
+            # the second hex digit has bit 2 set: made up, not the card's
+            st "$i has a made-up MAC address" \
+                "cut -c 2 $d/address | grep -q '[2367abefABEF]'"
+        else
+            say "  info  $i uses its own MAC address (USB, keep-mac," \
+                "or DHCP failed with a made-up one)" |
+                tee -a "$RUN/selftest.log"
+        fi
+        if [ -d "$d/wireless" ]; then
+            say "  info  $i (Wi-Fi) is $(cat "$d/operstate")" |
+                tee -a "$RUN/selftest.log"
+        fi
+    done
+    st "vpnauth is setuid root" "[ -u /usr/local/bin/vpnauth ]"
+    st "the server list and certificate are there" \
+        "[ -s $ETC/gateways ] && [ -s $ETC/client.crt ]"
+    st "the certificate is valid" \
+        "openssl x509 -checkend 0 -noout -in $ETC/client.crt"
+
+    st_level 2
+    st "IPv6 is off" "[ \$(cat /proc/sys/net/ipv6/conf/all/disable_ipv6) = 1 ]"
+    st "resolv.conf is locked to Tor (127.0.0.1)" \
+        "lsattr /etc/resolv.conf | grep -q '^[^ ]*i' &&
+        grep -qx 'nameserver 127.0.0.1' /etc/resolv.conf"
+    st "DNS through Tor answers" "$(as_nobody 'getent hosts gentoo.org')"
+    st_web "the web works through the VPN"
+    [ -z "$phys" ] || st_not "kill switch: nothing goes out on $phys itself" \
+        "$(as_nobody "curl -s -o /dev/null -m 10 --interface $phys $WEB")"
+    st "Tor's browser port 9150 is Tor" \
+        "for i in 1 2; do curl -sS -m 40 --socks5-hostname \\
+        127.0.0.1:9150 $TOR_CHECK | grep -q '\"IsTor\":true' && exit 0
+        done; exit 1"
+    st "Tor's program port 9200 is Tor" \
+        "for i in 1 2; do curl -sS -m 40 --socks5-hostname \\
+        127.0.0.1:9200 $TOR_CHECK | grep -q '\"IsTor\":true' && exit 0
+        done; exit 1"
+    st_clock
+    st "proxychains goes through Tor" \
+        "$(as_nobody "proxychains -q curl -s -m 40 $TOR_CHECK") |
+        grep -q '\"IsTor\":true'"
+    # ahostsv4: "getent hosts" asks for IPv6 first, and Tor maps that
+    # to a fake IPv6 address, which says nothing about the firewall
+    st ".onion names resolve (into Tor)" \
+        "$(as_nobody "getent ahostsv4 $ONION") | grep -q '^10\.'"
+    # curl itself refuses to look up .onion names (RFC 7686), so ask
+    # the system for the address Tor gives it, and connect to that
+    oip=$(sh -c "$(as_nobody "getent ahostsv4 $ONION")" 2>/dev/null |
+        sed -n '1s/ .*//p')
+    st "an .onion site opens without a proxy (through Tor)" \
+        "$(as_nobody "curl -sS -o /dev/null -m 90 -H \"Host: $ONION\" \
+            http://${oip:-0.0.0.0}/")"
+    if [ -n "$router" ]; then
+        was=off
+        [ ! -e "$ETC/lan" ] || was=on
+        cmd_lan off >/dev/null
+        # blocked: curl times out (28); allowed: anything else
+        st "LAN off: the router is not reachable" \
+            "$(as_nobody "curl -s -m 4 http://$router/"); [ \$? -eq 28 ]"
+        cmd_lan on >/dev/null
+        st "LAN on: the router is reachable" \
+            "$(as_nobody "curl -s -m 4 http://$router/"); [ \$? -ne 28 ]"
+        cmd_lan "$was" >/dev/null
+    fi
+
+    st_level 1
+    st "DNS is Riseup's ($(riseup_dns), through the VPN)" \
+        "grep -qx 'nameserver $(riseup_dns)' /etc/resolv.conf"
+    st_web "the web works through the VPN"
+    [ -z "$phys" ] || st_not "kill switch: nothing goes out on $phys itself" \
+        "$(as_nobody "curl -s -o /dev/null -m 10 --interface $phys $WEB")"
+
+    st_level 3
+    st "every program is on Tor (no proxy set)" \
+        "$(as_nobody "curl -s -m 40 $TOR_CHECK") | grep -q '\"IsTor\":true'"
+
+    st_level 0
+    st_web "the web works straight out"
+    st_not "it is not Tor" \
+        "$(as_nobody "curl -s -m 40 $TOR_CHECK") | grep -q '\"IsTor\":true'"
+
+    st_level sandbox
+    st_noweb "a program not started with vpn run can't go online"
+    if [ -n "$owner" ]; then
+        st "a program started with vpn run can" \
+            "su -s /bin/sh $owner -c '$0 run curl -s -o /dev/null -m 20 $WEB'"
+    fi
+
+    say "== level -1 (all off) and back on" | tee -a "$RUN/selftest.log"
+    cmd_off >/dev/null 2>&1
+    st "no firewall table" "! nft list table inet vpn"
+    st "resolv.conf is unlocked" \
+        "! lsattr /etc/resolv.conf | grep -q '^[^ ]*i'"
+    # the cards get their own MACs back and DHCP again: give it 30 s
+    n=0
+    while [ $n -lt 6 ]; do
+        sh -c "$(as_nobody "curl -s -o /dev/null -m 5 $WEB")" \
+            >/dev/null 2>&1 && break
+        sleep 5
+        n=$((n + 1))
+    done
+    st_web "the web works with everything off"
+    cmd_on >/dev/null 2>&1
+    wait_ok 240
+    st_res $? "vpn on brings it all back"
+
+    st_back
+    say ""
+    say "$ST_PASS passed, $ST_FAIL failed (log: $RUN/selftest.log)"
+    [ "$ST_FAIL" -eq 0 ]
+}
+
+# --- the screen: vpn (root) and vpn watch -------------------------
+# The status, redrawn every second by itself; one key does one thing,
+# and nothing needs Enter. The terminal is put back on any exit.
+
+TTY_SAVED=
+
+tty_raw() { stty -icanon -echo min 0 time 10 2>/dev/null; }
+
+tty_back() {
+    [ -z "$TTY_SAVED" ] || stty "$TTY_SAVED" 2>/dev/null
+    printf '\033[?25h'
+}
+
+# one key, or nothing after a second
+key() { dd bs=1 count=1 2>/dev/null; }
+
+# cooked <command...>: run a command that asks questions, in a normal
+# terminal, then wait for a key before going back to the screen
+cooked() {
+    tty_back
+    printf '\033[H\033[J'
+    "$@"
+    printf '\n(any key: back) '
+    stty -icanon -echo min 1 time 0 2>/dev/null
+    key >/dev/null
+    tty_raw
+}
+
+ESC=$(printf '\033')
+LINE=--------------------------------------------------------------------------
+
+# rows: the terminal's height (24 if unknown)
+rows() {
+    r=$(stty size 2>/dev/null | cut -d ' ' -f 1)
+    case $r in ''|*[!0-9]*) r=24 ;; esac
+    [ "$r" -ge 10 ] || r=10
+    say "$r"
+}
+
+# frame <menu|watch>: one screen, each line cleared to its end, so it
+# redraws without flicker. In the menu the rows left show the newest
+# events (vpn log).
+frame() {
+    if [ "$1" = menu ]; then h='(q quit, ? help, e log)'; else h='(q quit)'; fi
+    body=$(
+        printf 'vpn %-56s %s\n' "$h" "$(date -u +%H:%M:%S) UTC"
+        say "$LINE"
+        if [ "$1" = menu ]; then cmd_status -v; else cmd_status; fi
+        if [ "$1" = menu ]; then
+            if [ -e "$ETC/lan" ]; then lan=on; else lan=off; fi
+            if [ -e "$RUN/fw-off" ]; then fw=OFF; else fw=on; fi
+            say "$LINE"
+            say "level  0 bare  1 vpn  2 tor dns  3 tor"
+            say "       s sandbox (only vpn run programs online)  o offline" \
+                " - all off"
+            say "other  r reconnect  n new server list  l LAN ($lan)" \
+                " f firewall ($fw)"
+        fi
+        [ -z "$MSG" ] || printf '\n%s\n' "$MSG"
+    )
+    room=$(($(rows) - $(say "$body" | wc -l) - 2))
+    printf '\033[H'
+    {
+        say "$body"
+        if [ "$1" = menu ] && [ $room -ge 2 ] && [ -s "$RUN/events" ]; then
+            say "--- what happened, newest last (e: all of it) $LINE"
+            tail -n $((room - 1)) "$RUN/events" | wrap "$(cols)" |
+                tail -n $((room - 1))
+        fi
+    } | cut -c 1-"$(cols)" | sed "s/\$/$ESC[K/"
+    printf '\033[J'
+}
+
+# wrap <width>: long lines go on under the time, at word ends
+wrap() {
+    awk -v w="$1" '{
+        s = $0; pre = ""
+        while (length(pre s) > w) {
+            n = w - length(pre)
+            i = n
+            while (i > n / 2 && substr(s, i, 1) != " ") i--
+            if (i <= n / 2) i = n
+            print pre substr(s, 1, i)
+            s = substr(s, i + 1); pre = "         "
+        }
+        print pre s
+    }'
+}
+
+# cols: the terminal's width (80 if unknown)
+cols() {
+    c=$(stty size 2>/dev/null | cut -d ' ' -f 2)
+    case $c in ''|*[!0-9]*) c=80 ;; esac
+    [ "$c" -ge 20 ] || c=20
+    say $((c - 1))
+}
+
+MSG=
+
+screen() {    # screen <menu|watch>
+    if [ ! -t 0 ] || [ ! -t 1 ]; then
+        cmd_status ${2:-}
+        return
+    fi
+    TTY_SAVED=$(stty -g)
+    trap 'tty_back; printf "\n"; exit 0' INT TERM HUP
+    printf '\033[?25l\033[H\033[2J'
+    tty_raw
+    while :; do
+        frame "$1"
+        k=$(key)
+        [ -n "$k" ] || continue
+        MSG=
+        case $k in
+        q|Q) break ;;
+        esac
+        [ "$1" = menu ] || continue
+        case $k in
+        0|1|2|3)
+            if [ -e "$ETC/off" ]; then cooked cmd_level "$k"
+            else MSG=$(cmd_level "$k" 2>&1); fi ;;
+        -) cooked cmd_off ;;
+        s) MSG=$(cmd_level sandbox 2>&1) ;;
+        o) MSG=$(cmd_level offline 2>&1) ;;
+        r) MSG=$(cmd_retry 2>&1) ;;
+        n) cooked cmd_refresh ;;
+        l)
+            if [ -e "$ETC/lan" ]; then MSG=$(cmd_lan off 2>&1)
+            else MSG=$(cmd_lan on 2>&1); fi ;;
+        f)
+            if [ -e "$RUN/fw-off" ]; then MSG=$(cmd_fw_on 2>&1)
+            else cooked cmd_fw_off; fi ;;
+        e) cooked pager_log ;;
+        '?'|h) cooked help ;;
+        *) MSG="no key $k: press ? for help" ;;
+        esac
+    done
+    tty_back
+    printf '\n'
+}
+
+# pager_log: the whole log, a page at a time if there is a pager
+pager_log() {
+    if command -v less >/dev/null 2>&1; then cmd_log | less +G
+    else cmd_log | tail -n "$(($(rows) - 3))"; fi
+}
+
+help() { sed -n '2,37p' "$0" | sed 's/^# \{0,1\}//'; }
+
+# the screen: vpntop (C) when it is installed, else the plain one here
+cmd_menu() {
+    need_root
+    if [ -t 0 ] && [ -t 1 ] && [ -x /usr/local/bin/vpntop ]; then
+        exec /usr/local/bin/vpntop
+    fi
+    screen menu
+}
+
+cmd_watch() {
+    if [ -t 0 ] && [ -t 1 ] && [ -x /usr/local/bin/vpntop ]; then
+        exec /usr/local/bin/vpntop -w
+    fi
+    screen watch
+}
+
+# vpn report: everything needed to find a problem, in one go (root),
+# MAC addresses hidden. Look it over before you send it anywhere.
+cmd_report() {
+    need_root report
+    for c in "vpn status -v" "rc-status -a" \
+        "ls /etc/runlevels/boot /etc/runlevels/default" "cat $RUN/status" \
+        "tail -n 40 $RUN/openvpn.log" "cat $RUN/tor.log" \
+        "nft list ruleset" "lsattr /etc/resolv.conf" "cat /etc/resolv.conf" \
+        "ip -br addr" "ip route" "tail -n 12 /etc/dhcpcd.conf" "hostname" \
+        "ls $ETC" "ps -eo pid,ppid,stat,args --forest"
+    do
+        say "== $c"
+        sh -c "$c" 2>&1
+    done | sed 's/[0-9a-fA-F]\{2\}\(:[0-9a-fA-F]\{2\}\)\{5\}/MAC/g'
+}
+
+# --- vpn rescue: after a reboot with no internet ---------------------
+# Saves everything to a file in your home, then tries to get you online
+# step by step, testing the web after each: DHCP again (with the cards'
+# own MAC addresses), a new server, level 0, and at last everything
+# off (level -1). Says what worked; offers a reboot at the end.
+
+RESCUE=
+rlog() { say "$*" | tee -a "$RESCUE"; }
+
+# rcollect <title> <command>: its output into the file only
+rcollect() {
+    say "== $1" >> "$RESCUE"
+    sh -c "$2" >> "$RESCUE" 2>&1
+    say "" >> "$RESCUE"
+}
+
+# web_ok: can an ordinary program (nobody) open a web page?
+web_ok() {
+    su -s /bin/sh nobody -c "curl -s -o /dev/null -m 20 $WEB" \
+        </dev/null >/dev/null 2>&1
+}
+
+# rwait_state <secs>: until the vpn service says ok (or a problem)
+rwait_state() {
+    n=0
+    while [ $n -lt "$1" ]; do
+        st=$(cut -d ' ' -f 1 "$RUN/state" 2>/dev/null)
+        case $st in ok|problem) return 0 ;; esac
+        sleep 2
+        n=$((n + 2))
+        [ $((n % 10)) -ne 0 ] || printf '        ... %s s (%s)\n' "$n" \
+            "$(sed -n 's/^note=//p' "$RUN/status" 2>/dev/null | cut -c 1-50)"
+    done
+    return 1
+}
+
+# rtry <what>: test the web now; say it and keep it in the file
+rtry() {
+    if web_ok; then
+        rlog "  OK    the web works: $1"
+        return 0
+    fi
+    rlog "  no    the web does not work: $1"
+    return 1
+}
+
+cmd_rescue() {
+    need_root rescue
+    repo=$(cat "$ETC/repo" 2>/dev/null)
+    u=$(stat -c %U "$repo" 2>/dev/null)
+    home=$(getent passwd "$u" 2>/dev/null | cut -d : -f 6)
+    if [ -z "$u" ] || [ "$u" = root ] || [ ! -d "$home" ]; then
+        u=root home=/root
+    fi
+    RESCUE=$home/vpn-rescue-$(date -u +%Y%m%d-%H%M%S).txt
+    : > "$RESCUE"
+    chmod 600 "$RESCUE"
+    rlog "vpn rescue, $(date -u '+%Y-%m-%d %H:%M:%S') UTC"
+    rlog "Everything goes to $RESCUE (send it to me)."
+    rlog ""
+    rlog "1. collecting what is there now"
+    rcollect "vpn status -v" "$0 status -v"
+    rcollect "vpn log" "cat $RUN/events"
+    rcollect "ip -br link" "ip -br link"
+    rcollect "ip -br addr" "ip -br addr"
+    rcollect "ip route" "ip route"
+    rcollect "made-up MAC addresses" "cat $RUN/macs"
+    rcollect "dhcpcd" "rc-service dhcpcd status; tail -n 20 /etc/dhcpcd.conf"
+    rcollect "resolv.conf" "lsattr /etc/resolv.conf; cat /etc/resolv.conf"
+    rcollect "firewall" "nft list ruleset"
+    rcollect "runlevels" "rc-status -a"
+    rcollect "openvpn log" "tail -n 40 $RUN/openvpn.log"
+    rcollect "tor log" "tail -n 20 $RUN/tor.log"
+    rcollect "selftest log" "cat $RUN/selftest.log"
+    rcollect "kernel (network)" "dmesg | grep -i \
+        -e eth -e wlp -e wlan -e iwl -e firmware -e link -e dhcp | tail -n 40"
+    rcollect "processes" "ps -eo pid,ppid,stat,args --forest"
+    [ ! -x "$repo/install.sh" ] ||
+        rcollect "install.sh check" "$repo/install.sh check </dev/null"
+    rlog "  saved"
+    rlog ""
+    worked=
+
+    rlog "2. the network itself (DHCP)"
+    if has_net; then
+        rlog "  OK    a router gave an address"
+    else
+        rlog "  no    no address from DHCP"
+        if restore_macs; then
+            rlog "  fix   the cards' own MAC addresses back"
+        fi
+        if own_macs; then
+            rlog "  fix   more cards' own MAC addresses back (permaddr, dmesg)"
+        fi
+        dhcpcd -n >/dev/null 2>&1
+        rlog "  fix   asked dhcpcd again; waiting up to 40 s"
+        n=0
+        while [ $n -lt 40 ] && ! has_net; do sleep 2; n=$((n + 2)); done
+        if has_net; then rlog "  OK    a router gave an address"
+        else rlog "  no    still no address (cable? Wi-Fi? router?)"; fi
+    fi
+    rcollect "ip -br addr, after DHCP" "ip -br addr; ip route"
+
+    rlog ""
+    rlog "3. the web, as it is now"
+    if rtry "as it is (level $(cur_level))"; then
+        worked="as it is"
+    fi
+
+    if [ -z "$worked" ] && [ ! -e "$ETC/off" ] && has_net; then
+        rlog ""
+        rlog "4. picking a server again (up to 3 min)"
+        rm -f "$RUN/fw-off" "$RUN/state"
+        cmd_retry >/dev/null 2>&1
+        rwait_state 180
+        rlog "  vpn:  $(sed -n 's/^state=//p' "$RUN/status") $(sed -n \
+            's/^problem=//p' "$RUN/status")"
+        rtry "after picking a server again" && worked="a new server"
+        rcollect "vpn log, after the new pick" "tail -n 30 $RUN/events"
+    fi
+
+    if [ -z "$worked" ] && [ ! -e "$ETC/off" ]; then
+        rlog ""
+        rlog "5. level 0 (bare): your own IP, no VPN (until reboot)"
+        rm -f "$RUN/state"
+        cmd_level 0 >/dev/null 2>&1
+        rwait_state 40
+        sleep 3
+        rtry "level 0" && worked="level 0 (no VPN)"
+    fi
+
+    if [ -z "$worked" ]; then
+        rlog ""
+        rlog "6. everything off (level -1): the system as before vpn"
+        [ -e "$ETC/off" ] || cmd_off >> "$RESCUE" 2>&1
+        restore_macs >/dev/null 2>&1
+        dhcpcd -n >/dev/null 2>&1
+        n=0
+        while [ $n -lt 40 ] && ! has_net; do sleep 2; n=$((n + 2)); done
+        sleep 3
+        rtry "with everything off" && worked="everything off"
+        rcollect "after all off" "ip -br addr; ip route; cat /etc/resolv.conf"
+    fi
+
+    rlog ""
+    rlog "== result"
+    case $worked in
+    "as it is")
+        rlog "The internet works as it is: nothing had to change." ;;
+    "a new server")
+        rlog "The internet works again, through the VPN, with a new server." ;;
+    "level 0 (no VPN)")
+        rlog "The internet works at level 0 (your own IP, no VPN), until"
+        rlog "reboot. The VPN itself did not work: send me this file." ;;
+    "everything off")
+        rlog "The internet works with vpn turned off (level -1). Send me"
+        rlog "this file; vpn on turns it back on when it is fixed." ;;
+    *)
+        rlog "The internet does not work even with vpn off: the problem is"
+        rlog "the cable, the Wi-Fi or the router, not vpn (vpn is off now;"
+        rlog "vpn on turns it back on)." ;;
+    esac
+    sed -i 's/[0-9a-fA-F]\{2\}\(:[0-9a-fA-F]\{2\}\)\{5\}/MAC/g' "$RESCUE"
+    chown "$u" "$RESCUE" 2>/dev/null
+    say ""
+    say "Saved: $RESCUE (MAC addresses hidden)"
+    if [ -t 0 ]; then
+        ask "Reboot now? (the file stays) [y/N]" && reboot
+    fi
+    return 0
+}
+
+# random_macs: each network card gets a made-up MAC address, once, at
+# boot (vpnfw), while it is still down; nothing changes it while
+# connected (changing it then breaks Wi-Fi). /etc/vpn/keep-mac: don't.
+# USB network devices (phone tethering, docks: cdc_ncm, rndis...) are
+# left alone: they only pass on frames for the address they know.
+# /run/vpn/macs keeps "card own-address", for restore_macs.
+random_macs() {
+    [ ! -e "$ETC/keep-mac" ] || return 0
+    mkdir -p "$RUN"
+    : > "$RUN/macs"
+    chmod 600 "$RUN/macs"
+    for d in /sys/class/net/*; do
+        [ -e "$d/device" ] || continue
+        # USB cards only with a driver of their own chip: the generic
+        # ones (cdc_ncm, cdc_ether, rndis_host) leave the device
+        # filtering on its own MAC, so DHCP gets no answer
+        case $(readlink -f "$d/device/subsystem" 2>/dev/null) in
+        */usb)
+            case $(readlink "$d/device/driver" 2>/dev/null) in
+            */ax88179_178a|*/r8152|*/asix) ;;
+            *) continue ;;
+            esac ;;
+        esac
+        i=${d##*/}
+        own=$(cat "$d/address" 2>/dev/null)
+        set -- $(od -An -N6 -tx1 /dev/urandom)
+        [ $# -eq 6 ] || continue
+        # locally administered, unicast
+        m=$(printf '%02x:%s:%s:%s:%s:%s' $(( (0x$1 & 252) | 2 )) \
+            "$2" "$3" "$4" "$5" "$6")
+        up=no
+        ip link show dev "$i" | grep -q '[<,]UP[,>]' && up=yes
+        [ $up = no ] || ip link set dev "$i" down
+        if ip link set dev "$i" address "$m" 2>/dev/null; then
+            say "$i $own" >> "$RUN/macs"
+        else
+            warn "could not give $i a random MAC address"
+        fi
+        [ $up = no ] || ip link set dev "$i" up
+    done
+}
+
+# restore_macs: the cards' own MAC addresses back (from random_macs)
+restore_macs() {
+    [ -s "$RUN/macs" ] || return 1
+    while read -r i own; do
+        [ -n "$own" ] || continue
+        ip link set dev "$i" down 2>/dev/null
+        ip link set dev "$i" address "$own" 2>/dev/null
+        ip link set dev "$i" up 2>/dev/null
+    done < "$RUN/macs"
+    rm -f "$RUN/macs"
+    return 0
+}
+
+# own_macs: also cards with a made-up address that /run/vpn/macs does
+# not know (an older vpn changed USB cards too): the real one from
+# "ip link" (permaddr) or from the kernel's log when the card started
+own_macs() {
+    done_any=1
+    for d in /sys/class/net/*; do
+        [ -e "$d/device" ] || continue
+        i=${d##*/}
+        cut -c 2 "$d/address" | grep -q '[2367abefABEF]' || continue
+        own=$(ip link show dev "$i" | sed -n 's/.* permaddr \([^ ]*\).*/\1/p')
+        [ -n "$own" ] || own=$(dmesg 2>/dev/null |
+            sed -n "s/.* $i: register .*, \([0-9a-f:]\{17\}\)\$/\1/p" |
+            tail -n 1)
+        [ -n "$own" ] || continue
+        ip link set dev "$i" down 2>/dev/null
+        ip link set dev "$i" address "$own" 2>/dev/null
+        ip link set dev "$i" up 2>/dev/null
+        done_any=0
+    done
+    return $done_any
+}
+
+# has_net: a default route through a router (not dhcpcd's link-local
+# fallback, 169.254.x.x, which means DHCP gave nothing)
+has_net() {
+    ip -4 route show default 2>/dev/null | grep -q ' via '
+}
+
+case ${1:-} in
+''|level|default|retry|refresh|lan|firewall-off|firewall-on|report|off|on|\
+selftest|log|rescue)
+    as_root "$@" ;;
+status) [ "${2:-}" != -v ] || as_root "$@" ;;
+esac
+case ${1:-} in
+'') cmd_menu ;;
+status) cmd_status "${2:-}" ;;
+watch) cmd_watch ;;
+report) cmd_report ;;
+log) cmd_log "${2:-}" ;;
+rescue) cmd_rescue ;;
+off) cmd_off ;;
+selftest) cmd_selftest ;;
+on) cmd_on ;;
+level) cmd_level "${2:-}" ;;
+default) cmd_default "${2:-}" ;;
+retry) cmd_retry ;;
+refresh) cmd_refresh "${2:-}" ;;
+lan) cmd_lan "${2:-}" ;;
+firewall-off) cmd_fw_off ;;
+firewall-on) cmd_fw_on ;;
+run) shift; cmd_run "$@" ;;
+daemon) need_root daemon; daemon ;;
+boot)
+    need_root boot
+    [ ! -e "$ETC/off" ] || exit 0
+    S_LEVEL=$(cur_level)
+    firewall closed
+    random_macs ;;
+firewall)
+    need_root firewall
+    S_LEVEL=$(cur_level)
+    firewall "${2:-closed}" "${3:-}" ;;
+up-hook) up_hook ;;
+down-hook) down_hook ;;
+-h|--help|help) help ;;
+*) die "unknown command: $1 (vpn help)" ;;
+esac
