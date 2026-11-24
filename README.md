@@ -51,12 +51,6 @@ edits `~/dotfiles/nvim`. Programs go into `~/.system` (commands in
 `~/.system/share`, `state` and `cache`), so `~/.local` and `~/.cache`
 are not used (see "Where everything goes" below).
 
-The keyboard layout and the steno theory have repositories of their
-own, so they can be used without the rest:
-[moonlander](https://github.com/AliceInUndernix/moonlander) (the QMK
-layout) and [dotterel](https://github.com/AliceInUndernix/dotterel)
-(the British English steno theory and its dictionaries).
-
 ## Install
 
 Clone it and run the script as yourself. It never uses sudo or doas:
@@ -231,6 +225,18 @@ or newer). Those are system packages, so run it once as root:
 newest `libc++1-N`; Arch: `libc++` and `libc++abi`), then does the
 rest as you. `./install.sh check ksp` shows
 what is missing.
+
+## The other repositories
+
+Each can be used without the rest; `./install.sh keyboard games`
+sets them up here.
+
+- [moonlander](https://github.com/AliceInUndernix/moonlander):
+  the QMK layout for the ZSA Moonlander
+- [dotterel](https://github.com/AliceInUndernix/dotterel):
+  the British English steno theory and its dictionaries
+- [kspkan](https://github.com/AliceInUndernix/kspkan):
+  a small mod manager for Kerbal Space Program
 
 ## Colours: Habamax everywhere
 
