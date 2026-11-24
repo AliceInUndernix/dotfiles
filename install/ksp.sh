@@ -10,8 +10,8 @@
 #              (its README links the binary; it is not on GitHub's
 #              release pages, so nothing here fetches it for you):
 #                PRINCIPIA_ZIP=~/Principia-Lie.zip ./install.sh ksp
-#              or the newest ~/[Pp]rincipia*.zip. It goes into
-#              GameData/Principia of KSP_DIR, or of the first KSP found
+#              or the newest Principia*.zip in ~ or Downloads. It goes
+#              into GameData/Principia of KSP_DIR, or of the first KSP found
 #              in the usual places (Steam, GOG, ~/KSP). An old one is
 #              moved to ~/.system/state/backup/ksp/Principia.<date>.
 #
@@ -52,7 +52,16 @@ principia_zip() {
 		echo "$PRINCIPIA_ZIP"
 		return
 	fi
-	ls -t "$HOME"/[Pp]rincipia*.zip 2>/dev/null | head -n 1
+	# the newest in ~, the Downloads directory (XDG's, or ~/Downloads)
+	dl=$(sed -n 's/^XDG_DOWNLOAD_DIR="\(.*\)"$/\1/p' \
+		"$CONFIG/user-dirs.dirs" 2>/dev/null | sed "s|\$HOME|$HOME|")
+	set --
+	for d in "$HOME" "${dl:-$HOME}" "$HOME/Downloads" "$HOME/downloads"; do
+		for z in "$d"/[Pp]rincipia*.zip "$d"/[Pp]rincipia*.ZIP; do
+			[ ! -f "$z" ] || set -- "$@" "$z"
+		done
+	done
+	[ $# -eq 0 ] || ls -t "$@" 2>/dev/null | head -n 1
 }
 
 # ksp_libs_missing: the libraries principia.so can't find (ldd), or the

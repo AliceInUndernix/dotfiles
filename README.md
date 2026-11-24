@@ -210,10 +210,10 @@ Only when named. It installs:
   `~/.system/share/kspkan`).
 - **[Principia](https://github.com/mockingbirdnest/Principia)**, the
   n-body gravity mod. Its binary is linked from its README and is not
-  on GitHub, so download the zip into `~` yourself; the newest
-  `~/Principia*.zip` is used (or `PRINCIPIA_ZIP=FILE`). The zip is
-  checked first (only `Principia/`, nothing outside it, at most 2 GB
-  unpacked) and goes into `GameData/Principia` of `KSP_DIR`, or of the
+  on GitHub, so download the zip yourself; the newest `Principia*.zip`
+  in `~` or your Downloads directory is used (or `PRINCIPIA_ZIP=FILE`).
+  The zip is checked first (only `Principia/`, nothing outside it, at
+  most 2 GB unpacked) and goes into `GameData/Principia` of `KSP_DIR`, or of the
   first KSP found in Steam's, GOG's or `~/KSP`. An old one is moved
   out of the game to `~/.system/state/backup/ksp/`. Start a new save
   after installing it.
