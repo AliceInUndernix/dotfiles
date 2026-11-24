@@ -58,7 +58,10 @@ principia_zips() {
 # principia_ask <zips>: ask which zip to install from, on the terminal.
 # Prints the one chosen; nothing for no, or with no terminal to ask on.
 principia_ask() {
-	{ [ -r /dev/tty ] && : < /dev/tty; } 2>/dev/null || return 0
+	# the terminal: stdin when it is one, else /dev/tty if it opens
+	if [ -t 0 ]; then tty=
+	elif { true < /dev/tty; } 2>/dev/null; then tty=/dev/tty
+	else return 0; fi
 	echo "Principia zips found in $HOME:" >&2
 	n=0
 	echo "$1" | while IFS= read -r f; do
@@ -70,7 +73,8 @@ principia_ask() {
 	count=$(echo "$1" | wc -l)
 	while :; do
 		printf 'Install Principia from 1? (y, a number, or n): ' >&2
-		read -r a < /dev/tty || a=n
+		if [ -z "$tty" ]; then read -r a || a=n
+		else read -r a < "$tty" || a=n; fi
 		case $a in
 		y|Y|yes|'') a=1 ;;
 		n|N|no) return 0 ;;
