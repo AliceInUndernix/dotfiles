@@ -244,7 +244,8 @@ static void help(FILE *f)
         "  -f FILE  this diary file instead of ~/.diary (or the config's)\n"
         "  -c CMD   run CMD (with sh) in the open diary instead of the\n"
         "           screen, then save and wipe: diary -c ksh is a shell\n"
-        "  -s       the password from standard input, for scripts\n"
+        "  -s       the password from standard input, for scripts\n");
+    fprintf(f,
         "  -h       help\n"
         "settings: ~/.system/config/diary/config; see the README\n");
 }

@@ -356,7 +356,7 @@ static void handle_post(int fd, const char *path, const char *body)
             }
         }
         if (good) {
-            char num[64];
+            char num[96];
 
             sprintf(num, "Added %d link(s); the download starts in a few "
                 "seconds. ", good);

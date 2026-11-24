@@ -39,10 +39,10 @@ ck_browser() {
 # answer; nothing when there is no terminal to ask on.
 ask_apps() {
 	[ -t 0 ] || return 0
-	printf 'Build which of these? %s (names, all, or Enter for none): ' \
+	printf 'Build which of these? %s (names, all, or none): ' \
 		"$APPS" >&2
 	read -r a || a=
-	case $a in all) a=$APPS ;; esac
+	case $a in all) a=$APPS ;; none|n|no) a= ;; esac
 	for x in $a; do
 		case " $APPS " in *" $x "*) echo "$x" ;;
 		*) warn "not one of them: $x (left out)" ;; esac
