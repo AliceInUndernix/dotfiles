@@ -889,7 +889,7 @@ static int mouse_event(const unsigned char *k, int n)
 /* the keys read at once: -1 quit */
 static int view_keys(const unsigned char *k, int n)
 {
-    int i, c;
+    int i, c, p;
 
     for (i = 0; i < n; i++) {
         c = k[i];
@@ -899,12 +899,15 @@ static int view_keys(const unsigned char *k, int n)
         }
         /* arrows and pages: ESC [ A, B, 5~, 6~ (or ESC O A, B) */
         if (c == 27 && i + 2 < n && (k[i + 1] == '[' || k[i + 1] == 'O')) {
-            c = k[i + 2];
+            /* read to the final byte, so ESC [ 1 ; 5 A leaves no ";5A"
+               to be taken as keys */
             i += 2;
-            if (c == '5' || c == '6') {
-                if (i + 1 < n && k[i + 1] == '~')
-                    i++;
-                c = c == '5' ? 21 : 4;
+            p = k[i];
+            while (i + 1 < n && k[i] >= 0x20 && k[i] <= 0x3f)
+                i++;
+            c = k[i];
+            if (c == '~') {
+                c = p == '5' ? 21 : p == '6' ? 4 : 0;
             } else {
                 c = c == 'A' ? 'k' : c == 'B' ? 'j' : c == 'H' ? 'g' :
                     c == 'F' ? 'G' : 0;

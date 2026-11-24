@@ -1258,6 +1258,18 @@ static int drop_outline(const char *outlines, const char *outline,
     return had;
 }
 
+/* put_str: s at o + n; the new end (o stays a C string). Saving
+ * with strcat re-read the whole output for every line: a big
+ * dictionary took minutes. */
+static long put_str(char *o, long n, const char *s)
+{
+    long k;
+
+    k = (long)strlen(s);
+    memcpy(o + n, s, (unsigned long)k + 1);
+    return n + k;
+}
+
 /* Put outline -> text in a .dict file: on the line of that text when
  * there is one (else a new line at the end), and off any other line,
  * since an outline writes one thing. A line left with no outline
@@ -1267,10 +1279,15 @@ static int write_entry(const char *path, const char *outline,
 {
     char *f, *o, *line, *next, *tab, esc[TEXT_MAX * 2 + 8];
     char rest[TEXT_MAX * 4], tmp[1100];
-    long size, need;
+    long size, need, n;
     int done, r, w, fd;
 
+    errno = 0;
     f = read_file(path, &size);
+    if (!f && errno != ENOENT) {
+        say("can't read %s; nothing was changed", path);
+        return -1;
+    }
     if (!f) {
         f = malloc(1);
         if (!f)
@@ -1286,6 +1303,7 @@ static int write_entry(const char *path, const char *outline,
         return -1;
     }
     o[0] = 0;
+    n = 0;
     done = 0;
     for (line = f; line && *line; line = next) {
         next = strchr(line, '\n');
@@ -1295,8 +1313,8 @@ static int write_entry(const char *path, const char *outline,
         }
         tab = strrchr(line, '\t');
         if (!tab) {
-            strcat(o, line);   /* not an entry: as it was */
-            strcat(o, "\n");
+            n = put_str(o, n, line);   /* not an entry: as it was */
+            n = put_str(o, n, "\n");
             continue;
         }
         *tab = 0;
@@ -1309,16 +1327,16 @@ static int write_entry(const char *path, const char *outline,
         }
         if (!rest[0])
             continue;
-        strcat(o, line);
-        strcat(o, "\t");
-        strcat(o, rest);
-        strcat(o, "\n");
+        n = put_str(o, n, line);
+        n = put_str(o, n, "\t");
+        n = put_str(o, n, rest);
+        n = put_str(o, n, "\n");
     }
     if (!done) {
-        strcat(o, esc);
-        strcat(o, "\t");
-        strcat(o, outline);
-        strcat(o, "\n");
+        n = put_str(o, n, esc);
+        n = put_str(o, n, "\t");
+        n = put_str(o, n, outline);
+        n = put_str(o, n, "\n");
     }
     free(f);
     /* a new file, then rename: never half a dictionary */
@@ -1596,6 +1614,15 @@ int tool_add(const char *outline, const char *text)
         say("not an outline: %s", outline);
         return 1;
     }
+    /* an empty entry would hide the real one; a long one was cut */
+    if (!text[0]) {
+        say("no text for %s: nothing was added", norm);
+        return 1;
+    }
+    if (strlen(text) > TEXT_MAX / 2) {
+        say("the text for %s is too long: nothing was added", norm);
+        return 1;
+    }
     typographic(text, typo, sizeof(typo));
     show_conflicts(norm, typo);
     res = write_entry(t, norm, typo);
@@ -1817,7 +1844,7 @@ int word_save(const char *path, const char *outline, const char *text)
 int word_drop(const char *path, const char *outline)
 {
     char *f, *o, *line, *next, *tab, rest[TEXT_MAX * 4], tmp[1100];
-    long size;
+    long size, n;
     int r, w, fd;
 
     f = read_file(path, &size);
@@ -1829,6 +1856,7 @@ int word_drop(const char *path, const char *outline)
         return -1;
     }
     o[0] = 0;
+    n = 0;
     for (line = f; line && *line; line = next) {
         next = strchr(line, '\n');
         if (next) {
@@ -1837,18 +1865,18 @@ int word_drop(const char *path, const char *outline)
         }
         tab = strrchr(line, '\t');
         if (!tab) {
-            strcat(o, line);
-            strcat(o, "\n");
+            n = put_str(o, n, line);
+            n = put_str(o, n, "\n");
             continue;
         }
         *tab = 0;
         drop_outline(tab + 1, outline, rest, sizeof(rest));
         if (!rest[0])
             continue;
-        strcat(o, line);
-        strcat(o, "\t");
-        strcat(o, rest);
-        strcat(o, "\n");
+        n = put_str(o, n, line);
+        n = put_str(o, n, "\t");
+        n = put_str(o, n, rest);
+        n = put_str(o, n, "\n");
     }
     free(f);
     sprintf(tmp, "%.1000s.new", path);

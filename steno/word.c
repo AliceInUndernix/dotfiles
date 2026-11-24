@@ -876,8 +876,12 @@ static int keys(const unsigned char *k, int n)
     for (i = 0; i < n; i++) {
         c = k[i];
         if (c == 27 && i + 2 < n && (k[i + 1] == '[' || k[i + 1] == 'O')) {
-            c = k[i + 2];
+            /* the whole sequence: parameters (ESC [ 1 ; 5 C, ESC [ 3 ~)
+               would otherwise be typed into the word */
             i += 2;
+            while (i + 1 < n && k[i] >= 0x20 && k[i] <= 0x3f)
+                i++;
+            c = k[i];
             /* focus in and out (st, xterm: mode 1004) */
             if (c == 'I' || c == 'O') {
                 focused = c == 'I';
@@ -899,11 +903,6 @@ static int keys(const unsigned char *k, int n)
                 next_list(1);
             else if (c == 'D')
                 next_list(-1);
-            while (i + 1 < n && ((k[i + 1] >= '0' && k[i + 1] <= '9') ||
-                k[i + 1] == ';' || k[i + 1] == '~'))
-            {
-                i++;               /* the rest of ESC [ 5 ~ and such */
-            }
             continue;
         }
         if (c == 3)

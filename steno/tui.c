@@ -456,9 +456,13 @@ int tui_key(void)
         }
         /* the arrows choose: ESC [ A and ESC [ B (or ESC O A) */
         if (c == 27 && i + 2 < n && (b[i + 1] == '[' || b[i + 1] == 'O')) {
-            c = b[i + 2] == 'A' ? 'k' : b[i + 2] == 'B' ? 'j' :
-                b[i + 2] == 'a' ? 'K' : b[i + 2] == 'b' ? 'J' : 0;
+            /* read to the final byte: ESC [ 1 ; 5 A must not leave
+               ";5A" behind, whose A would open "add a stroke" */
             i += 2;
+            while (i + 1 < n && b[i] >= 0x20 && b[i] <= 0x3f)
+                i++;
+            c = b[i] == 'A' ? 'k' : b[i] == 'B' ? 'j' :
+                b[i] == 'a' ? 'K' : b[i] == 'b' ? 'J' : 0;
             if (asking || !c)
                 continue;
         }

@@ -295,10 +295,12 @@ char *read_file(const char *path, long *size)
     int fd;
     long n, cap, k;
     char *p, *q;
+    int e;
 
     fd = open(path, O_RDONLY);
     if (fd < 0)
         return 0;
+    e = 0;
     cap = 65536;
     p = malloc(cap + 1);
     n = 0;
@@ -316,13 +318,23 @@ char *read_file(const char *path, long *size)
         k = read(fd, p + n, cap - n);
         if (k < 0 && errno == EINTR)
             continue;
+        if (k < 0)
+            e = errno;
         if (k <= 0)
             break;
         n += k;
     }
     close(fd);
-    if (!p)
+    if (!p) {
+        errno = ENOMEM;
         return 0;
+    }
+    /* half a file is no file: saving it back would lose the rest */
+    if (e) {
+        free(p);
+        errno = e;
+        return 0;
+    }
     p[n] = 0;
     *size = n;
     return p;
