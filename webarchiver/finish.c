@@ -377,10 +377,45 @@ static void big_register(struct big *g, struct strlist *keys,
     sl_free(&fresh);
 }
 
-/* where a big file goes: the domain directory, or _external/<host>/ */
-static char *big_dest(const char *url, const char *d)
+/* the extension a file of this Content-Type needs, so that a page
+ * opens it as what it is ("css?family=x" -> "css?family=x.css") */
+static const char *type_ext(const char *type)
 {
-    char *host, *hd, *base, *path, *raw, *dest, *dir, *tmp;
+    static const char *map[] = { "text/css", ".css",
+        "text/html", ".html", "application/xhtml+xml", ".html",
+        "javascript", ".js", "ecmascript", ".js",
+        "image/png", ".png", "image/jpeg", ".jpg", "image/gif", ".gif",
+        "image/svg+xml", ".svg", "image/webp", ".webp",
+        "image/avif", ".avif", "image/x-icon", ".ico",
+        "image/vnd.microsoft.icon", ".ico", "image/bmp", ".bmp",
+        "font/woff2", ".woff2", "font/woff", ".woff",
+        "application/font-woff", ".woff", "font/ttf", ".ttf",
+        "font/otf", ".otf", "application/json", ".json", 0 };
+    int i, n;
+
+    if (!type)
+        return 0;
+    while (*type == ' ')
+        type++;
+    n = strcspn(type, ";");
+    for (i = 0; map[i]; i += 2) {
+        if (n >= (int)strlen(map[i]) && strstr(type, map[i]) &&
+            strstr(type, map[i]) < type + n)
+        {
+            return map[i + 1];
+        }
+    }
+    return 0;
+}
+
+/* where a fetched file goes: the domain directory, or
+ * _external/<host>/, named as wget names files: path, "?query" (a
+ * hash of it when long), and the extension its type needs */
+static char *big_dest(const char *url, const char *d, const char *type)
+{
+    char *host, *hd, *base, *path, *raw, *dest, *dir, *tmp, *query;
+    const char *ext;
+    char sha[65];
 
     host = url_host(url);
     hd = host_dir(host);
@@ -393,7 +428,34 @@ static char *big_dest(const char *url, const char *d)
         free(tmp);
     }
     raw = url_path(url);
-    path = pct_unquote(raw[0] ? raw : "/index");
+    path = pct_unquote(raw[0] && strcmp(raw, "/") ? raw : "/index");
+    if (ends_with(path, "/")) {
+        tmp = str2(path, "index");
+        free(path);
+        path = tmp;
+    }
+    query = url_query(url);
+    if (query && query[0] && !has_ext(path, &big_exts)) {
+        if (strlen(query) > 100 || strchr(query, '/')) {
+            sha_data(query, strlen(query), sha);
+            sha[16] = 0;
+            tmp = str3(path, "?", sha);
+        } else {
+            tmp = str3(path, "?", query);
+        }
+        free(path);
+        path = tmp;
+    }
+    free(query);
+    ext = type_ext(type);
+    if (ext && !ends_with(path, ext) &&
+        !(!strcmp(ext, ".html") && ends_with(path, ".htm")) &&
+        !(!strcmp(ext, ".jpg") && ends_with(path, ".jpeg")))
+    {
+        tmp = str2(path, ext);
+        free(path);
+        path = tmp;
+    }
     tmp = str3(base, "/", path[0] == '/' ? path + 1 : path);
     dest = norm_path(tmp);
     if (!starts_with(dest, dir) || dest[strlen(dir)] != '/') {
@@ -455,7 +517,7 @@ static char *big_get_new(struct big *g, const char *url)
 {
     struct strlist probed, keys;
     char sha[65], line[64];
-    char *k, *mine, *final, *size, *p, *dest, *res, *r;
+    char *k, *mine, *final, *size, *type, *p, *dest, *res, *r;
     const char *same;
     int i, strong, matches, got;
 
@@ -467,7 +529,7 @@ static char *big_get_new(struct big *g, const char *url)
     if (!g->fetch || stop_requested())
         return mine;
     sl_init(&probed);
-    if (!probe(url, &final, &size, &probed)) {
+    if (!probe(url, &final, &size, &type, &probed)) {
         sl_free(&probed);
         if (mine)
             return mine;
@@ -519,10 +581,16 @@ static char *big_get_new(struct big *g, const char *url)
         }
         for (i = 0; i < keys.n; i++) {
             r = known_global(keys.v[i]);
+            if (r && is_page(r)) {
+                /* another site's copy has its links made for that
+                 * site: fetch this one again */
+                free(r);
+                r = 0;
+            }
             if (!r)
                 continue;
             /* downloaded for another domain already: copy it */
-            dest = big_dest(final, g->d);
+            dest = big_dest(final, g->d, type);
             p = rel_out(dest);
             if (is_file(dest) && strcmp(p, r)) {
                 free(p);
@@ -551,7 +619,7 @@ static char *big_get_new(struct big *g, const char *url)
             goto quit;
         }
     }
-    dest = mine ? abs_out(mine) : big_dest(final, g->d);
+    dest = mine ? abs_out(mine) : big_dest(final, g->d, type);
     if (!mine && is_file(dest)) {
         p = free_name(dest);
         free(dest);
@@ -616,6 +684,7 @@ quit:
     sl_free(&keys);
     free(final);
     free(size);
+    free(type);
     return res;
 }
 
@@ -852,9 +921,13 @@ static int is_space(int c)
     return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f';
 }
 
-/* new value for one link, or 0 to leave it as it is */
+/* new value for one link, or 0 to leave it as it is. need: the page
+ * loads it (a picture, a style sheet, a script, a font), so it is
+ * fetched from wherever it is when it is not here yet, whatever its
+ * name; other links only when their name says they are such a file
+ * or a big file. */
 static char *resolve(struct rewriter *w, const char *raw,
-    const char *page_dir, const char *page_url, int is_html)
+    const char *page_dir, const char *page_url, int is_html, int need)
 {
     static const char *skip[] = { "#", "data:", "mailto:", "javascript:",
         "tel:", "about:", "blob:", 0 };
@@ -933,7 +1006,7 @@ static char *resolve(struct rewriter *w, const char *raw,
         char *path;
 
         path = url_path(url);
-        if (has_ext(path, &big_exts) || has_ext(path, &req_exts))
+        if (need || has_ext(path, &big_exts) || has_ext(path, &req_exts))
             p = big_get(w->big, url);  /* big file, or one wget missed */
         free(path);
     }
@@ -974,16 +1047,18 @@ struct page {
 };
 
 static char *resolve_safe(struct rewriter *w, struct page *pg,
-    const char *raw)
+    const char *raw, int need)
 {
     if (strlen(raw) > 4000 || strchr(raw, '\n')) {
         w->bad_links++;
         return 0;
     }
-    return resolve(w, raw, pg->dir, pg->url, pg->is_html);
+    return resolve(w, raw, pg->dir, pg->url, pg->is_html, need);
 }
 
-static int name_at(const char *s, const char **names, int *len)
+/* the attribute names[*which] starts at s ("name =") */
+static int name_at(const char *s, const char **names, int *len,
+    int *which)
 {
     int i, n;
 
@@ -997,9 +1072,66 @@ static int name_at(const char *s, const char **names, int *len)
                 e++;
             if (*e == '=') {
                 *len = e + 1 - s;
+                *which = i;
                 return 1;
             }
         }
+    }
+    return 0;
+}
+
+/* case-blind: is word in s[0..n)? */
+static int has_word(const char *s, int n, const char *word)
+{
+    int i, k;
+
+    k = strlen(word);
+    for (i = 0; i + k <= n; i++) {
+        if (str_ieq_n(s + i, word, k))
+            return 1;
+    }
+    return 0;
+}
+
+/* does the page load what attribute name at s points to? It looks at
+ * the tag the attribute is in: src loads (but not a frame: that is
+ * another page), href only on <link rel="stylesheet|icon|preload..."> */
+static int loads(const char *text, const char *s, const char *name)
+{
+    static const char *always[] = { "poster", "background", "icon",
+        "manifest", "data-src", "data-poster", "data-background", 0 };
+    static const char *rels[] = { "stylesheet", "icon", "preload",
+        "manifest", "image_src", 0 };
+    const char *lt, *gt, *t;
+    int i, n;
+
+    for (i = 0; always[i]; i++) {
+        if (!strcmp(name, always[i]))
+            return 1;
+    }
+    for (lt = s; lt > text && *lt != '<' && *lt != '>'; lt--)
+        ;
+    if (*lt != '<')
+        return 0;
+    t = lt + 1;
+    n = 0;
+    while ((t[n] >= 'a' && t[n] <= 'z') || (t[n] >= 'A' && t[n] <= 'Z') ||
+        (t[n] >= '0' && t[n] <= '9'))
+    {
+        n++;
+    }
+    if (!strcmp(name, "src"))
+        return !(n == 6 && str_ieq_n(t, "iframe", 6)) &&
+            !(n == 5 && str_ieq_n(t, "frame", 5));
+    if (!strcmp(name, "data"))
+        return n == 6 && str_ieq_n(t, "object", 6);
+    if (strcmp(name, "href") || n != 4 || !str_ieq_n(t, "link", 4))
+        return 0;
+    gt = strchr(s, '>');
+    n = gt ? gt - lt : (int)strlen(lt);
+    for (i = 0; rels[i]; i++) {
+        if (has_word(lt, n, rels[i]))
+            return 1;
     }
     return 0;
 }
@@ -1011,14 +1143,15 @@ static char *pass_attrs(struct rewriter *w, struct page *pg,
     struct buf out;
     const char *s, *v, *e;
     char *val, *nv;
-    int len, q, prev;
+    int len, q, prev, which;
 
     buf_init(&out);
     s = text;
+    which = 0;
     while (*s) {
         prev = s > text ? (unsigned char)s[-1] : 0;
         if (!(prev && (is_space(prev) || prev == '"' || prev == '\'' ||
-            prev == '/')) || !name_at(s, names, &len))
+            prev == '/')) || !name_at(s, names, &len, &which))
         {
             buf_addc(&out, *s);
             s++;
@@ -1067,7 +1200,7 @@ static char *pass_attrs(struct rewriter *w, struct page *pg,
                     char *first;
 
                     first = xstrndup(sp, rest - sp);
-                    nv = resolve_safe(w, pg, first);
+                    nv = resolve_safe(w, pg, first, 1);
                     free(first);
                 }
                 if (nv) {
@@ -1089,7 +1222,7 @@ static char *pass_attrs(struct rewriter *w, struct page *pg,
             sl_free(&items);
             s = e + 1;
         } else {
-            nv = resolve_safe(w, pg, val);
+            nv = resolve_safe(w, pg, val, loads(text, s, names[which]));
             if (nv) {
                 buf_addn(&out, s, v - s);
                 buf_addc(&out, q ? q : '"');
@@ -1166,7 +1299,7 @@ static char *pass_css(struct rewriter *w, struct page *pg,
             }
         }
         val = q ? xstrndup(v + 1, e - v - 1) : xstrndup(v, e - v);
-        nv = resolve_safe(w, pg, val);
+        nv = resolve_safe(w, pg, val, 1);   /* CSS loads all of them */
         if (nv) {
             buf_addn(&out, s, v - s);
             buf_addc(&out, q ? q : '"');
@@ -1183,7 +1316,8 @@ static char *pass_css(struct rewriter *w, struct page *pg,
     return out.s;
 }
 
-/* "http://.../movie.mp4" anywhere in quotes (scripts): local copy */
+/* "http://.../movie.mp4", ".../app.js" anywhere in quotes (scripts):
+ * the local copy, fetched if it is not here yet */
 static char *pass_big(struct rewriter *w, struct page *pg,
     const char *text)
 {
@@ -1227,8 +1361,10 @@ static char *pass_big(struct rewriter *w, struct page *pg,
         if (strchr(url, '#'))
             *strchr(url, '#') = 0;
         path = url_path(url);
-        ok = has_ext(path, &big_exts);
-        p = ok ? big_get(w->big, url) : 0;
+        ok = has_ext(path, &big_exts) || has_ext(path, &req_exts);
+        p = ok ? lookup(w, url) : 0;
+        if (ok && !p)
+            p = big_get(w->big, url);
         if (p) {
             link = make_link(p, pg->dir);
             buf_addc(&out, q);
@@ -1269,7 +1405,7 @@ static char *convert(struct rewriter *w, const char *text,
         a = pass_attrs(w, &pg, text, srcset_names, 1);
         b = pass_attrs(w, &pg, a, attr_names, 0);
         free(a);
-        a = pass_css(w, &pg, b, 0);
+        a = pass_css(w, &pg, b, 1);    /* <style> may @import */
         free(b);
         b = pass_big(w, &pg, a);
         free(a);
@@ -1475,6 +1611,7 @@ int finalize(const char *d, const char *rc, int fetch)
     long long bytes;
     int dups, pages, round, before, ok, counts[3], i;
 
+    tor_all = is_onion(d);     /* everything of an .onion site: Tor */
     state_load(d, &st);
     if (strcmp(st.phase, "crawl") && strcmp(st.phase, "finalize"))
         return 0;
@@ -1530,12 +1667,13 @@ int finalize(const char *d, const char *rc, int fetch)
     w.host = url_host(w.base);
     w.bad_links = 0;
     pages = 0;
-    for (round = 0; round < 4; round++) {
-        /* new CSS files can bring fonts and images of their own */
-        before = big.new_files;
+    for (round = 0; round < 6; round++) {
+        /* new CSS files can bring fonts, images and more CSS of their
+         * own (a copy from another site too) */
+        before = big.new_files + big.dups;
         status(d, "fixing links", 0);
         pages += rewrite_pages(d, &w, &referenced, &pre);
-        if (big.new_files == before)
+        if (big.new_files + big.dups == before)
             break;
     }
     map_save(d, &map);

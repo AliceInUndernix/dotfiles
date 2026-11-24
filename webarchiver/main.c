@@ -31,6 +31,8 @@ char *hsts_opt;
 int use_ipv4;
 int insecure;
 int allow_http;
+struct strlist tor_cmd;
+int tor_all;
 int jobs;
 int refresh;
 char *self_path;
@@ -79,6 +81,9 @@ static void settings(void)
     insecure = v && !strcmp(v, "1");
     v = getenv("ALLOW_HTTP");
     allow_http = v && !strcmp(v, "1");
+    v = getenv("TOR_CMD");
+    sl_init(&tor_cmd);
+    sl_split(&tor_cmd, v && v[0] ? v : DEF_TOR_CMD, ' ');
     v = getenv("JOBS");
     jobs = v && v[0] ? (int)parse_ll(v) : DEF_JOBS;
     if (jobs < 1)
@@ -236,8 +241,12 @@ static void read_links(const char *file)
         line[len] = 0;
         if (!line[0])
             continue;
-        link = str_ieq_n(line, "http://", 7) || str_ieq_n(line, "https://",
-            8) ? xstrdup(line) : str2("https://", line);
+        /* no scheme: https, but http for .onion (Tor already encrypts
+         * it end to end, and few onion sites have https) */
+        if (str_ieq_n(line, "http://", 7) || str_ieq_n(line, "https://", 8))
+            link = xstrdup(line);
+        else
+            link = str2(is_onion(line) ? "http://" : "https://", line);
         d = link_domain(link);
         if (!d[0]) {
             fprintf(stderr, "Skipping bad line: %s\n", link);

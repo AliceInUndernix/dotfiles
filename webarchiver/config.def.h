@@ -36,3 +36,14 @@
 
 /* port of the local archive page (--serve) */
 #define SERVE_PORT 8800
+
+/* .onion links, and everything an .onion site needs, are fetched by
+ * wget started through this command, so they go through Tor; it is
+ * never left out (TOR_CMD). The dotfiles' proxychains gives wget a Tor
+ * port of its own. */
+#define DEF_TOR_CMD "proxychains -q"
+
+/* files of the dotfiles' vpn (net/vpn), read to say why Tor does not
+ * answer: "<state> <level>", and the "vpn off" mark */
+#define VPN_STATE_FILE "/run/vpn/state"
+#define VPN_OFF_FILE "/etc/vpn/off"

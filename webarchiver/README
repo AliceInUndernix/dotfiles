@@ -7,6 +7,11 @@ wget for the downloading and does the rest itself:
 - several sites at the same time, with a live progress table
 - every file stored once: copies, symlinks and aliases on a site are
   detected (big files before they are downloaded, the rest by content)
+- everything a page loads is saved, from any host: style sheets (and
+  what they load: fonts, pictures, more style sheets), scripts,
+  pictures, icons, video; also when the address has no file name
+  ending (fonts.example.org/css?family=x), by the type the server
+  gives. Links to other sites' pages and frames stay live links.
 - links rewritten to relative paths, so a site works from any directory
 - safe to stop at any time (Ctrl+C, network loss, crash) and to resume
 - updates download only what changed and keep the old versions; any old
@@ -44,7 +49,9 @@ Use
         https certificate check fails, or the site answers only over
         plain http, that link is not downloaded and the run ends with a
         "problems" line saying so (see INSECURE and ALLOW_HTTP below).
-        A link written with http:// is used as it is.
+        A link written with http:// is used as it is. .onion links
+        go through Tor (see "Tor and .onion" below); without a scheme
+        they use http.
         Each domain gets its own directory:
             webarchiver sites.txt          ->  ./example.org/
             webarchiver sites.txt archive  ->  ./archive/example.org/
@@ -101,6 +108,26 @@ Settings (environment variables, defaults in config.h)
                        the middle could read and change it)
     ALLOW_HTTP=1       use plain http for sites that do not answer over
                        https (unencrypted)
+    TOR_CMD="proxychains -q"
+                       what wget is started through for .onion sites
+
+
+Tor and .onion
+--------------
+
+An .onion link is fetched through Tor: every wget for it is started as
+"proxychains -q wget ..." (TOR_CMD), and so is everything that site
+loads from other hosts, so none of it comes from your own address.
+An .onion link never goes out without Tor. Before it starts, it
+checks that proxychains is installed and what the vpn says (/run/vpn
+and /etc/vpn/off from the dotfiles' net/): when the vpn is off or at
+level offline, or Tor gives no answer, that link is skipped and the
+"problems" line at the end says why and what to run. Tor is slower,
+so it waits longer for an answer there (90 s to connect).
+
+Other sites still go out the normal way (through the VPN). To send
+everything through Tor, use vpn level 3, which sends every connection
+through Tor.
 
 
 Files in an archive directory
@@ -137,4 +164,5 @@ Plain http requests show which pages you fetch to anyone on the network,
 so https is never given up silently: a failed certificate check or a
 site without https stops that link until you choose INSECURE=1,
 ALLOW_HTTP=1 or an http:// link. To hide your address from the sites,
-run it through Tor, for example "torsocks webarchiver ARCHIVE_DIR".
+use vpn level 3 (everything through Tor); .onion sites always go
+through Tor.

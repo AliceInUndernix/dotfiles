@@ -94,11 +94,25 @@ static void args_free(struct args *a)
     a->n = 0;
 }
 
-static void wget_base(struct args *a)
+/* through Tor: .onion links, and everything of an .onion site (its
+ * pictures on other hosts too, so they don't come from your address) */
+static int via_tor(const char *url)
+{
+    return tor_all || is_onion(url);
+}
+
+/* the start of a wget command for url: TOR_CMD in front when it goes
+ * through Tor */
+static void wget_base(struct args *a, const char *url)
 {
     char *ua;
+    int i;
 
     a->n = 0;
+    if (via_tor(url)) {
+        for (i = 0; i < tor_cmd.n; i++)
+            arg(a, tor_cmd.v[i]);
+    }
     arg(a, "wget");
     ua = str2("--user-agent=", user_agent);
     arg(a, ua);
@@ -112,20 +126,91 @@ static void wget_base(struct args *a)
     arg(a, hsts_opt);
 }
 
+/* the link itself, last; Tor needs longer to connect (wget takes the
+ * last of the same option) */
+static void wget_url(struct args *a, const char *url)
+{
+    if (via_tor(url)) {
+        arg(a, "--connect-timeout=90");
+        arg(a, "--read-timeout=120");
+    }
+    arg(a, url);
+}
+
+/* is the program of TOR_CMD there? */
+static int tor_cmd_found(void)
+{
+    const char *path, *e;
+    char *dir, *p;
+    int found;
+
+    if (!tor_cmd.n)
+        return 0;
+    if (strchr(tor_cmd.v[0], '/'))
+        return access(tor_cmd.v[0], X_OK) == 0;
+    path = getenv("PATH");
+    found = 0;
+    while (path && *path && !found) {
+        e = path + strcspn(path, ":");
+        dir = e > path ? xstrndup(path, e - path) : xstrdup(".");
+        p = path2(dir, tor_cmd.v[0]);
+        found = is_file(p) && access(p, X_OK) == 0;
+        free(p);
+        free(dir);
+        path = *e ? e + 1 : e;
+    }
+    return found;
+}
+
+/* why Tor can't be used now, from the vpn's own files; 0 = try it */
+static const char *tor_problem(void)
+{
+    char *data, *sp;
+    const char *why;
+    int len;
+
+    if (!tor_cmd_found())
+        return "proxychains (TOR_CMD) is not installed, so .onion links "
+            "are not fetched (they never go out without Tor). As root: "
+            "~/dotfiles/install.sh net";
+    if (is_file(VPN_OFF_FILE))
+        return "the vpn is off (level -1), so Tor is not running: vpn on";
+    data = read_file(VPN_STATE_FILE, &len);
+    if (!data)
+        return 0;   /* no vpn: Tor may run on its own */
+    why = 0;
+    sp = strchr(data, ' ');
+    if (sp && starts_with(sp + 1, "offline"))
+        why = "the vpn is at level offline, nothing goes out: "
+            "vpn level 2";
+    free(data);
+    return why;
+}
+
+/* why an .onion link did not answer through Tor */
+static const char *tor_down(void)
+{
+    if (!is_file(VPN_STATE_FILE))
+        return "no answer through Tor: the vpn is not running (as "
+            "root: rc-service vpn start) or Tor is not; run again later";
+    return "no answer through Tor: the site may be down, or Tor is "
+        "still connecting (vpn status); run again later";
+}
+
 /* exit code of "wget --spider" for one link: 0 = it answers */
 static int spider(const char *url)
 {
     struct args a;
     int rc;
 
-    wget_base(&a);
+    wget_base(&a, url);
     arg(&a, "-q");
     arg(&a, "--spider");
     arg(&a, "--tries=1");
     arg(&a, "--connect-timeout=10");
     arg(&a, "--dns-timeout=10");
     arg(&a, "--read-timeout=20");
-    arg(&a, url);
+    wget_url(&a, url);
     rc = run_wait(a.v, 0);
     args_free(&a);
     return rc;
@@ -142,6 +227,26 @@ char *pick_scheme(const char *url, const char **why)
     int rc;
 
     *why = 0;
+    if (via_tor(url)) {
+        /* Tor encrypts the way to an .onion site itself, so plain http
+         * is fine there; nothing goes out if Tor is not there */
+        *why = tor_problem();
+        if (*why)
+            return 0;
+        rc = spider(url);
+        if (rc == 5 && !insecure) {
+            *why = "the https certificate check failed (onion sites "
+                "rarely have a real one). Tor already encrypts .onion "
+                "links, so write it with http://, or run again with "
+                "INSECURE=1";
+            return 0;
+        }
+        if (rc == 4) {
+            *why = tor_down();
+            return 0;
+        }
+        return xstrdup(url);
+    }
     if (!starts_with(url, "https://"))
         return xstrdup(url);
     rc = spider(url);
@@ -303,7 +408,7 @@ static int mirror(const char *d, const char *mode, const char *site,
     int pid, ws, rc, slowed, pushbacks;
     long long off;
 
-    wget_base(&a);
+    wget_base(&a, site);
     arg(&a, "--recursive");
     arg(&a, "--level=inf");
     arg(&a, "--page-requisites");
@@ -357,7 +462,7 @@ static int mirror(const char *d, const char *mode, const char *site,
     p = str2("--append-output=", log);
     arg(&a, p);
     free(p);
-    arg(&a, site);
+    wget_url(&a, site);
     off = file_size(log);
     if (off < 0)
         off = 0;
@@ -411,6 +516,7 @@ void worker(const char *d, const char *mode, struct strlist *links)
     char num[32];
     int i, rc, worst, lvl;
 
+    tor_all = is_onion(d);
     worker_rc_file = state_file(d, ".rc");
     on_signal_do(SIGINT, SIG_IGN);  /* the main process stops us cleanly */
     on_signal_do(SIGTERM, worker_term);
@@ -492,6 +598,7 @@ struct answer {
     char *length;
     char *etag;
     char *range_total;
+    char *type;
     int code;
 };
 
@@ -506,6 +613,7 @@ static void read_answer(const char *text, const char *url,
     r->length = 0;
     r->etag = 0;
     r->range_total = 0;
+    r->type = 0;
     r->code = 0;
     for (line = text; line && *line; line = strchr(line, '\n')) {
         if (*line == '\n')
@@ -521,9 +629,11 @@ static void read_answer(const char *text, const char *url,
             free(r->length);
             free(r->etag);
             free(r->range_total);
+            free(r->type);
             r->length = 0;
             r->etag = 0;
             r->range_total = 0;
+            r->type = 0;
         } else if (v && str_ieq_n(val, "Location:", 9)) {
             v++;
             while (*v == ' ')
@@ -534,6 +644,9 @@ static void read_answer(const char *text, const char *url,
         } else if (v && str_ieq_n(val, "Content-Length:", 15)) {
             free(r->length);
             r->length = xstrdup(v + 1 + (v[1] == ' '));
+        } else if (v && str_ieq_n(val, "Content-Type:", 13)) {
+            free(r->type);
+            r->type = xstrdup(v + 1 + (v[1] == ' '));
         } else if (v && str_ieq_n(val, "ETag:", 5)) {
             free(r->etag);
             r->etag = xstrdup(v + 1 + (v[1] == ' '));
@@ -553,6 +666,7 @@ static void answer_free(struct answer *r)
     free(r->length);
     free(r->etag);
     free(r->range_total);
+    free(r->type);
 }
 
 static char *temp_name(const char *what)
@@ -582,7 +696,7 @@ static int read_prefix(const char *url, char *sha, char **total)
     if (pipe(fds) != 0)
         return 0;
     hdr = temp_name("headers");
-    wget_base(&a);
+    wget_base(&a, url);
     arg(&a, "-S");
     arg(&a, "-q");
     arg(&a, "--tries=1");
@@ -591,7 +705,7 @@ static int read_prefix(const char *url, char *sha, char **total)
     arg(&a, "-");
     sprintf(tmp, "--header=Range: bytes=0-%d", PREFIX_BYTES - 1);
     arg(&a, tmp);
-    arg(&a, url);
+    wget_url(&a, url);
     range = 0;
     if (!start(a.v, hdr, fds[1], &pid)) {
         args_free(&a);
@@ -631,8 +745,10 @@ static int read_prefix(const char *url, char *sha, char **total)
 }
 
 /* what the server says about a file, without downloading it:
- * final URL after redirects, size, and keys that identify it */
-int probe(const char *url, char **final, char **size, struct strlist *keys)
+ * final URL after redirects, size, type (Content-Type, or 0) and keys
+ * that identify it */
+int probe(const char *url, char **final, char **size, char **type,
+    struct strlist *keys)
 {
     struct args a;
     struct answer r;
@@ -641,13 +757,13 @@ int probe(const char *url, char **final, char **size, struct strlist *keys)
     int rc, len;
 
     hdr = temp_name("headers");
-    wget_base(&a);
+    wget_base(&a, url);
     arg(&a, "-S");
     arg(&a, "--spider");
     arg(&a, "--tries=1");
     arg(&a, "--timeout=60");
     arg(&a, "--max-redirect=20");
-    arg(&a, url);
+    wget_url(&a, url);
     unlink(hdr);
     rc = run_wait(a.v, hdr);
     args_free(&a);
@@ -662,6 +778,7 @@ int probe(const char *url, char **final, char **size, struct strlist *keys)
     }
     *final = xstrdup(r.final);
     *size = 0;
+    *type = r.type ? xstrdup(r.type) : 0;
     k = str2("url:", r.final);
     sl_add(keys, k);
     free(k);
@@ -746,7 +863,7 @@ int download(const char *url, const char *dest, const char *size,
         have = file_size(part);
         if (have < 0)
             have = 0;
-        wget_base(&a);
+        wget_base(&a, url);
         arg(&a, "-q");
         arg(&a, "--tries=5");
         arg(&a, "--connect-timeout=15");
@@ -755,7 +872,7 @@ int download(const char *url, const char *dest, const char *size,
             arg(&a, "--continue");
         arg(&a, "-O");
         arg(&a, part);
-        arg(&a, url);
+        wget_url(&a, url);
         if (!spawn(a.v, 0, &pid)) {
             args_free(&a);
             free(part);

@@ -93,7 +93,10 @@ Privacy
 - A common browser User-Agent instead of a program name; times in UTC;
   no absolute paths (which contain the user name) in pages; nothing is
   sent anywhere except wget's requests to the listed sites; no telemetry.
-- Tor: optional and not wanted for now ("torsocks webarchiver ..." works).
+- Tor: .onion links (and everything an .onion site loads) are fetched
+  with wget started through TOR_CMD ("proxychains -q", the dotfiles'
+  per-program Tor port); never without it. The vpn's /run/vpn/state
+  and /etc/vpn/off are read to explain why Tor does not answer.
 
 Other decisions by the owner
 - Name: WebArchiver (one word), command: webarchiver.
@@ -211,7 +214,14 @@ replaced.
   point at a copy that later changed (rare; fixed by the next update of
   that page).
 - No license chosen yet.
-- Possible later work: shrinking the code, an optional Tor setting.
+- Possible later work: shrinking the code.
+- Everything a page loads is fetched (2026-11-24): src (not frames),
+  poster, srcset, <link rel=stylesheet|icon|preload|manifest>, CSS
+  url()/@import (also in <style>), and .js/.css/picture/font links in
+  scripts, whatever the address looks like. A file without a proper
+  ending gets one from its Content-Type, and keeps "?query" in its name
+  as wget does. A page (CSS/HTML) downloaded for another site is
+  fetched again instead of copied, since its links are that site's.
 
 
 4. Added to the dotfiles

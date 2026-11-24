@@ -463,3 +463,18 @@ char *rel_path(const char *target, const char *start)
         buf_addc(&b, '.');
     return b.s;
 }
+
+/* 1 for a link (or host, or domain directory) on an .onion address */
+int is_onion(const char *url)
+{
+    const char *p, *e;
+    int n;
+
+    p = strstr(url, "://");
+    p = p ? p + 3 : url;
+    e = p + strcspn(p, "/?#:_");
+    n = e - p;
+    if (n > 0 && p[n - 1] == '.')
+        n--;
+    return n >= 6 && str_ieq_n(p + n - 6, ".onion", 6);
+}

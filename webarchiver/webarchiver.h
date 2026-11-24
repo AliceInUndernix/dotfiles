@@ -121,6 +121,7 @@ char *html_unescape(const char *s);
 char *norm_path(const char *path);
 char *rel_path(const char *target, const char *start);
 char *host_dir(const char *host);
+int is_onion(const char *url);
 
 /* ---- configuration and locations (main.c) */
 extern char *out_dir;
@@ -137,6 +138,8 @@ extern char *hsts_opt;
 extern int use_ipv4;
 extern int insecure;
 extern int allow_http;
+extern struct strlist tor_cmd;
+extern int tor_all;
 extern int jobs;
 extern int refresh;
 extern char *self_path;
@@ -197,7 +200,8 @@ int run_wait(char **argv, const char *log);
 int spawn(char **argv, const char *log, int *pid);
 char *pick_scheme(const char *url, const char **why);
 void worker(const char *d, const char *mode, struct strlist *links);
-int probe(const char *url, char **final, char **size, struct strlist *keys);
+int probe(const char *url, char **final, char **size, char **type,
+    struct strlist *keys);
 int download(const char *url, const char *dest, const char *size,
     char *sha);
 
