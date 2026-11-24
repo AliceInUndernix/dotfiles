@@ -107,6 +107,16 @@ Needs a C compiler, make, and libc.  The tests also need sh, python3
 network connection, and use only scratch folders.
 
 
+OTHER REPOSITORIES
+
+kspkan is used on its own, or installed with the dotfiles
+(./install.sh ksp there, which also installs Principia):
+
+    https://github.com/AliceInUndernix/dotfiles     the Linux desktop
+    https://github.com/AliceInUndernix/moonlander   the keyboard layout
+    https://github.com/AliceInUndernix/dotterel     the steno theory
+
+
 LICENSE
 
 Copyright (c) 2026 AliceInUndernix.  kspkan is available under the
