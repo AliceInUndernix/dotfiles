@@ -1,3 +1,12 @@
+Unreleased
+    - an upgrade that is refused (a file belongs to another module or
+      is in the way) now leaves the old version installed
+    - installing a module by name that came in as a dependency keeps
+      it as yours, so autoremove no longer deletes it
+    - reinstalling a metapackage no longer registers it twice
+    - fixed a one-byte overflow reading long names in the module list
+    - a broken line in the installed list no longer mixes up files
+
 0.1.0  2026-11-24
     First release.
     - module list from CKAN-meta, with download counts

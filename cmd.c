@@ -242,10 +242,13 @@ static int install_entries(struct ctx *c, struct entry **ents, int n,
     for (i = 0; i < n; i++) {
         autoinst = !is_wanted(wanted, nwanted, ents[i]->id);
         old = registry_find(&c->reg, ents[i]->id);
-        if (old != NULL) {
-            autoinst = old->autoinst;
+        if (old != NULL && !old->autoinst) {
+            autoinst = 0;
         }
         if (paths[i] == NULL) {
+            if (old != NULL) {
+                registry_drop(&c->reg, ents[i]->id);
+            }
             registry_add(&c->reg, ents[i]->id, ents[i]->version, autoinst);
             continue;
         }
@@ -259,6 +262,14 @@ static int install_entries(struct ctx *c, struct entry **ents, int n,
         }
         rc = install_plan(&a, entry_json(c, ents[i]), ents[i]->id, &p, err,
             sizeof(err));
+        if (rc == 0) {
+            /* check before the old copy goes, so a refused upgrade
+               leaves the old version installed */
+            rc = install_check(c, &p, ents[i]->id, err, sizeof(err));
+            if (rc < 0) {
+                plan_free(&p);
+            }
+        }
         if (rc == 0) {
             if (old != NULL) {
                 remove_module(c, ents[i]->id);
@@ -384,6 +395,34 @@ static char **choose_extras(struct ctx *c, struct entry **ents, int nents,
     return res;
 }
 
+/* a module the user names on purpose is no longer "only a
+   dependency", so autoremove and removing its parent keep it */
+static void mark_wanted(struct ctx *c, char **ids, int n)
+{
+    struct inst *m;
+    char *id;
+    int i, changed;
+
+    changed = 0;
+    for (i = 0; i < n; i++) {
+        if (strchr(ids[i], '=') != NULL) {
+            id = xstrndup(ids[i], (long)(strchr(ids[i], '=') - ids[i]));
+        } else {
+            id = xstrdup(ids[i]);
+        }
+        m = registry_find(&c->reg, id);
+        if (m != NULL && m->autoinst) {
+            m->autoinst = 0;
+            changed = 1;
+            printf("%s is now kept as installed by you\n", id);
+        }
+        free(id);
+    }
+    if (changed) {
+        registry_save(c);
+    }
+}
+
 int cmd_install(struct ctx *c, char **ids, int n)
 {
     struct entry **ents, **ents2;
@@ -427,6 +466,7 @@ int cmd_install(struct ctx *c, char **ids, int n)
             nents = nents2;
         }
     }
+    mark_wanted(c, ids, n);
     if (nents == 0) {
         printf("nothing to do\n");
         return 0;

@@ -150,7 +150,7 @@ int tar_open(struct archive *a, const unsigned char *data, long len)
 {
     long pos, size, cap, hold;
     char *longname;
-    char name[256];
+    char name[260];
     int type, plen, nlen, i, rc;
     struct aent *ne;
 
