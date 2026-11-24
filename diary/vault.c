@@ -55,6 +55,21 @@ static void on_signal(int sig)
     got_signal = sig;
 }
 
+/* restart = 0 makes a signal break a blocking read(), so Ctrl-C at
+   the password prompt really stops instead of reading on */
+static void catch_signals(int restart)
+{
+    struct sigaction sa;
+
+    memset(&sa, 0, sizeof sa);
+    sa.sa_handler = on_signal;
+    sa.sa_flags = restart ? SA_RESTART : 0;
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGTERM, &sa, 0);
+    sigaction(SIGHUP, &sa, 0);
+    sigaction(SIGINT, &sa, 0);
+}
+
 static void setup(void)
 {
     struct sigaction sa;
@@ -72,13 +87,9 @@ static void setup(void)
     memset(sec, 0, sizeof *sec);
     mlock(sec, sizeof *sec);
 
+    catch_signals(1);
     memset(&sa, 0, sizeof sa);
-    sa.sa_handler = on_signal;
-    sa.sa_flags = SA_RESTART;
     sigemptyset(&sa.sa_mask);
-    sigaction(SIGTERM, &sa, 0);
-    sigaction(SIGHUP, &sa, 0);
-    sigaction(SIGINT, &sa, 0);
     sa.sa_handler = SIG_IGN;
     sigaction(SIGPIPE, &sa, 0);
 }
@@ -123,9 +134,16 @@ static long ask(const char *prompt, char *buf)
     write_all(tty_fd, prompt, strlen(prompt));
     tty_changed = 1;
     tcsetattr(tty_fd, TCSAFLUSH, &t);
-    n = read_line(tty_fd, buf, sizeof sec->pass);
-    tcsetattr(tty_fd, TCSAFLUSH, &tty_saved);
+    catch_signals(0);
+    n = -1;
+    if (!got_signal)
+        n = read_line(tty_fd, buf, sizeof sec->pass);
+    catch_signals(1);
+    if (tty_changed)
+        tcsetattr(tty_fd, TCSAFLUSH, &tty_saved);
     tty_changed = 0;
+    if (got_signal)
+        return -1;
     return n;
 }
 
@@ -145,7 +163,7 @@ static int get_pass(int twice, int from_stdin)
         }
         n = ask("password for the diary: ", sec->pass);
         m = n;
-        if (n > 0 && twice)
+        if (n > 0 && twice && !got_signal)
             m = ask("again: ", sec->pass2);
         close(tty_fd);
         tty_fd = -1;

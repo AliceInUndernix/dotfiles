@@ -629,10 +629,15 @@ static void edit(const char *rel, int line, int at_end)
         n++;
     }
     had_state = 0;
+    ed_base = strrchr(cfg.editor[0], '/');
+    ed_base = ed_base ? ed_base + 1 : cfg.editor[0];
     if (cfg.private_ed) {
-        argv[n] = "-i";
-        argv[n + 1] = "NONE";
-        n += 2;
+        /* only vim and nvim know -i NONE (no shada/viminfo) */
+        if (!strcmp(ed_base, "nvim") || !strcmp(ed_base, "vim")) {
+            argv[n] = "-i";
+            argv[n + 1] = "NONE";
+            n += 2;
+        }
         sprintf(state, "%.3000s/editor", ram_base_dir);
         mkdir(state, 0700);
         sprintf(dir, "%.3000s/editor/undo", ram_base_dir);
@@ -643,8 +648,6 @@ static void edit(const char *rel, int line, int at_end)
             had_state = 1;
         }
         setenv("XDG_STATE_HOME", state, 1);
-        ed_base = strrchr(cfg.editor[0], '/');
-        ed_base = ed_base ? ed_base + 1 : cfg.editor[0];
         if ((!strcmp(ed_base, "nvim") || !strcmp(ed_base, "vim")) &&
             vim_safe(state))
         {
@@ -2179,6 +2182,11 @@ static void add_plan(int s)
     int fd, from, to, r;
     char last;
 
+    if (ed_running) {
+        say(C_BROWN, "%s", "the editor is open already: quit it first "
+            "(Ctrl-\\ goes there)");
+        return;
+    }
     subj_rel(rel, s, "events");
     abs_path(path, rel);
     from = cur_date;

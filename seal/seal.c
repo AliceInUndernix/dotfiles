@@ -306,7 +306,8 @@ static void read_from(const char *base, const char *name, char *from)
     from[n - 1] = 0;
 }
 
-static void write_from(const char *base, const char *name,
+/* remember which FILE a RAM directory came from; -1 on failure */
+static int write_from(const char *base, const char *name,
     const char *file)
 {
     char state[PATH_SIZE], abs[PATH_SIZE], cwd[PATH_SIZE];
@@ -326,19 +327,24 @@ static void write_from(const char *base, const char *name,
     if (r == 0)
         r = join(state, base, "/.from");
     if (r < 0)
-        return;
+        return -1;
     mkdir(state, 0700);
     r = join(state, state, "/");
     if (r == 0)
         r = join(state, state, name);
     if (r < 0)
-        return;
+        return -1;
     fd = open(state, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0600);
     if (fd < 0)
-        return;
-    write_all(fd, abs, strlen(abs));
-    write_all(fd, "\n", 1);
-    close(fd);
+        return -1;
+    r = write_all(fd, abs, strlen(abs));
+    if (r == 0)
+        r = write_all(fd, "\n", 1);
+    if (close(fd) < 0)
+        r = -1;
+    if (r < 0)
+        unlink(state);
+    return r < 0 ? -1 : 0;
 }
 
 /* ------------------------------------------------------------ links */
@@ -597,6 +603,7 @@ static int cmd_list(void)
         if (r < 0 || !from[0])
             continue;
         r = lstat(path, &st);
+        link[0] = 0;
         links_update(0, 0, 0, path, link);
         printf("%s%s (from %s)", path, r < 0 ? " (gone)" : "", from);
         if (link[0])
@@ -631,7 +638,7 @@ static int cmd_all(void)
         r = join(path, base, "/.from");
     if (r == 0)
         d = opendir(path);
-    while (d && n < 64 && (e = readdir(d)) != 0) {
+    while (d && (e = readdir(d)) != 0) {
         if (e->d_name[0] == '.' || strlen(e->d_name) > 255)
             continue;
         read_from(base, e->d_name, from);
@@ -640,6 +647,11 @@ static int cmd_all(void)
             r = join(path, path, e->d_name);
         if (r == 0 && from[0])
             r = lstat(path, &st);
+        if (r == 0 && from[0] && n == 64) {
+            warn("%s", "more than 64 directories in RAM: run seal -a "
+                "again for the rest", 0);
+            break;
+        }
         if (r == 0 && from[0]) {
             strcpy(names[n], e->d_name);
             n++;
@@ -1044,15 +1056,24 @@ static int cmd_unseal(const char *file)
     rmdir(tmp);
     if (!in_ram)
         sync_dir(dest);
+    if (in_ram) {
+        /* without this record "seal" would not know where to put it
+           back, so better unseal nothing (the RAM may be full) */
+        n = write_from(dest, name, file);
+        if (n < 0) {
+            rm_tree(final);
+            warn("%s: can't note where %s came from (RAM full?); "
+                "nothing was unsealed", file, final);
+            return 1;
+        }
+    }
     if (r > 0) {
         say_counts(file, final, &c);
         warn("%s: unsealed with problems (above): check the files; %s "
             "is kept", final, file);
         return 1;
     }
-    if (in_ram)
-        write_from(dest, name, file);
-    else if (!opt_keep)
+    if (!in_ram && !opt_keep)
         unlink(file);
     say_counts(file, final, &c);
     if (in_ram && !opt_nolink)
