@@ -10,8 +10,8 @@
 #              (its README links the binary; it is not on GitHub's
 #              release pages, so nothing here fetches it for you):
 #                PRINCIPIA_ZIP=~/Principia-Lie.zip ./install.sh ksp
-#              or the newest Principia*.zip in ~ or Downloads. It goes
-#              into GameData/Principia of KSP_DIR, or of the first KSP found
+#              or it finds every Principia*.zip in ~ and asks which.
+#              It goes into GameData/Principia of KSP_DIR, or of the first KSP found
 #              in the usual places (Steam, GOG, ~/KSP). An old one is
 #              moved to ~/.system/state/backup/ksp/Principia.<date>.
 #
@@ -46,22 +46,45 @@ ksp_dir() {
 	done
 }
 
-# principia_zip: PRINCIPIA_ZIP, or the newest Principia zip in ~.
-principia_zip() {
-	if [ -n "${PRINCIPIA_ZIP:-}" ]; then
-		echo "$PRINCIPIA_ZIP"
-		return
-	fi
-	# the newest in ~, the Downloads directory (XDG's, or ~/Downloads)
-	dl=$(sed -n 's/^XDG_DOWNLOAD_DIR="\(.*\)"$/\1/p' \
-		"$CONFIG/user-dirs.dirs" 2>/dev/null | sed "s|\$HOME|$HOME|")
-	set --
-	for d in "$HOME" "${dl:-$HOME}" "$HOME/Downloads" "$HOME/downloads"; do
-		for z in "$d"/[Pp]rincipia*.zip "$d"/[Pp]rincipia*.ZIP; do
-			[ ! -f "$z" ] || set -- "$@" "$z"
-		done
+# principia_zips: every Principia*.zip anywhere in ~ (one file system),
+# the newest first, one a line
+principia_zips() {
+	find "$HOME" -xdev -type f -iname 'principia*.zip' 2>/dev/null |
+		while IFS= read -r f; do
+			echo "$(date -r "$f" +%s) $f"
+		done | sort -rn | cut -d ' ' -f 2-
+}
+
+# principia_ask <zips>: ask which zip to install from, on the terminal.
+# Prints the one chosen; nothing for no, or with no terminal to ask on.
+principia_ask() {
+	{ [ -r /dev/tty ] && : < /dev/tty; } 2>/dev/null || return 0
+	echo "Principia zips found in $HOME:" >&2
+	n=0
+	echo "$1" | while IFS= read -r f; do
+		n=$((n + 1))
+		mb=$(( $(wc -c < "$f") / 1048576 ))
+		printf '  %2d  %s  (%s, %d MB)\n' "$n" "$f" \
+			"$(date -r "$f" +%Y-%m-%d)" "$mb" >&2
 	done
-	[ $# -eq 0 ] || ls -t "$@" 2>/dev/null | head -n 1
+	count=$(echo "$1" | wc -l)
+	while :; do
+		printf 'Install Principia from 1? (y, a number, or n): ' >&2
+		read -r a < /dev/tty || a=n
+		case $a in
+		y|Y|yes|'') a=1 ;;
+		n|N|no) return 0 ;;
+		esac
+		case $a in
+		*[!0-9]*) ;;
+		*)
+			if [ "$a" -ge 1 ] && [ "$a" -le "$count" ]; then
+				echo "$1" | sed -n "${a}p"
+				return 0
+			fi ;;
+		esac
+		echo "  y installs the first, a number that one, n none" >&2
+	done
 }
 
 # ksp_libs_missing: the libraries principia.so can't find (ldd), or the
@@ -133,17 +156,36 @@ install_principia() {
 		warn "    KSP_DIR=/path/to/KSP ./install.sh ksp"
 		return 0
 	fi
-	z=$(principia_zip)
-	if [ -z "$z" ] || [ ! -f "$z" ]; then
-		say "note    no Principia zip in $HOME: download it from the link in"
-		say "        https://github.com/mockingbirdnest/Principia#readme into ~,"
-		say "        then ./install.sh ksp (or PRINCIPIA_ZIP=FILE ./install.sh ksp)"
-		return 0
+	mark=$STATE/ksp/principia-zip
+	dst=$k/GameData/Principia
+	if [ -n "${PRINCIPIA_ZIP:-}" ]; then
+		z=$PRINCIPIA_ZIP
+		[ -f "$z" ] || die "PRINCIPIA_ZIP: no file $z"
+	else
+		zips=$(principia_zips)
+		if [ -z "$zips" ]; then
+			say "note    no Principia zip in $HOME: download it from the link in"
+			say "        https://github.com/mockingbirdnest/Principia#readme,"
+			say "        then ./install.sh ksp (or PRINCIPIA_ZIP=FILE ./install.sh ksp)"
+			return 0
+		fi
+		# the newest is the one installed last time: nothing to ask
+		z=$(echo "$zips" | head -n 1)
+		if [ -d "$dst" ] &&
+			[ "$(cat "$mark" 2>/dev/null)" = "$(cksum < "$z") $dst" ]
+		then
+			say "ok      $dst (from $(basename "$z"))"
+			return 0
+		fi
+		z=$(principia_ask "$zips")
+		if [ -z "$z" ]; then
+			say "note    Principia not installed (asked no, or no terminal"
+			say "        to ask on: PRINCIPIA_ZIP=FILE ./install.sh ksp)"
+			return 0
+		fi
 	fi
 	# the same zip as last time: nothing to do
-	mark=$STATE/ksp/principia-zip
 	sum=$(cksum < "$z")
-	dst=$k/GameData/Principia
 	if [ -d "$dst" ] && [ "$(cat "$mark" 2>/dev/null)" = "$sum $dst" ]; then
 		say "ok      $dst (from $(basename "$z"))"
 		return 0
