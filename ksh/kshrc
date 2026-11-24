@@ -8,7 +8,8 @@ set -o noclobber          # > will not overwrite a file; >| does
 
 # One history file shared by every open shell: a command run in one
 # terminal can be found with the arrows in the others. ksh has no
-# "unlimited", so a million commands stands in for it.
+# "unlimited", so a million commands stands in for it (ksh93 itself
+# uses only the newest 16384 of them).
 # It is in ~/.system/state/ksh (install.sh moves an old ~/.ksh_history).
 HISTFILE=${XDG_STATE_HOME:-$HOME/.system/state}/ksh/history
 [ -d "${HISTFILE%/*}" ] || mkdir -p "${HISTFILE%/*}"
@@ -20,34 +21,65 @@ HISTSIZE=1000000
 # own Up already searches like this, but its Down does not. Other ksh
 # keep their plain arrows.
 case ${KSH_VERSION:-} in *93*) IFS= read -r -d '' _hs_code <<'EOF'
-# Reads the history lazily: a new search reads the history once into
-# file descriptor 7, and each Up reads only as far as the next match, so
-# a search costs what it finds, not the length of the history (a million
-# commands took seconds when all were read at the first Up).
+# How it shows a command: not by typing it (ksh keeps only about 78
+# bytes of what a key trap gives it, so long commands lost their ends),
+# but with ksh's own history keys: Esc > goes to the newest command and
+# Esc <count> Ctrl+P back <count> commands from there, so any command,
+# however long, comes back whole. Only what you typed (after Down past
+# the newest) is typed back.
+#
+# The history is read lazily: a new search lists it once into file
+# descriptor 7 (hist -lr: newest first, "number<Tab>command", and a
+# command over several lines goes on in lines that start with a Tab),
+# and each Up reads only as far as the next match, so a search costs
+# what it finds, not the length of the history.
 _hs_more() {
-	typeset l
-	while IFS= read -u7 -r l; do
-		[[ $l == $'\t'* ]] || continue     # commands start with a Tab
-		l=${l#$'\t'}
-		# a command split over lines with \ at the ends comes back
-		# as one line, the way the shell reads it: shown with the
-		# \ at its end, the next arrow key was taken literally
-		# (it printed ^[[A and the arrows stopped working)
-		if [[ -n $_hs_pend ]]; then l=${_hs_pend%\\}$l _hs_pend=; fi
-		if [[ $l == *\\ ]]; then _hs_pend=$l; continue; fi
-		# leave out lines with control characters (Esc, Ctrl+C...):
-		# pasted terminal junk, not commands, and putting them back
-		# on the line confused the editor
-		[[ $l == *[[:cntrl:]]* ]] && continue
-		[[ $l == "$_hs_prefix"?* && -z ${_hs_seen[$l]-} ]] || continue
-		_hs_seen[$l]=1 _hs_list[_hs_n]=$l
+	typeset l n t
+	while :; do
+		if IFS= read -u7 -r l; then
+			if [[ $l == $'\t'* ]]; then
+				[[ -n $_hs_num ]] && _hs_txt+=$'\n'${l#$'\t'}
+				continue
+			fi
+			[[ $l == +([0-9])$'\t'* ]] || continue
+		else
+			[[ -n $_hs_num ]] || return 1
+			l=
+		fi
+		# the command before this line is complete now
+		n=$_hs_num t=$_hs_txt
+		if [[ -n $l ]]; then
+			_hs_num=${l%%$'\t'*} _hs_txt=${l#*$'\t'}
+		else
+			_hs_num= _hs_txt=
+		fi
+		[[ -n $n ]] || continue
+		if [[ $t == *$'\n'* ]]; then
+			# over several lines: ksh would bring back only its
+			# first line, so it is typed instead, as one line,
+			# when the lines were joined with \ at their ends and
+			# it is short enough; else it is left out
+			t=${t//$'\\\n'/}
+			[[ $t == *$'\n'* || ${#t} -gt 70 ]] && continue
+			n=
+		fi
+		# ksh's editor reaches only 16382 commands back (ksh93 keeps
+		# 16384, whatever HISTSIZE says): older ones are typed too
+		if [[ -n $n ]] && (( HISTCMD - 1 - n > 16382 )); then
+			(( ${#t} <= 70 )) || continue
+			n=
+		fi
+		# lines with control characters (Esc, Ctrl+C...) are pasted
+		# terminal junk, not commands
+		[[ $t == *[[:cntrl:]]* ]] && continue
+		[[ $t == "$_hs_prefix"?* && -z ${_hs_seen[$t]-} ]] || continue
+		_hs_seen[$t]=1 _hs_list[_hs_n]=$t _hs_at[_hs_n]=$n
 		_hs_n=$((_hs_n + 1))
 		return 0
 	done
-	return 1
 }
 _hs_key() {
-	typeset dir l t
+	typeset dir l c
 	case ${.sh.edchar} in
 	$'\e[A'|$'\eOA') dir=up ;;
 	$'\e[B'|$'\eOB') dir=down ;;
@@ -56,21 +88,22 @@ _hs_key() {
 	*) _hs_on= ; return ;;
 	esac
 	# a new search, unless the last key was an arrow (any other key ends
-	# the search). Not by comparing the line with what was shown: for a
-	# line longer than the screen or with UTF-8 (accents, dashes) ksh reports it
-	# differently, the search started over from that whole command, and
-	# Up/Down then found nothing and seemed stuck. An empty line (after
-	# Ctrl+C) starts over too.
+	# the search). An empty line (after Ctrl+C) starts over too.
 	if [[ -z $_hs_on || ( -z ${.sh.edtext} && -n $_hs_shown ) ]]; then
-		_hs_on=1 _hs_i=0 _hs_prefix=${.sh.edtext} _hs_pend= _hs_n=0
-		unset _hs_list _hs_seen; typeset -a _hs_list; typeset -A _hs_seen
+		# what you typed has to be typed back after Down: if it is
+		# too long for that, the arrows are ksh's own
+		(( ${#.sh.edtext} <= 70 )) || { _hs_on= ; return; }
+		_hs_on=1 _hs_i=0 _hs_prefix=${.sh.edtext} _hs_n=0
+		_hs_num= _hs_txt=
+		unset _hs_list _hs_at _hs_seen
+		typeset -a _hs_list _hs_at; typeset -A _hs_seen
 		# Only ksh's own commands here, no pipes or programs: running
 		# one from this trap (the old "hist | awk") left the terminal
 		# out of line-editing mode in UTF-8, so the next arrow printed
 		# ^[[A instead of doing nothing.
-		t=$(hist -lnr -$HISTSIZE 2>/dev/null)
+		l=$(hist -lr -$HISTSIZE 2>/dev/null)
 		exec 7<&-
-		exec 7<<< "$t"
+		exec 7<<< "$l"
 	fi
 	if [[ $dir == up ]]; then
 		if (( _hs_i >= _hs_n )); then
@@ -81,11 +114,24 @@ _hs_key() {
 		(( _hs_i > 0 )) || { .sh.edchar= ; return; }
 		_hs_i=$((_hs_i - 1))
 	fi
-	if (( _hs_i == 0 )); then l=$_hs_prefix; else l=${_hs_list[_hs_i-1]}; fi
+	if (( _hs_i == 0 )); then
+		l=$_hs_prefix c=
+	else
+		l=${_hs_list[_hs_i-1]} c=${_hs_at[_hs_i-1]}
+	fi
 	_hs_shown=$l
-	# replace the line: Ctrl+A, Ctrl+K, then the text, with Ctrl+V before
-	# control characters (a Tab would otherwise complete)
-	.sh.edchar=$'\001\013'"${l//@([[:cntrl:]])/$'\026'\1}"
+	if [[ -n $c ]]; then
+		c=$((HISTCMD - 1 - c))
+		if (( c > 0 )); then
+			.sh.edchar=$'\e>\e'$c$'\020'
+		else
+			.sh.edchar=$'\e>'
+		fi
+	else
+		# type it: Ctrl+A, Ctrl+K, then the text, with Ctrl+V before
+		# control characters (a Tab would otherwise complete)
+		.sh.edchar=$'\001\013'"${l//@([[:cntrl:]])/$'\026'\1}"
+	fi
 }
 trap _hs_key KEYBD
 EOF

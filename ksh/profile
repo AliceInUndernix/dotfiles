@@ -1,6 +1,12 @@
 # Login settings, read once when you log in (linked to ~/.profile).
 
 export EDITOR=nvim VISUAL=nvim PAGER=less
+# ksh switches to vi keys on the command line whenever EDITOR or VISUAL
+# gets a name with "vi" in it (nvim does), so reading this file again
+# (. ~/.profile) left the shell in vi mode: arrows, Delete and Tab did
+# odd things and ~ turned letters into capitals. Back to emacs keys,
+# as in kshrc.
+case ${KSH_VERSION:-} in ?*) set -o emacs ;; esac
 # less: searches ignore case unless they have a capital letter (-i), quit
 # when the text fits on one screen (-F), show colours, e.g. git's (-R).
 export LESS=-iFR
