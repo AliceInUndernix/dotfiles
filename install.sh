@@ -418,6 +418,6 @@ n=$(find "$HOME" -xdev ! -type l ! -path "$SYSBIN/slock" -user "$USER_NAME" \
 	say "skipped $skipped (needs root): su -c '$DOTFILES/install.sh $skipped'"
 if [ -n "$failed" ]; then
 	warn "these parts did not finish:$failed (the messages above say why;"
-	warn "no internet? parts that download: steno, moonlander, st's font, net)"
+	warn "no internet? parts that download: steno, moonlander, net)"
 	exit 1
 fi

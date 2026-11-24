@@ -366,8 +366,10 @@ install_webarchiver() {
 		warn "wget is not installed; webarchiver needs it (su -c '$DOTFILES/install.sh --deps')"
 }
 # st's font2 falls back to Symbols Nerd Font Mono for icons and symbols
-# Liberation Mono lacks. It goes into your home directory, nothing needs root;
-# delete the directory and run ./install.sh st again to get the newest release.
+# Liberation Mono lacks. It goes into your home directory, nothing needs
+# root. It comes from archive/fonts/ (no download); to get a newer
+# release, put it there and delete the directory below, then run
+# ./install.sh st again.
 NERD_FONTS=$DATA/fonts/NerdFontsSymbolsOnly
 
 install_st() {
@@ -375,16 +377,19 @@ install_st() {
 	if [ -f "$NERD_FONTS/SymbolsNerdFontMono-Regular.ttf" ]; then
 		say "ok      $NERD_FONTS"
 	else
-		url=https://github.com/ryanoasis/nerd-fonts/releases/latest/download/NerdFontsSymbolsOnly.tar.xz
-		say "fetch   Symbols Nerd Font -> $NERD_FONTS"
+		tarball=
+		for t in "$DOTFILES"/archive/fonts/NerdFontsSymbolsOnly-*.tar.xz; do
+			[ -e "$t" ] && tarball=$t
+		done
+		say "unpack  Symbols Nerd Font -> $NERD_FONTS"
 		userdir "${NERD_FONTS%/*}"
 		rm -rf "$NERD_FONTS.tmp" && mkdir -p "$NERD_FONTS.tmp"
-		if curl -fL "$url" | tar -xJ -C "$NERD_FONTS.tmp"; then
+		if [ -n "$tarball" ] && tar -xJf "$tarball" -C "$NERD_FONTS.tmp"; then
 			rm -rf "$NERD_FONTS" && mv "$NERD_FONTS.tmp" "$NERD_FONTS"
 			own "$NERD_FONTS"
 		else
 			rm -rf "$NERD_FONTS.tmp"
-			warn "could not download Symbols Nerd Font; st still works without it"
+			warn "no Symbols Nerd Font in $DOTFILES/archive/fonts; st still works without it"
 		fi
 	fi
 	if command -v fc-cache >/dev/null 2>&1; then
