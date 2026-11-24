@@ -1,0 +1,20 @@
+Copyright (c) 2026 AliceInUndernix.
+
+The keymap (canary/keymap.c, config.h, rules.mk, keymap.json) is built
+into QMK, which is under the GNU General Public License version 2 or
+later, so the keymap is under the GNU GPL version 2 or (at your option)
+any later version too: see the file COPYING.
+
+The rest of what is ours here (build.sh, layout.html, the docs) is
+available under the terms of Croco's Individualistic Free Software
+License, version 0.251225, by Andrey V. Stolyarov: see the file LICENSE
+(its home is http://thalassa.croco.net/license.html).
+
+These parts were written by others and keep their own terms:
+
+  canary/combo/map.h          William Swanson, MIT (see the file)
+  canary/combo/, lang_shift/, arbitrary_keycode/, color/,
+  moonlander_leds.h, mcuconf.h, qmk.patch
+                              optozorax and klavarog's keymap libraries
+                              (README.md says where they come from)
+  archive/                    optozorax's keymap as it was taken

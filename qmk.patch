@@ -1,0 +1,56 @@
+diff --git a/platforms/chibios/drivers/audio_dac_basic.c b/platforms/chibios/drivers/audio_dac_basic.c
+index 99b938e610..79f33ba5ff 100644
+--- a/platforms/chibios/drivers/audio_dac_basic.c
++++ b/platforms/chibios/drivers/audio_dac_basic.c
+@@ -78,5 +78,8 @@ GPTConfig gpt7cfg1 = {.frequency = AUDIO_DAC_SAMPLE_RATE,
+ static void gpt_audio_state_cb(GPTDriver *gptp);
+-GPTConfig   gptStateUpdateCfg = {.frequency = 10,
++#ifndef AUDIO_STATE_TIMER_FREQUENCY
++#    define AUDIO_STATE_TIMER_FREQUENCY 10
++#endif
++GPTConfig gptStateUpdateCfg = {.frequency = AUDIO_STATE_TIMER_FREQUENCY,
+                                .callback  = gpt_audio_state_cb,
+                                .cr2       = TIM_CR2_MMS_1, /* MMS = 010 = TRGO on Update Event.    */
+                                .dier      = 0U};
+diff --git a/quantum/keyboard.h b/quantum/keyboard.h
+index 0f39fde682..c7bf31b8e8 100644
+--- a/quantum/keyboard.h
++++ b/quantum/keyboard.h
+@@ -30,6 +30,8 @@ extern "C" {
+ typedef struct {
+     uint8_t col;
+     uint8_t row;
++    bool use_custom_keycode;
++    uint16_t custom_keycode;
+ } keypos_t;
+ 
+ typedef enum keyevent_type_t { TICK_EVENT = 0, KEY_EVENT = 1, ENCODER_CW_EVENT = 2, ENCODER_CCW_EVENT = 3, COMBO_EVENT = 4, DIP_SWITCH_ON_EVENT = 5, DIP_SWITCH_OFF_EVENT = 6 } keyevent_type_t;
+diff --git a/quantum/keymap_common.c b/quantum/keymap_common.c
+index abdcd5c7ba..44a229b569 100644
+--- a/quantum/keymap_common.c
++++ b/quantum/keymap_common.c
+@@ -199,6 +199,8 @@ action_t action_for_keycode(uint16_t keycode) {
+ // translates key to keycode
+ __attribute__((weak)) uint16_t keymap_key_to_keycode(uint8_t layer, keypos_t key) {
+-    if (key.row < MATRIX_ROWS && key.col < MATRIX_COLS) {
++    if (key.use_custom_keycode) {
++        return key.custom_keycode;
++    } else if (key.row < MATRIX_ROWS && key.col < MATRIX_COLS) {
+         return keycode_at_keymap_location(layer, key.row, key.col);
+     }
+ #ifdef ENCODER_MAP_ENABLE
+diff --git a/quantum/process_keycode/process_rgb_matrix.c b/quantum/process_keycode/process_rgb_matrix.c
+index fd2aa1a0c7..9ff7c36aba 100644
+--- a/quantum/process_keycode/process_rgb_matrix.c
++++ b/quantum/process_keycode/process_rgb_matrix.c
+@@ -8,6 +8,10 @@
+ #include "modifiers.h"
+ 
+ bool process_rgb_matrix(uint16_t keycode, keyrecord_t *record) {
++    if (record->event.key.use_custom_keycode) {
++        return true;
++    }
++
+ #ifdef RGB_TRIGGER_ON_KEYDOWN
+     if (record->event.pressed) {
+ #else
