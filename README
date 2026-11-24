@@ -1,4 +1,4 @@
-kspkan 0.1.0 - a small mod manager for Kerbal Space Program
+kspkan 0.2.0 - a small mod manager for Kerbal Space Program
 
 Read this first.  Everything here was written with an AI (vibecoded).
 It was made for one person's computer and works there; it is not
@@ -26,6 +26,8 @@ COMMANDS
     kspkan remove ID...             remove, with what needs them
     kspkan upgrade [ID...]          upgrade installed modules
     kspkan autoremove               remove dependencies nothing needs
+    kspkan keep ID... | auto ID...  mark as chosen by you / a dependency
+    kspkan modlist [...]            saved lists of mods (see MODLISTS)
     kspkan clean                    delete downloaded archives
     kspkan add NAME [GAMEDIR]       remember a game folder
     kspkan instances                list them (* is the one in use)
@@ -51,9 +53,53 @@ id, name, description and tags.
     after:2024-01-01  before:2025-01-01      release date
     size<5                                   under 5 MB unpacked
     is:installed  is:update  is:new
+    is:chosen  is:dep  is:needed  is:orphan  (chosen by you; installed
+                                  as a dependency; needed by another
+                                  installed mod; a dependency nothing
+                                  needs any more)
     sort:pop  sort:new  sort:small  sort:big  sort:name
 
 Example:  kspkan search tag:plugin dl>20k size<2 sort:new
+
+
+MODLISTS
+
+A modlist is the set of mods you chose, saved as plain text, one
+"id version" a line (# starts a comment).  Dependencies are not in it;
+they are worked out again when it is installed.  Use one to set up a
+new game folder like an old one, to keep a few sets of mods to switch
+between, or to hand your set to somebody.
+
+    kspkan modlist                  the saved ones
+    kspkan modlist save NAME        save the mods you chose
+    kspkan modlist show NAME        what it has, and how the game differs
+    kspkan modlist install NAME     install what is missing (newest fit)
+    kspkan modlist pin NAME         the same, at the versions it names
+    kspkan modlist sync NAME        install it; remove chosen mods not in it
+    kspkan modlist delete NAME
+
+A NAME with a / in it is a file anywhere (./mine.txt).
+
+
+FULL SCREEN MODE
+
+Each installed mod is marked i (chosen by you) or d (installed as a
+dependency), and u when a newer version fits.  The keys that matter
+most:
+
+    i  I        show: all, installed, chosen by you, dependencies,
+                unneeded dependencies, not installed, updates, marked
+    p           the description at the bottom, on the right (90 columns
+                or more), or off; remembered.  J K scroll it.
+    Space       mark (+ install, x remove), Enter carries the marks out
+    e           make an installed mod your choice, or a dependency
+    w  o        save the mods you chose as a modlist; open one (marks
+                what the game lacks of it)
+    /  s  c     search, order, show mods that do not fit the game
+
+The right pane shows everything about the mod: the long description,
+what it needs, recommends, suggests and conflicts with, which of your
+mods need it, and its links.
 
 
 WHAT IT DOES WITH MODS
@@ -82,6 +128,8 @@ $XDG_DATA_HOME/kspkan, or ~/.local/share/kspkan:
     instances            the remembered game folders
     index summary provides counts meta/    the module list (shared)
     cache/               downloaded archives
+    modlists/            the saved modlists
+    settings             where the full screen mode puts the description
     inst/NAME/installed  what was installed into that game
 
 All are plain text.  Nothing is written into the game folder except the

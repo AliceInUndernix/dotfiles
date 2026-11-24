@@ -88,7 +88,8 @@ static int starts(const char *s, const char *prefix)
 
 /* Words are ANDed.  A leading - negates a word.  Forms:
    author:X tag:X license:X needs:X dl>N dl<N after:DATE before:DATE
-   size<N is:installed is:update sort:pop|name|new|small|big */
+   size<N is:installed is:chosen is:dep is:needed is:orphan is:update
+   is:new sort:pop|name|new|small|big */
 void query_parse(struct query *q, const char *text)
 {
     char *p, *w, *e;
@@ -216,6 +217,20 @@ static int term_hit(struct ctx *c, const struct qterm *t,
         m = registry_find(&c->reg, s->id);
         if (starts(t->text, "inst")) {
             return m != NULL;
+        }
+        if (starts(t->text, "chos") || starts(t->text, "expl") ||
+            starts(t->text, "man") || starts(t->text, "mine"))
+        {
+            return m != NULL && !m->autoinst;
+        }
+        if (starts(t->text, "dep") || starts(t->text, "auto")) {
+            return m != NULL && m->autoinst;
+        }
+        if (starts(t->text, "orph") || starts(t->text, "unneed")) {
+            return m != NULL && is_orphan(c, s->id);
+        }
+        if (starts(t->text, "need")) {
+            return m != NULL && needed_by(c, s->id, NULL) > 0;
         }
         if (starts(t->text, "new") || starts(t->text, "avail")) {
             return m == NULL;

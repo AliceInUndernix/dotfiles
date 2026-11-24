@@ -31,7 +31,7 @@ char *data_dir(void)
     return p;
 }
 
-static int name_valid(const char *s)
+int name_valid(const char *s)
 {
     int i;
 

@@ -1,3 +1,23 @@
+0.2.0  2026-11-24
+    - installed mods are told apart: chosen by you (i) or installed as a
+      dependency (d); list, show and the full screen mode say which mods
+      need each one, and point out dependencies nothing needs
+    - search: is:chosen, is:dep, is:needed, is:orphan
+    - full screen mode: i / I go through all, installed, chosen,
+      dependencies, unneeded dependencies, not installed, updates, marked
+    - full screen mode: p puts the description at the bottom, on the
+      right (everything about the mod, scrolled with J K) or off;
+      remembered in "settings"
+    - modlists: save, show, install, pin, sync, delete; w and o in the
+      full screen mode
+    - keep and auto (and e in the full screen mode) change a mod between
+      chosen and dependency; installing a mod that is in as a
+      dependency makes it chosen, so removing its parent keeps it
+    - fixed: a key typed right after Esc was lost
+    - help is paged when the terminal is short; S orders backwards,
+      C clears all marks, r says how many it marked
+    - tests/modlist.sh, which needs no network
+
 0.1.0  2026-11-24
     First release.
     - module list from CKAN-meta, with download counts

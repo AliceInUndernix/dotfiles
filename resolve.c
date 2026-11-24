@@ -771,3 +771,44 @@ void collect_extras(struct ctx *c, struct entry **ents, int n,
         }
     }
 }
+
+/* installed modules that depend on the installed module id; their ids
+   go into out when it is not NULL.  Returns how many. */
+int needed_by(struct ctx *c, const char *id, struct strs *out)
+{
+    struct inst *m;
+    struct entry *te, *me;
+    int i, n;
+
+    m = registry_find(&c->reg, id);
+    if (m == NULL || c->ix.n == 0) {
+        return 0;
+    }
+    te = reg_entry(c, m);
+    if (te == NULL) {
+        return 0;
+    }
+    n = 0;
+    for (i = 0; i < c->reg.n; i++) {
+        if (strcmp(c->reg.v[i].id, id) == 0) {
+            continue;
+        }
+        me = reg_entry(c, &c->reg.v[i]);
+        if (me != NULL && depends_on(c, me, te)) {
+            if (out != NULL) {
+                strs_add(out, xstrdup(c->reg.v[i].id));
+            }
+            n++;
+        }
+    }
+    return n;
+}
+
+/* a dependency that no installed module needs any more */
+int is_orphan(struct ctx *c, const char *id)
+{
+    struct inst *m;
+
+    m = registry_find(&c->reg, id);
+    return m != NULL && m->autoinst && needed_by(c, id, NULL) == 0;
+}

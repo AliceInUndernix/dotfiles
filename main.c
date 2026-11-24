@@ -18,7 +18,17 @@ static void usage(void)
         "  remove ID...          remove modules\n"
         "  upgrade [ID...]       upgrade installed modules\n"
         "  autoremove            remove dependencies nothing needs\n"
+        "  keep ID... | auto ID... mark as chosen by you, or as a "
+        "dependency\n"
         "  clean                 delete downloaded archives\n",
+        stderr);
+    fputs("  modlist [list]        the saved modlists\n"
+        "  modlist save NAME     save the modules you chose\n"
+        "  modlist show NAME     what it has, and how the game differs\n"
+        "  modlist install NAME  install what it has (newest that fits)\n"
+        "  modlist pin NAME      install the very versions it names\n"
+        "  modlist sync NAME     install it, remove chosen ones not in it\n"
+        "  modlist delete NAME   (NAME with a / is a file anywhere)\n",
         stderr);
     fputs("  add NAME [GAMEDIR]    remember a game folder as an instance\n"
         "  instances | use NAME | forget NAME\n\n", stderr);
@@ -269,6 +279,15 @@ int main(int argc, char **argv)
     }
     if (strcmp(cmd, "autoremove") == 0) {
         return cmd_remove(&c, NULL, 0);
+    }
+    if (strcmp(cmd, "keep") == 0 && i < argc) {
+        return cmd_keep(&c, argv + i, argc - i, 0);
+    }
+    if (strcmp(cmd, "auto") == 0 && i < argc) {
+        return cmd_keep(&c, argv + i, argc - i, 1);
+    }
+    if (strcmp(cmd, "modlist") == 0) {
+        return cmd_modlist(&c, argv + i, argc - i);
     }
     if (strcmp(cmd, "upgrade") == 0) {
         return cmd_upgrade(&c, argv + i, argc - i);

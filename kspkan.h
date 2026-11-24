@@ -1,7 +1,7 @@
 #ifndef KSPKAN_H
 #define KSPKAN_H
 
-#define KSPKAN_VERSION "0.1.0"
+#define KSPKAN_VERSION "0.2.0"
 
 /* ---- util.c ---- */
 
@@ -264,6 +264,8 @@ int resolve(struct ctx *c, char **want, int nwant, char **skip, int nskip,
     struct entry ***out, int *nout, char *err, int errsz);
 int plan_removal(struct ctx *c, char **ids, int n, struct strs *out,
     char *err, int errsz);
+int needed_by(struct ctx *c, const char *id, struct strs *out);
+int is_orphan(struct ctx *c, const char *id);
 
 /* ---- install.c ---- */
 
@@ -294,6 +296,27 @@ int cmd_install(struct ctx *c, char **ids, int n);
 int cmd_remove(struct ctx *c, char **ids, int n);
 int cmd_upgrade(struct ctx *c, char **ids, int n);
 int cmd_tui(struct ctx *c);
+int cmd_keep(struct ctx *c, char **ids, int n, int autoinst);
+
+/* ---- modlist.c: saved lists of chosen modules ---- */
+
+struct mlent {
+    char *id;
+    char *version;
+};
+
+struct modlist {
+    struct mlent *v;
+    int n;
+    int cap;
+};
+
+char *modlist_path(struct ctx *c, const char *name);
+int modlist_read(struct ctx *c, const char *name, struct modlist *ml);
+int modlist_write(struct ctx *c, const char *name, int *count);
+void modlist_free(struct modlist *ml);
+int modlist_names(struct ctx *c, struct strs *out);
+int cmd_modlist(struct ctx *c, char **args, int n);
 
 
 /* ---- query.c: advanced search ---- */
@@ -328,6 +351,7 @@ int inst_load(struct ctx *c);
 int inst_select(struct ctx *c, const char *name);
 int inst_first_run(struct ctx *c);
 int is_game_dir(const char *dir);
+int name_valid(const char *s);
 int cmd_add(struct ctx *c, const char *name, const char *dir);
 int cmd_forget(struct ctx *c, const char *name);
 int cmd_use(struct ctx *c, const char *name);

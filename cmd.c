@@ -111,6 +111,27 @@ static void show_rel(struct jnode *j, const char *key)
     }
 }
 
+/* "needed by: a, b" and a newline, or nothing when nothing needs id */
+static void print_needers(struct ctx *c, const char *id, const char *label)
+{
+    struct strs by;
+    int i;
+
+    by.v = NULL;
+    by.n = 0;
+    by.cap = 0;
+    needed_by(c, id, &by);
+    if (by.n == 0) {
+        return;
+    }
+    fputs(label, stdout);
+    for (i = 0; i < by.n; i++) {
+        printf("%s%s", i > 0 ? ", " : "", by.v[i]);
+    }
+    printf("\n");
+    strs_free(&by);
+}
+
 int cmd_show(struct ctx *c, const char *id)
 {
     struct entry *e;
@@ -137,7 +158,9 @@ int cmd_show(struct ctx *c, const char *id)
     printf("newest: %s\n", e->version);
     m = registry_find(&c->reg, id);
     if (m != NULL) {
-        printf("installed: %s\n", m->version);
+        printf("installed: %s, %s\n", m->version, m->autoinst ?
+            "as a dependency" : "chosen by you");
+        print_needers(c, id, "needed by: ");
     }
     if (c->kspver != NULL) {
         printf("game: %s\n", c->kspver);
@@ -164,16 +187,61 @@ int cmd_show(struct ctx *c, const char *id)
     return 0;
 }
 
+/* the installed modules: those you chose, then the dependencies, each
+   with what needs it.  The module list is used when there is one. */
 int cmd_list(struct ctx *c)
 {
-    int i, k;
+    struct inst *m;
+    int i, pass;
 
-    for (i = 0; i < c->reg.n; i++) {
-        k = c->reg.v[i].autoinst;
-        printf("%s %s%s\n", c->reg.v[i].id, c->reg.v[i].version,
-            k ? " (dependency)" : "");
+    if (c->ix.n == 0 && index_load(c) < 0) {
+        memset(&c->ix, 0, sizeof(c->ix));
+    }
+    for (pass = 0; pass < 2; pass++) {
+        for (i = 0; i < c->reg.n; i++) {
+            m = &c->reg.v[i];
+            if (m->autoinst != pass) {
+                continue;
+            }
+            printf("%s %s%s", m->id, m->version,
+                m->autoinst ? " (dependency)" : "");
+            if (m->autoinst && is_orphan(c, m->id) && c->ix.n > 0) {
+                printf(" nothing needs it (kspkan autoremove)");
+            }
+            print_needers(c, m->id, " needed by ");
+            if (needed_by(c, m->id, NULL) == 0) {
+                printf("\n");
+            }
+        }
     }
     return 0;
+}
+
+/* keep: the modules become your choice (autoremove leaves them);
+   auto: they become dependencies (autoremove takes them when nothing
+   needs them) */
+int cmd_keep(struct ctx *c, char **ids, int n, int autoinst)
+{
+    struct inst *m;
+    int i, rv;
+
+    rv = 0;
+    for (i = 0; i < n; i++) {
+        m = registry_find(&c->reg, ids[i]);
+        if (m == NULL) {
+            fprintf(stderr, "kspkan: not installed: %s\n", ids[i]);
+            rv = 1;
+            continue;
+        }
+        m->autoinst = autoinst;
+        printf("%s: %s\n", ids[i], autoinst ? "now a dependency" :
+            "now chosen by you");
+    }
+    if (registry_save(c) < 0) {
+        fprintf(stderr, "kspkan: cannot save what is installed\n");
+        return 1;
+    }
+    return rv;
 }
 
 static int confirm(struct ctx *c)
@@ -207,6 +275,33 @@ static int is_wanted(char **ids, int n, const char *id)
         }
     }
     return 0;
+}
+
+/* modules named for installing that are already in as dependencies
+   become your choice, so that removing what needed them keeps them */
+static void made_chosen(struct ctx *c, char **ids, int n)
+{
+    struct inst *m;
+    char *id;
+    int i, changed;
+
+    changed = 0;
+    for (i = 0; i < n; i++) {
+        id = xstrdup(ids[i]);
+        if (strchr(id, '=') != NULL) {
+            *strchr(id, '=') = 0;
+        }
+        m = registry_find(&c->reg, id);
+        if (m != NULL && m->autoinst) {
+            m->autoinst = 0;
+            changed = 1;
+            printf("%s is now chosen by you, not only a dependency\n", id);
+        }
+        free(id);
+    }
+    if (changed) {
+        registry_save(c);
+    }
 }
 
 /* download, then install each entry; old copies named in replace are
@@ -414,6 +509,7 @@ int cmd_install(struct ctx *c, char **ids, int n)
         fprintf(stderr, "kspkan: %s\n", err);
         return 1;
     }
+    made_chosen(c, ids, n);
     want = choose_extras(c, ents, nents, ids, n, &nwant);
     if (nwant > n) {
         rc = resolve(c, want, nwant, skip, nskip, &ents2, &nents2, err,

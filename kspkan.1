@@ -1,4 +1,4 @@
-.TH KSPKAN 1 2026-11-24 "kspkan 0.1.0"
+.TH KSPKAN 1 2026-11-24 "kspkan 0.2.0"
 .SH NAME
 kspkan \- small mod manager for Kerbal Space Program
 .SH SYNOPSIS
@@ -25,14 +25,17 @@ Fetch the module list.
 List modules.  Words are ANDed; a leading \- excludes a word.  Also:
 .IR author:x " " tag:x " " license:x " " needs:x " " dl>5k " " dl<100
 .IR after:2024-01-01 " " before:... " " size<5 " (MB) "
-.IR is:installed " " is:update " " is:new " and "
+.IR is:installed " " is:chosen " " is:dep " " is:needed " " is:orphan
+.IR is:update " " is:new " and "
 .IR sort:pop | new | small | big | name .
 .TP
 .BI show " id"
 Describe a module.
 .TP
 .B list
-Installed modules.
+Installed modules: those you chose, then the dependencies, each with
+the modules that need it.  A dependency nothing needs is pointed out
+(autoremove takes it).
 .TP
 .BI install " id[=version] ..."
 Install modules and what they need.  Recommended and suggested modules
@@ -48,6 +51,43 @@ Upgrade installed modules (all of them when none is named).
 .B autoremove
 Remove dependencies nothing needs.
 .TP
+.BI keep " id ..."
+Mark installed modules as chosen by you, so that autoremove and the
+removal of what needed them leave them in.  Installing a module that is
+in as a dependency does the same.
+.TP
+.BI auto " id ..."
+Mark installed modules as dependencies: autoremove takes them when
+nothing needs them.
+.TP
+.BR modlist " [" list ]
+The saved modlists.  A modlist is a plain text file with one
+.RI \(dq id " " version \(dq
+line for each module you chose (lines starting with # are comments);
+the dependencies are worked out again when it is installed.
+.TP
+.BI "modlist save" " name"
+Save the modules you chose as a modlist.
+.TP
+.BI "modlist show" " name"
+What the modlist has, and how this game differs from it.
+.TP
+.BI "modlist install" " name"
+Install what the modlist has and the game has not, at the newest
+version that fits the game.
+.TP
+.BI "modlist pin" " name"
+The same, at the very versions the modlist names.
+.TP
+.BI "modlist sync" " name"
+Install the modlist, and remove the modules you chose that are not in
+it.
+.TP
+.BI "modlist delete" " name"
+Delete a modlist.  A
+.I name
+with a / in it is a file anywhere, for example one somebody gave you.
+.TP
 .B clean
 Delete downloaded archives.
 .TP
@@ -59,6 +99,32 @@ List, choose or forget instances.  Forgetting never touches the game.
 .TP
 .B version
 Print the version.
+.SH FULL SCREEN MODE
+The list marks each installed module
+.B i
+(chosen by you) or
+.B d
+(a dependency), and
+.B u
+when a newer version fits.
+.B i
+and
+.B I
+go through what is shown: all, installed, chosen by you,
+dependencies, unneeded dependencies, not installed, updates, marked.
+.B p
+puts the description at the bottom, on the right (with everything
+about the module: what needs it, the long description, links;
+.BR J " and " K
+scroll it), or turns it off; the choice is remembered.
+.B e
+makes an installed module your choice or a dependency.
+.B w
+saves the modules you chose as a modlist;
+.B o
+opens one and marks what the game lacks of it, ready for Enter.
+.B ?
+shows every key.
 .SH OPTIONS
 .TP
 .BI \-i " name"
@@ -108,6 +174,10 @@ the remembered game folders;
 the module list;
 .BR cache/ :
 downloads;
+.BR modlists/ :
+the saved modlists;
+.BR settings :
+where the full screen mode puts the description;
 .BI inst/ name /installed :
 what was installed into each instance.  All are plain text.
 .SH ENVIRONMENT
