@@ -1,0 +1,14 @@
+0.1.0  2026-11-24
+    First release.
+    - module list from CKAN-meta, with download counts
+    - dependencies: depends, any_of, provides, conflicts, version limits,
+      DLC detection; recommended and suggested modules offered
+    - install rules: find, find_regexp, file, as, filter, filter_regexp,
+      include_only, find_matches_files, install_to GameRoot
+    - checks SHA-256 or SHA-1 of every download; tries every mirror
+    - remove with dependents and orphans; upgrade; pinned versions;
+      autoremove; clean
+    - remembered game instances, shared module list
+    - full screen mode: colours (habamax), search, five orders,
+      detail pane, keyboard only
+    - safe against path traversal, symlinks and zip bombs
