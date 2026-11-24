@@ -87,6 +87,19 @@ press keys), the RGB code ignores those events, and the audio state timer
 frequency can be set from `config.h`. `mcuconf.h` turns on the two extra
 timers the audio driver uses.
 
+## The other repositories
+
+Each can be used on its own; the dotfiles installer sets them all up
+(`./install.sh keyboard games`).
+
+- [dotfiles](https://github.com/AliceInUndernix/dotfiles):
+  the whole Linux desktop: configs, the installer, steno, the diary
+  and the other programs
+- [dotterel](https://github.com/AliceInUndernix/dotterel):
+  the British English steno theory and its dictionaries
+- [kspkan](https://github.com/AliceInUndernix/kspkan):
+  a small mod manager for Kerbal Space Program
+
 ## License
 
 Copyright (c) 2026 AliceInUndernix. The firmware is built with QMK,
