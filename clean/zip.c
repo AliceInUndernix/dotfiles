@@ -751,7 +751,7 @@ static int zip_walk(const unsigned char *in, long n, struct buf *out,
     cdsize = get32le(in + eocd + 12);
     cdoff = get32le(in + eocd + 16);
     clen = get16le(in + eocd + 20);
-    if (count == 0xffff || cdoff == -1 || cdsize == -1) {
+    if (count == 0xffff || cdoff == 0xffffffffL || cdsize == 0xffffffffL) {
         why = "zip64 files are not supported yet";
         return -1;
     }

@@ -371,13 +371,15 @@ static long nobjs;
 static struct val *trailer;
 static long trailer_where;
 static long unpacked;
+static long pdf_len;    /* object numbers are limited by it */
 
 static int set_obj(long num, struct val *v, long where)
 {
     struct obj *o;
     long n;
 
-    if (num < 0 || num >= MAX_OBJECTS)
+    /* a tiny file with "7999999 0 obj" must not take 450 MB */
+    if (num < 0 || num >= MAX_OBJECTS || num > pdf_len / 2 + 4096)
         return -1;
     if (num >= nobjs) {
         n = nobjs ? nobjs : 1024;
@@ -793,6 +795,7 @@ int clean_pdf(const unsigned char *in, long n, struct buf *out)
 
     objs = 0;
     nobjs = 0;
+    pdf_len = n;
     trailer = 0;
     trailer_where = 0;
     unpacked = 0;

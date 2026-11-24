@@ -435,6 +435,43 @@ static void set_backup_dir(void)
         "/.system/state/clean");
 }
 
+/* tidy_path: drop "//", "/./" and "dir/.." in an absolute path, so
+   ./x, a/../x and x name the same backup */
+static void tidy_path(char *d)
+{
+    char *w, *r, *s;
+    long n;
+
+    w = d;
+    r = d;
+    while (*r) {
+        while (*r == '/')
+            r++;
+        s = r;
+        while (*r && *r != '/')
+            r++;
+        n = (long)(r - s);
+        if (n == 0 || (n == 1 && s[0] == '.'))
+            continue;
+        if (n == 2 && s[0] == '.' && s[1] == '.') {
+            while (w > d && w[-1] != '/')
+                w--;
+            if (w > d)
+                w--;
+            continue;
+        }
+        *w = '/';
+        w++;
+        memmove(w, s, (unsigned long)n);
+        w += n;
+    }
+    if (w == d) {
+        *w = '/';
+        w++;
+    }
+    *w = 0;
+}
+
 /* abs_path: path from the root (the current directory before it) */
 static int abs_path(const char *path, char *d, int size)
 {
@@ -443,6 +480,7 @@ static int abs_path(const char *path, char *d, int size)
 
     if (path[0] == '/') {
         copy_str(d, path, size);
+        tidy_path(d);
         return 0;
     }
     r = getcwd(cwd, sizeof cwd);
@@ -450,6 +488,7 @@ static int abs_path(const char *path, char *d, int size)
         return -1;
     join(d, size, cwd, "/");
     copy_str(d + strlen(d), path, size - strlen(d));
+    tidy_path(d);
     return 0;
 }
 
@@ -561,6 +600,12 @@ static int replace(const char *path, const unsigned char *p, long n,
         return -1;
     }
     r = write_all(fd, p, n);
+    /* the umask must not narrow the file's mode, and the data must be
+       on disk before the rename, or a crash could leave it empty */
+    if (r == 0 && fchmod(fd, mode & 07777) < 0)
+        r = -1;
+    if (r == 0 && fsync(fd) < 0)
+        r = -1;
     rc = close(fd);
     if (rc < 0)
         r = -1;
@@ -635,6 +680,15 @@ static int kind_of(int fd, long long size)
     if (h[0] == 0x1a && h[1] == 0x45 && h[2] == 0xdf && h[3] == 0xa3)
         return k_mkv;
     if (is_word(h + 4, "ftyp")) {
+        /* Canon CR3 keeps EXIF, GPS and the serial in boxes the MP4
+           code does not look into: refuse it rather than pass it */
+        if (is_word(h + 8, "crx "))
+            return k_unknown;
+        if (is_word(h + 8, "mif2") || is_word(h + 8, "heim") ||
+            is_word(h + 8, "heis") || is_word(h + 8, "hevm"))
+        {
+            return k_heif;
+        }
         if (is_word(h + 8, "heic") || is_word(h + 8, "heix") ||
             is_word(h + 8, "mif1") || is_word(h + 8, "msf1") ||
             is_word(h + 8, "avif") || is_word(h + 8, "avis") ||

@@ -450,7 +450,9 @@ static int sub_ifds(int fd, const unsigned char *e, int exif, int scan)
 
     vs = value_size(e);
     k = (long)t32(e + 4);
-    if (vs < 4 || k > 16)
+    /* offsets are 4 bytes each (LONG or IFD); anything else is not
+       a list of IFDs and could overrun p */
+    if (k < 1 || k > 16 || vs != 4 * (long long)k)
         return 0;
     if (vs == 4) {
         memcpy(p, e + 8, 4);

@@ -248,6 +248,10 @@ static int mp4_walk(int fd, long long off, long long end, int depth)
     const unsigned char *t;
     int r;
 
+    if (depth > 32) {
+        why = "an MP4 nested too deep";
+        return -1;
+    }
     while (off + 8 <= end) {
         rc = at_read(fd, off, h, 8);
         if (rc < 0) {
@@ -426,6 +430,10 @@ static int mkv_children(int fd, long long off, long long end, int level)
     long long data;
     int r;
 
+    if (level > 16) {
+        why = "a Matroska file nested too deep";
+        return -1;
+    }
     while (off < end) {
         rc = ebml_head(fd, off, end, &e);
         if (rc < 0) {
@@ -440,6 +448,9 @@ static int mkv_children(int fd, long long off, long long end, int level)
             return 0;   /* a live stream's cluster: nothing more to see */
         }
         if (e.size > end - data) {
+            /* a recording cut short: still clean what is there */
+            if (e.id == ID_SEGMENT && level == 0)
+                return mkv_children(fd, data, end, 1);
             if (e.id == ID_CLUSTER || level == 0)
                 return 0;
             why = "a broken Matroska file";
