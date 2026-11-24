@@ -9,15 +9,15 @@ libraries come from. This file adds the background and the history.
 
 | Path | What it is |
 |---|---|
-| `canary/keymap.c` | **Latest layout (version 109)** |
-| `canary/config.h` | Latest config (version 109): debounce, RGB, audio, combo limits |
-| `canary/rules.mk` | Latest build features (version 109): steno, mouse keys, USB endpoints |
+| `canary/keymap.c` | **Latest layout (version 110)** |
+| `canary/config.h` | Latest config (version 110): debounce, RGB, audio, combo limits |
+| `canary/rules.mk` | Latest build features (version 110): steno, mouse keys, USB endpoints |
 | `knowledge/canary/` | The first working canary keymap, kept as reference |
 | `knowledge/inspiration.md` | Link to the inspiration: https://github.com/optozorax/moonlander |
 | `build.sh` | Sets up QMK, builds and flashes (see README.md) |
 | `history/` | Every earlier numbered draft (keymap 75..86, config 71/81..86, rules 1/81..86), unchanged |
 
-`history/` stops at version 86; versions 87 to 109 are in the version history
+`history/` stops at version 86; versions 87 to 110 are in the version history
 below, and in git: up to 97 in the dotfiles repo, where the layout
 lived until 2026-11-15 (`git log -- moonlander/canary` there), and
 from then on here.
@@ -170,8 +170,13 @@ suggest them again without asking:
 - **108:** `&` and `#` are chords again: `&` = `" + =`, `#` =
   `* + '`. `@` moved to the old `&` key and `^` to the old `#` key, so
   the innermost number-row key on each hand does nothing.
-- **109 (latest):** dwm layer: Word on the left inner home key (Super+y)
+- **109:** dwm layer: Word on the left inner home key (Super+y)
   opens the steno word adder (`steno -W`) as a dwm scratchpad.
+- **110 (latest):** keys held together that make no chord (two keys of
+  the 4-key `...` chord rolled into each other, like `!` then `=`) each
+  type their own mark, in the order pressed; before, both were dropped
+  (combo/src.c, `combo_flush_keys`). Real chords (`" + =` is `&`) still
+  fire when their keys overlap within 50 ms.
 - **config:** combo key count raised from 20 to 32 (by version 71); debounce
   raised to 12 ms against double letters (version 82). **rules:** unchanged in
   substance since the first numbered version (rules_1).

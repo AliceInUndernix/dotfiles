@@ -6,7 +6,7 @@
  * config.h holds numbers and switches that QMK and the libraries read while
  * the firmware is being built. It goes next to keymap.c and rules.mk.
  * Reference: https://docs.qmk.fm/config_options
- * Version 109. See keymap.c (top comment) and HANDOFF.md for the overview.
+ * Version 110. See keymap.c (top comment) and HANDOFF.md for the overview.
  */
 
 #pragma once

@@ -5,7 +5,7 @@
 # rules.mk says which QMK features are built into the firmware.
 # "yes" builds a feature in, "no" leaves it out.
 # Reference: https://docs.qmk.fm/config_options#the-rulesmk-file
-# Version 109. See keymap.c (top comment) and HANDOFF.md for the overview.
+# Version 110. See keymap.c (top comment) and HANDOFF.md for the overview.
 #
 # Comments are kept on their own lines on purpose: in a .mk file, a comment
 # after a value can leave invisible spaces in that value.

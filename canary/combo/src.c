@@ -195,6 +195,34 @@ void combo_onenter_3(Combo *combo, ComboKey key) {
   }
 }
 
+// The one-key chord of a key, or NONE_COMBO_POS.
+ComboPos combo_single_pos(ComboKey key) {
+  for (uint8_t i = 0; i < combos_size; ++i) {
+    ComboPos pos = COMBO_POS(i);
+    if (combo_get_len(pos) == 1 && combo_elem_has_key(pos, key)) {
+      return pos;
+    }
+  }
+  return NONE_COMBO_POS;
+}
+
+// Keys held together that are no chord (only part of a longer one, like
+// two keys of the 4-key ellipsis chord rolled into each other): type
+// each key alone, in the order pressed, instead of dropping them all.
+// The keys are still held, so the chord goes to state 3, which swallows
+// their releases.
+void combo_flush_keys(Combo *combo) {
+  for (uint8_t i = 0; i < combo->size; ++i) {
+    ComboPos single = combo_single_pos(combo->array[i]);
+    if (neq_combo_pos(single, NONE_COMBO_POS)) {
+      combo_press(single, true);
+      combo_press(single, false);
+    }
+  }
+  combo->state = 3;
+  TRANSITION_DEBUG(flush);
+}
+
 bool combo_process_1(Combo *combo, uint16_t key, keyrecord_t *record) {
   bool down = record->event.pressed;
   bool up = !down;
@@ -225,6 +253,11 @@ bool combo_process_1(Combo *combo, uint16_t key, keyrecord_t *record) {
         TRANSITION_DEBUG(k);
         return true;
       }
+      if (!neq_combo_pos(pos, NONE_COMBO_POS) && combo_k_enabled) {
+        // no chord, and this key makes none: type what is held first
+        combo_flush_keys(combo);
+        return true;
+      }
     }
   }
 
@@ -249,7 +282,9 @@ bool combo_process_1(Combo *combo, uint16_t key, keyrecord_t *record) {
       }
     }
   } else {
-    if (up && neq_combo_key(key_combo, NONE_COMBO_KEY)) {
+    if (up && neq_combo_key(key_combo, NONE_COMBO_KEY) && combo_has_key(combo, key_combo)) {
+      // released before it made a chord: type the keys one by one
+      combo_flush_keys(combo);
       combo_onenter_3(combo, key_combo);
       TRANSITION_DEBUG(f);
       if (combo->size == 0) {
@@ -403,6 +438,8 @@ void combo_user_timer(void) {
           combo_press(pos, true);
           combo->state = 2;
           TRANSITION_DEBUG(d);
+        } else {
+          combo_flush_keys(combo);
         }
       }
     } else if (combo->state == 4) {

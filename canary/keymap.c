@@ -2,7 +2,7 @@
  * ==========================================================================
  *  ZSA Moonlander (rev B), keymap "canary"
  *  Canary letter layout, built on optozorax's keymap libraries.
- *  Version 109 (the latest; earlier drafts were numbered 75..97, and 98
+ *  Version 110 (the latest; earlier drafts were numbered 75..97, and 98
  *  was dropped).
  * ==========================================================================
  *
