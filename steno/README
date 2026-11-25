@@ -20,6 +20,9 @@ SYNOPSIS
                                        format, into DIR
     steno -t [-c CONFIG]               strokes from stdin, print what
                                        would be typed (for tests)
+    steno -K                           stuck keys: let go of a Shift,
+                                       Ctrl, Alt or Super still down,
+                                       Caps Lock off (dwm: Mod+BackSpace)
 
 DESCRIPTION
 

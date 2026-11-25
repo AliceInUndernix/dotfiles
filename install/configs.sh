@@ -131,6 +131,17 @@ install_x() {
 		rm "$HOME/.xinitrc"
 		say "remove  $HOME/.xinitrc (now $CONFIG/x/xinitrc)"
 	fi
+	# No Caps Lock on any keyboard (x/nocaps.conf): X's own settings,
+	# so it needs root
+	nocaps=/etc/X11/xorg.conf.d/90-nocaps.conf
+	if [ "$AS_ROOT" = yes ]; then
+		f=$(root_put "$DOTFILES/x/nocaps.conf" x/nocaps.conf 644)
+		chmod 711 "${ROOT_SYSTEM%/*}" "$ROOT_SYSTEM"
+		chmod 755 "$ROOT_SYSTEM/x"
+		root_link "$f" "$nocaps"
+	elif ! [ -L "$nocaps" ]; then
+		warn "Caps Lock is still there: su -c '$DOTFILES/install.sh x' takes it away (then restart X)"
+	fi
 	for tool in xsetroot xset xss-lock; do
 		command -v $tool >/dev/null 2>&1 || warn "$tool is not installed (su -c '$DOTFILES/install.sh --deps')"
 	done

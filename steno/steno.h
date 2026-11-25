@@ -115,6 +115,7 @@ void out_event(void);          /* the X connection has something */
 void out_backspaces(int n);
 void out_string(const char *s, int n);
 void out_combo(const char *combo);
+int out_unstick(void);          /* steno -K */
 void run_command(const char *cmd);
 int atoi_small(const char *s);         /* -1: not a number */
 

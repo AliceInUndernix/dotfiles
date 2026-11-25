@@ -1173,6 +1173,9 @@ static void usage(int code)
         "                                          steno's format\n"
         "       steno -t                           strokes from stdin,\n"
         "                                          print what is typed\n"
+        "       steno -K                           let go of stuck\n"
+        "                                          Shift, Ctrl...; Caps\n"
+        "                                          Lock off\n"
         "  -c  settings file ($XDG_CONFIG_HOME/steno/config)\n"
         "  -p  serial port of the keyboard (auto: /dev/ttyACM0 to 9)\n"
         "  -t  test: one stroke or outline a line, as KAT or KAT/-S\n"
@@ -1265,6 +1268,8 @@ int main(int argc, char **argv)
             arg1 = argv[i + 1];
             arg2 = argv[i + 2];
             i += 2;
+        } else if (!strcmp(argv[i], "-K")) {
+            return out_unstick();
         } else if (!strcmp(argv[i], "-q")) {
             quiet = 1;
         } else if (!strcmp(argv[i], "-v")) {

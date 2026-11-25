@@ -5,6 +5,7 @@
 #   --deps   system packages          slock   must be root's to lock
 #   ksh      making ksh the login shell, and root's copies of the files
 #   steno    adding you to the serial port's group (dialout), once
+#   x        no Caps Lock on any keyboard (/etc/X11/xorg.conf.d)
 #   net      Riseup VPN, Tor and the kill switch (Gentoo with OpenRC;
 #            net/README)
 #   icecat, chromium   the browsers (emerge)
@@ -274,7 +275,7 @@ if [ "$AS_ROOT" = no ]; then
 		esac
 	done
 elif [ "$want_deps" = no ] && [ -n "$named" ]; then
-	case " $named " in *" slock "*|*" ksh "*|*" steno "*|*" net "*|*" ksp "*|*" icecat "*|*" chromium "*) ;; *)
+	case " $named " in *" slock "*|*" ksh "*|*" steno "*|*" x "*|*" net "*|*" ksp "*|*" icecat "*|*" chromium "*) ;; *)
 		say "note    these parts don't need root; next time just run ./install.sh$named" ;;
 	esac
 fi

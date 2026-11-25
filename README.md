@@ -298,6 +298,19 @@ The sources are the releases from https://git.suckless.org; `UPSTREAM`
 names the tag and commit. One local change: `slock/config.h` uses group
 `nobody`, because Gentoo has no `nogroup`.
 
+## No Caps Lock, no stuck keys
+
+There is no Caps Lock on any keyboard: `x/nocaps.conf` (X's
+`caps:none`) is linked into `/etc/X11/xorg.conf.d` by a root run of
+`./install.sh x`, and X reads it when it starts. If a Shift, Ctrl, Alt
+or Super ever stays down with no key pressed (everything typed comes
+out in capitals), Super+BackSpace (with or without Shift) runs
+`steno -K`: it lets go of the key and says on the bar (Super+b) what
+it found. A key that another keyboard holds can't be let go of from
+the computer: press and let go of that key there, or unplug that
+keyboard. The Moonlander (version 111 and later) lets go of every
+modifier by itself 0.3 s after its last key is let go.
+
 ## tmux and Neovim
 
 tmux stays close to its defaults (prefix Ctrl-b): no Esc delay, true

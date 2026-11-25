@@ -108,6 +108,11 @@ static const char *icecatcmd[] = { "icecat", NULL };
 static const char *chromiumcmd[] = { "chromium-browser", NULL };
 static const char *mixercmd[] = { "st", "-e", "wiremix", NULL };
 static const char *topcmd[]   = { "st", "-e", "btop", NULL };
+/* stuck keys: steno -K lets go of a Shift, Ctrl... that stays down
+ * when no key is pressed, and turns Caps Lock off; what it did shows
+ * on the bar (Mod+b) */
+static const char *unstickcmd[] = { "/bin/sh", "-c",
+	"xsetroot -name \"$(steno -K 2>&1 | tr '\\n' ' ')\"", NULL };
 /* tmux in st: Mod+x attaches to the last session (starts one if there is
  * none), Mod+Shift+x always starts a new session */
 static const char *tmuxcmd[]  = { "st", "-e", "/bin/sh", "-c", "tmux attach || exec tmux", NULL };
@@ -179,6 +184,9 @@ static const Key keys[] = {
 	{ MODKEY|ShiftMask,             XK_w,      spawn,          {.v = chromiumcmd } },
 	{ MODKEY,                       XK_a,      spawn,          {.v = mixercmd } },
 	{ MODKEY,                       XK_Escape, spawn,          {.v = topcmd } },
+	/* with Shift too: it works while a Shift is stuck */
+	{ MODKEY,                       XK_BackSpace, spawn,       {.v = unstickcmd } },
+	{ MODKEY|ShiftMask,             XK_BackSpace, spawn,       {.v = unstickcmd } },
 	{ MODKEY,                       XK_x,      spawn,          {.v = tmuxcmd } },
 	{ MODKEY|ShiftMask,             XK_x,      spawn,          {.v = tmuxnewcmd } },
 	{ MODKEY|ShiftMask,             XK_q,      quit,           {0} },

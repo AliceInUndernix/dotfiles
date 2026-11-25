@@ -241,6 +241,18 @@ uninstall_deps() {
 	fi
 }
 
+# x: also the link that takes Caps Lock away (root's)
+uninstall_x() {
+	f=/etc/X11/xorg.conf.d/90-nocaps.conf
+	if [ -L "$f" ] && [ "$AS_ROOT" = yes ]; then
+		rm "$f"
+		say "remove  $f (Caps Lock is back after X restarts)"
+	elif [ -L "$f" ]; then
+		say "note    $f stays: su -c '$DOTFILES/install.sh uninstall x'"
+	fi
+	unlink_part x
+}
+
 # every other part: its links, and its program if it builds one
 uninstall_default() {
 	case $1 in

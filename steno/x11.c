@@ -50,6 +50,9 @@ static int spare[256];         /* spare keycodes, oldest used first */
 static long spare_sym[256][CUSTOM_LEN];
 static int nspare;
 static int mod_key[8];         /* a keycode for each modifier bit */
+static unsigned char mod_all[8][8];    /* all of them (steno -K) */
+static int mod_per;
+static long root_win;
 static int bs_code, bs_mods;
 
 /* --- the connection ------------------------------------------------- */
@@ -324,6 +327,10 @@ static int x_connect(void)
     /* the reply after its first 8 bytes: the keycodes there are */
     min_kc = setup[26];
     max_kc = setup[27];
+    /* the first screen's root window: after the vendor name and the
+     * pixmap formats */
+    i = 32 + ((get16(setup + 16) + 3) & ~3) + 8 * setup[21];
+    root_win = i + 4 <= len ? get32(setup + i) : 0;
     free(setup);
     return 0;
 }
@@ -452,6 +459,10 @@ static int read_keymap(void)
     if (res < 0)
         return -1;
     per = h[1];
+    mod_per = per < 8 ? per : 8;
+    for (i = 0; i < 8; i++)
+        for (j = 0; j < mod_per; j++)
+            mod_all[i][j] = e[i * per + j];
     for (i = 0; i < 8; i++) {
         mod_key[i] = 0;
         for (j = 0; j < per; j++)
@@ -861,6 +872,108 @@ void out_combo(const char *combo)
     return;
 bad:
     say("bad key combo: %s", combo);
+}
+
+/* --- steno -K: stuck keys -------------------------------------------- */
+
+static const char *const mod_names[8] = {
+    "Shift", "Caps Lock", "Ctrl", "Alt", "Num Lock", "Mod3", "Super",
+    "AltGr"
+};
+
+/* Keys down now (QueryKeymap), and the modifier state (QueryPointer). */
+static int key_state(unsigned char *keys, int *mask)
+{
+    int res;
+    unsigned char h[32], *e;
+
+    request(44, 0, 1);             /* QueryKeymap */
+    res = x_reply(seq, h, &e);
+    if (res < 0)
+        return -1;
+    memcpy(keys, h + 8, 24);
+    if (e)
+        memcpy(keys + 24, e, 8);
+    free(e);
+    *mask = 0;
+    if (!root_win)
+        return 0;
+    request(38, 0, 2);             /* QueryPointer */
+    put32(root_win);
+    res = x_reply(seq, h, &e);
+    if (res < 0)
+        return -1;
+    free(e);
+    *mask = (int)get16(h + 24);
+    return 0;
+}
+
+static int key_down(const unsigned char *keys, int code)
+{
+    return (keys[code / 8] >> (code % 8)) & 1;
+}
+
+/* Let go of every modifier key that is still down and turn Caps Lock
+ * off. XTEST can only let go of keys it pressed itself (steno's, or a
+ * program's like it); a key another keyboard holds stays down, and
+ * that keyboard has to let go of it. Says what it found on stdout. */
+int out_unstick(void)
+{
+    int res;
+    unsigned char keys[32];
+    int mask, i, j, code, found, left;
+    struct pollfd pf;
+
+    res = out_open();
+    if (res < 0)
+        return 1;
+    /* the keys that ran this (Super+BackSpace in dwm) are let go of
+     * first */
+    pf.fd = -1;
+    pf.events = 0;
+    poll(&pf, 0, 700);
+    res = key_state(keys, &mask);
+    if (res < 0)
+        return 1;
+    found = 0;
+    for (i = 0; i < 8; i++)
+        for (j = 0; j < mod_per; j++) {
+            code = mod_all[i][j];
+            if (!code || !key_down(keys, code))
+                continue;
+            printf("%s was held (key %d): let go\n", mod_names[i], code);
+            fake(KEY_RELEASE, code);
+            found = 1;
+        }
+    if ((mask & 2) && mod_key[1]) {
+        printf("Caps Lock was on: off\n");
+        fake(KEY_PRESS, mod_key[1]);
+        fake(KEY_RELEASE, mod_key[1]);
+        found = 1;
+    }
+    sync_x();
+    res = key_state(keys, &mask);
+    if (res < 0)
+        return 1;
+    left = 0;
+    for (i = 0; i < 8; i++)
+        for (j = 0; j < mod_per; j++) {
+            code = mod_all[i][j];
+            if (!code || !key_down(keys, code))
+                continue;
+            printf("%s is still held by a keyboard (key %d): press and "
+                "let go of its %s, or unplug it and plug it in again\n",
+                mod_names[i], code, mod_names[i]);
+            left = 1;
+        }
+    if (mask & 2) {
+        printf("Caps Lock is still on\n");
+        left = 1;
+    }
+    if (!found && !left)
+        printf("no key was stuck, Caps Lock was off\n");
+    fflush(stdout);
+    return left;
 }
 
 int out_open(void)
