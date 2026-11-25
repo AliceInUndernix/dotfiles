@@ -393,12 +393,19 @@ tells it). Then:
                    (^F) or American (^O) sound, played with mpv (F and
                    O are next to each other on Canary's top row)
 
+Both sounds start downloading in the background as soon as a word is
+looked up, apart from playing, so they are usually in before you ask.
+^F and ^O play at once whenever a sound is in (a new press stops the
+one playing); pressed while it is still coming, it plays as soon as it
+is in. When a sound can't be had (Cambridge has none, or the download
+failed), the message line says so.
+
 The sounds are fetched through Tor only (proxychains, ./install.sh
 net), since each fetch tells Cambridge a word you are adding; without
 proxychains nothing is fetched. The page's sound links and each mp3
-are kept in $XDG_CACHE_HOME/steno/sound (~/.system/cache/steno/sound),
-so a word goes out once; delete the directory to forget them. A word
-Cambridge has no sound for says so on the message line.
+are kept for good in $XDG_DATA_HOME/steno/sound
+(~/.system/share/steno/sound), so a word goes out once; delete the
+directory to forget them.
 
 It saves into dotterel-NAME.dict in the dictionaries directory, NAME
 from data/word-homes.txt (base, proper-nouns, affixes, punctuation,
@@ -435,7 +442,7 @@ FILES
                  -W asks the engine for
     gen.c        -G: sounds, syllables and outlines made by the rules
     word.c       -W: the word adder's screen
-    sound.c      -W's ^F ^O: Cambridge's sounds, through Tor, cached
+    sound.c      -W's ^F ^O: Cambridge's sounds, through Tor, kept
     view.c       -T, -S, -TS: the boxes
     tui.c        the status screen
     screen.c     drawing boxes in the terminal, for both

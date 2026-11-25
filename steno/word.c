@@ -65,12 +65,25 @@ static long mine[STROKE_MAX];  /* your outline, parsed for matching */
 static int nmine;              /* its strokes; 0: none or not one yet */
 static int nmatch[3];          /* listed outlines that are the same */
 static int capture_fd = -1, focused = 1;
-static volatile int resized, stop_now, child_done;
-static int sound_pid = -1, sound_us;   /* ^F ^O: fetching or playing */
+static volatile int resized, stop_now;
+
+/* ^F ^O: the word's sounds, fetched in the background as soon as it is
+ * looked up, apart from playing them */
+#define FETCH_MAX 8
+struct fetching {
+    int pid;
+    char word[64];
+    int play;          /* -1, or the sound to play when it is in */
+};
+static struct fetching fetches[FETCH_MAX];
+static int nfetch;
+static int player = -1;
 static struct termios old_tty;
 static int tty;
 static const char *homes[] = { "base", "proper-nouns", "affixes",
     "punctuation", "numbers", "commands", "fingerspelling", "user", 0 };
+
+static void fetch_sounds(const char *w, int play);
 
 /* --- the word ---------------------------------------------------------- */
 
@@ -362,6 +375,7 @@ static void look_up(void)
     sel[0] = sel[1] = sel[2] = 0;
     list = l_made;
     asking_drop = 0;
+    fetch_sounds(word, -1);    /* ready before you ask for them */
 }
 
 /* --- strokes from the engine --------------------------------------------- */
@@ -1002,43 +1016,116 @@ static void word_key(int c)
     }
 }
 
-/* ^F UK, ^O US: the word's sound, from Cambridge through Tor */
-static void sound_key(int us)
+static struct fetching *fetching(const char *w)
 {
-    char w[64];
+    int i;
 
-    if (sound_pid > 0) {
-        say_msg("a sound is still coming: wait for it", 1);
-        return;
-    }
-    scopy(w, word, sizeof(w));
-    if (!w[0]) {
-        say_msg("no word to say", 1);
-        return;
-    }
-    sound_us = us;
-    sound_pid = sound_start(w, us, capture_fd);
-    if (sound_pid < 0)
-        say_msg("could not start it", 1);
-    else
-        say_msg(us ? "US: getting it (through Tor, once)" :
-            "UK: getting it (through Tor, once)", 0);
+    for (i = 0; i < nfetch; i++)
+        if (!strcmp(fetches[i].word, w))
+            return &fetches[i];
+    return 0;
 }
 
-/* the sound's child ended: say how */
-static void sound_done(void)
+/* start fetching a word's sounds, unless they are kept or coming;
+ * play: the sound to play when it is in, or -1 */
+static void fetch_sounds(const char *w, int play)
 {
-    int st, r;
+    struct fetching *f;
+    int pid;
 
-    child_done = 0;
-    if (sound_pid <= 0)
+    if (!w[0] || (sound_have(w, 0) && sound_have(w, 1)))
         return;
-    r = waitpid(sound_pid, &st, WNOHANG);
-    if (r != sound_pid)
+    f = fetching(w);
+    if (f) {
+        if (play >= 0)
+            f->play = play;
         return;
-    sound_pid = -1;
-    st = WIFEXITED(st) ? WEXITSTATUS(st) : 3;
-    say_msg(sound_said(st, sound_us), st != 0);
+    }
+    if (nfetch == FETCH_MAX)
+        return;
+    pid = sound_fetch(w, capture_fd);
+    if (pid < 0)
+        return;
+    f = &fetches[nfetch];
+    nfetch++;
+    f->pid = pid;
+    scopy(f->word, w, sizeof(f->word));
+    f->play = play;
+}
+
+static void play_sound(const char *w, int us)
+{
+    if (player > 0)
+        kill(player, SIGTERM);     /* the new one instead */
+    player = sound_play(w, us, capture_fd);
+}
+
+/* ^F UK, ^O US: play it now when it is in, else as soon as it is */
+static void sound_key(int us)
+{
+    if (!word[0]) {
+        say_msg("no word to hear", 1);
+        return;
+    }
+    if (sound_have(word, us)) {
+        play_sound(word, us);
+        return;
+    }
+    fetch_sounds(word, us);
+    if (fetching(word))
+        say_msg(us ? "US sound still downloading: it plays when it is in"
+            : "UK sound still downloading: it plays when it is in", 0);
+    else
+        say_msg("could not start the download", 1);
+}
+
+/* a fetch ended: play what was asked for, say what failed */
+static void fetch_done(struct fetching *f, int st)
+{
+    char m[LINE];
+    int code[2], i;
+
+    code[0] = st & 7;
+    code[1] = (st >> 3) & 7;
+    if (f->play >= 0 && !code[f->play])
+        play_sound(f->word, f->play);
+    if (!code[0] && !code[1])
+        return;
+    if (code[0] && code[1] && code[0] == code[1]) {
+        sprintf(m, "%.40s: no sound: %.150s", f->word,
+            sound_said(code[0], 0) + 3);
+    } else {
+        i = code[0] ? 0 : 1;
+        sprintf(m, "%.40s: %.150s", f->word, sound_said(code[i], i));
+        if (code[0] && code[1]) {
+            scat(m, "; ", sizeof(m));
+            scat(m, sound_said(code[1], 1), sizeof(m));
+        }
+    }
+    say_msg(m, 1);
+}
+
+/* children that ended: fetches and the player */
+static void reap(void)
+{
+    int pid, st, i;
+
+    while ((pid = waitpid(-1, &st, WNOHANG)) > 0) {
+        st = WIFEXITED(st) ? WEXITSTATUS(st) : 3 + 8 * 3;
+        if (pid == player) {
+            player = -1;
+            if (st && st != 15)
+                say_msg("mpv could not play it", 1);
+            continue;
+        }
+        for (i = 0; i < nfetch && fetches[i].pid != pid; i++)
+            ;
+        if (i == nfetch)
+            continue;
+        fetch_done(&fetches[i], st);
+        nfetch--;
+        fetches[i] = fetches[nfetch];
+    }
 }
 
 /* the keys read at once; 1: quit */
@@ -1164,8 +1251,7 @@ static int read_strokes(void)
 
 static void on_child(int sig)
 {
-    (void)sig;
-    child_done = 1;
+    (void)sig;                 /* only to wake poll: reap() does it */
 }
 
 static void on_resize(int sig)
@@ -1249,7 +1335,7 @@ int word_main(const char *cfg)
         }
         /* while a sound comes, wake now and then: its SIGCHLD may
          * come just before poll */
-        r = poll(pf, n, sound_pid > 0 ? 500 : -1);
+        r = poll(pf, n, nfetch || player > 0 ? 500 : -1);
         if (r < 0 && errno != EINTR)
             break;
         if (r > 0 && pf[0].revents) {
@@ -1261,8 +1347,7 @@ int word_main(const char *cfg)
         if (!quit && n > 1 && capture_fd >= 0 && pf[1].revents & POLLIN)
             quit = read_strokes();
         resized = 0;
-        if (child_done)
-            sound_done();
+        reap();
         if (!quit)
             draw();
     }

@@ -138,8 +138,10 @@ void outline_off_says(const char *outline, char *out, int size);
 
 /* --- steno -W's sounds (sound.c) ---------------------------------- */
 
-int sound_start(const char *word, int us, int keep);
-const char *sound_said(int status, int us);
+int sound_fetch(const char *word, int keep);
+int sound_have(const char *word, int us);
+int sound_play(const char *word, int us, int keep);
+const char *sound_said(int code, int us);
 int word_main(const char *cfg);              /* word.c, steno -W */
 int gen_main(const char *word);             /* gen.c, steno -G */
 int capture_stroke(long st);

@@ -4,11 +4,14 @@
  * Every fetch goes through Tor (proxychains, from net/), never
  * straight: each one tells Cambridge a word you are adding. Without
  * proxychains nothing is fetched. The page's two sound links and each
- * mp3 are kept in $XDG_CACHE_HOME/steno/sound, so a word is fetched
- * once; delete the directory to forget them.
+ * mp3 are kept for good in $XDG_DATA_HOME/steno/sound, so a word is
+ * fetched once; delete the directory to forget them.
  *
- * It all runs in a child process, so the screen never waits: the
- * child's exit status says how it went (sound_said). */
+ * Fetching and playing are apart: steno -W starts a word's fetch (both
+ * sounds) in a child as soon as it looks the word up, and a key plays
+ * what is in the cache at once, in a child of its own. The fetch's
+ * exit status says how each sound went: the UK one's code, plus the US
+ * one's times 8 (sound_said). */
 #define _XOPEN_SOURCE 700
 #include <errno.h>
 #include <fcntl.h>
@@ -37,23 +40,41 @@ enum {
 
 static char dir[1024];
 
-/* $XDG_CACHE_HOME/steno/sound (or ~/.cache/...), made; 0 when not */
-static int sound_dir(void)
+/* $XDG_x_HOME/steno/sound, or ~/home_dir/steno/sound, in out; 0
+ * when there is no home */
+static int xdg_dir(const char *var, const char *home_dir, char *out)
 {
     const char *x;
-    char *s;
 
-    x = getenv("XDG_CACHE_HOME");
+    x = getenv(var);
     if (x && x[0] == '/') {
-        scopy(dir, x, 900);
+        scopy(out, x, 900);
     } else {
         x = getenv("HOME");
         if (!x || x[0] != '/')
             return 0;
-        scopy(dir, x, 900);
-        scat(dir, "/.cache", sizeof(dir));
+        scopy(out, x, 900);
+        scat(out, home_dir, 1000);
     }
-    scat(dir, "/steno/sound", sizeof(dir));
+    scat(out, "/steno/sound", 1024);
+    return 1;
+}
+
+/* $XDG_DATA_HOME/steno/sound (or ~/.local/share/...), made; 0 when
+ * not. Kept for good: data, not a cache anything clears. Where the
+ * first version kept them ($XDG_CACHE_HOME/steno/sound), they are
+ * moved from. */
+static int sound_dir(void)
+{
+    static int made;
+    char old[1024];
+    char *s;
+    struct stat sb;
+
+    if (made)
+        return 1;
+    if (!xdg_dir("XDG_DATA_HOME", "/.local/share", dir))
+        return 0;
     for (s = dir + 1; *s; s++) {
         if (*s == '/') {
             *s = 0;
@@ -61,8 +82,14 @@ static int sound_dir(void)
             *s = '/';
         }
     }
+    if (stat(dir, &sb) < 0 && xdg_dir("XDG_CACHE_HOME", "/.cache", old) &&
+        stat(old, &sb) == 0)
+    {
+        rename(old, dir);
+    }
     mkdir(dir, 0700);
-    return access(dir, W_OK) == 0;
+    made = access(dir, W_OK) == 0;
+    return made;
 }
 
 /* the word as a file name: a-z 0-9, the rest _ */
@@ -286,65 +313,75 @@ static void write_links(const char *file, const char *uk, const char *us)
     fclose(f);
 }
 
-/* the child's work: the link, the mp3, mpv; its exit status */
-static int sound_child(const char *word, int us)
+/* the cached mp3 of one sound, in out; 1 when it is there */
+static int mp3_file(const char *word, int us, char *out)
+{
+    char name[NAME_MAX_];
+    struct stat sb;
+
+    out[0] = 0;
+    if (!sound_dir())
+        return 0;
+    file_word(word, name, sizeof(name));
+    if (!name[0])
+        return 0;
+    sprintf(out, "%.1000s/%.100s-%s.mp3", dir, name, us ? "us" : "uk");
+    return stat(out, &sb) == 0 && sb.st_size > 0;
+}
+
+/* the fetch child's work: the page's links (once), then each mp3 not
+ * kept yet; the exit status as above */
+static int fetch_child(const char *word)
 {
     char name[NAME_MAX_], links[1200], page[1200], mp3[1200];
-    char url[1200], uw[NAME_MAX_ * 3], uk_link[LINK_MAX];
-    char us_link[LINK_MAX];
-    char *text, *link;
-    char *argv[8];
-    struct stat sb;
-    int r;
+    char url[1200], uw[NAME_MAX_ * 3], link[2][LINK_MAX];
+    char *text;
+    int r, i, code[2];
 
     if (!sound_dir())
-        return snd_nodir;
+        return snd_nodir + 8 * snd_nodir;
     file_word(word, name, sizeof(name));
     url_word(word, uw, sizeof(uw));
     if (!name[0] || !uw[0])
-        return snd_none;
-    sprintf(mp3, "%.1000s/%.100s-%s.mp3", dir, name, us ? "us" : "uk");
-    if (stat(mp3, &sb) < 0 || sb.st_size <= 0) {
-        sprintf(links, "%.1000s/%.100s.links", dir, name);
-        if (!read_links(links, uk_link, us_link)) {
-            sprintf(page, "%.1000s/%.100s.html", dir, name);
-            sprintf(url, "%s%.300s", SOUND_PAGE, uw);
-            r = fetch(url, page, PAGE_MAX);
-            if (r)
-                return r;
-            text = slurp(page, 4000000L);
-            unlink(page);
-            if (!text)
-                return snd_net;
-            find_link(text, "uk_pron", uk_link);
-            find_link(text, "us_pron", us_link);
-            free(text);
-            /* only what was found is kept: a page Tor's exit got
-             * instead of the dictionary's shouldn't stay as "none" */
-            if (uk_link[0] || us_link[0])
-                write_links(links, uk_link, us_link);
-        }
-        link = us ? us_link : uk_link;
-        if (!link[0])
-            return snd_none;
-        sprintf(url, "%s%.600s", SOUND_SITE, link);
-        r = fetch(url, mp3, MP3_MAX);
+        return snd_none + 8 * snd_none;
+    if (mp3_file(word, 0, mp3) && mp3_file(word, 1, mp3))
+        return 0;
+    sprintf(links, "%.1000s/%.100s.links", dir, name);
+    if (!read_links(links, link[0], link[1])) {
+        sprintf(page, "%.1000s/%.100s.html", dir, name);
+        sprintf(url, "%s%.300s", SOUND_PAGE, uw);
+        r = fetch(url, page, PAGE_MAX);
         if (r)
-            return r;
+            return r + 8 * r;
+        text = slurp(page, 4000000L);
+        unlink(page);
+        if (!text)
+            return snd_net + 8 * snd_net;
+        find_link(text, "uk_pron", link[0]);
+        find_link(text, "us_pron", link[1]);
+        free(text);
+        /* only what was found is kept: a page Tor's exit got
+         * instead of the dictionary's shouldn't stay as "none" */
+        if (link[0][0] || link[1][0])
+            write_links(links, link[0], link[1]);
     }
-    argv[0] = "mpv";
-    argv[1] = "--really-quiet";
-    argv[2] = "--no-video";
-    argv[3] = "--no-terminal";
-    argv[4] = mp3;
-    argv[5] = 0;
-    r = run(argv, 0);
-    return r ? snd_noplayer : snd_played;
+    for (i = 0; i < 2; i++) {
+        code[i] = 0;
+        if (mp3_file(word, i, mp3))
+            continue;
+        if (!link[i][0]) {
+            code[i] = snd_none;
+            continue;
+        }
+        sprintf(url, "%s%.600s", SOUND_SITE, link[i]);
+        code[i] = fetch(url, mp3, MP3_MAX);
+    }
+    return code[0] + 8 * code[1];
 }
 
-/* start it; the child's pid, or -1. keep: an fd the child closes (the
- * engine's FIFO, which it must not hold) */
-int sound_start(const char *word, int us, int keep)
+/* start a word's fetch in a child; its pid, or -1. keep: an fd the
+ * child closes (the engine's FIFO, which it must not hold) */
+int sound_fetch(const char *word, int keep)
 {
     int pid;
 
@@ -353,25 +390,65 @@ int sound_start(const char *word, int us, int keep)
         return pid;
     if (keep >= 0)
         close(keep);
-    _exit(sound_child(word, us));
+    _exit(fetch_child(word));
     return -1;
 }
 
-/* what an exit status of the child means, for the message line */
-const char *sound_said(int status, int us)
+/* 1 when the sound is kept already */
+int sound_have(const char *word, int us)
+{
+    char mp3[1200];
+
+    return mp3_file(word, us, mp3);
+}
+
+/* play a kept sound: mpv itself, in a child; its pid, -1 when it
+ * isn't kept or can't start. Its exit status: 0 played */
+int sound_play(const char *word, int us, int keep)
+{
+    char mp3[1200];
+    char *argv[6];
+    int pid;
+
+    if (!mp3_file(word, us, mp3))
+        return -1;
+    pid = fork();
+    if (pid)
+        return pid;
+    if (keep >= 0)
+        close(keep);
+    argv[0] = "mpv";
+    argv[1] = "--really-quiet";
+    argv[2] = "--no-video";
+    argv[3] = "--no-terminal";
+    argv[4] = mp3;
+    argv[5] = 0;
+    pid = open("/dev/null", O_RDWR);
+    if (pid >= 0) {
+        dup2(pid, 0);
+        dup2(pid, 1);
+        dup2(pid, 2);
+    }
+    execvp(argv[0], argv);
+    _exit(127);
+    return -1;
+}
+
+/* what one sound's code means, for the message line */
+const char *sound_said(int code, int us)
 {
     static char m[128];
     const char *s;
 
-    switch (status) {
+    switch (code) {
     case snd_played:
-        s = "played";
+        s = "ready";
         break;
     case snd_none:
         s = "Cambridge has no sound for it";
         break;
     case snd_noproxy:
-        s = "not fetched: no proxychains (install.sh net), so not "
+        s = "not downloaded: no proxychains (install.sh net), so not "
             "through Tor";
         break;
     case snd_noplayer:
@@ -381,9 +458,9 @@ const char *sound_said(int status, int us)
         s = "no cache directory to keep it in";
         break;
     default:
-        s = "could not fetch it through Tor";
+        s = "could not download it through Tor";
         break;
     }
-    sprintf(m, "%s: %s", us ? "US" : "UK", s);
+    sprintf(m, "%s %s", us ? "US" : "UK", s);
     return m;
 }
