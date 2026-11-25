@@ -1,0 +1,13 @@
+# Add-ons that install.sh fetches from GNUzilla's catalogue of free
+# add-ons, https://gnuzilla.gnu.org/ (each page links to one release
+# on addons.mozilla.org). One per line: the number from the page's
+# address (extension.php?id=NUMBER), a space, then a name. Lines
+# starting with "#" are ignored.
+
+607454 uBlock Origin
+855413 Dark Reader
+481438 I don't care about cookies
+
+# The community fork, without the original's owner since 2022 (Avast);
+# use it instead of the line above if you prefer:
+# 2766861 I still don't care about cookies

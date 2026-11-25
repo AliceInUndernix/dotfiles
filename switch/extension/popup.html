@@ -1,0 +1,64 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=us-ascii" />
+<title>switch</title>
+<link rel="stylesheet" type="text/css" href="style.css" />
+</head>
+<body class="popup">
+<h1>switch <span class="key" id="state"></span></h1>
+<div class="warn" id="warn"></div>
+
+<div class="sect">Switches</div>
+<div class="line">
+<input type="checkbox" id="tor" />
+<label for="tor">Tor</label>
+<span class="hint">t</span>
+<div class="desc" id="tor_text"></div>
+</div>
+<div class="line">
+<input type="checkbox" id="js" />
+<label for="js">JavaScript everywhere</label>
+<span class="hint">j</span>
+</div>
+<div class="line" id="site_line">
+<input type="checkbox" id="site" />
+<label for="site" id="site_label">JavaScript on this site</label>
+<span class="hint">s</span>
+</div>
+<div class="line" id="http_line">
+<input type="checkbox" id="http" />
+<label for="http" id="http_label">Plain HTTP on this site</label>
+<span class="hint">h</span>
+</div>
+
+<div id="here">
+<div class="sect" id="host_name"></div>
+<div class="desc" id="face_text"></div>
+<div class="desc" id="ip_text"></div>
+<div class="buttons">
+<button type="button" id="face">New face <span class="hint">c</span></button>
+<button type="button" id="lookup">Look up IP <span class="hint">l</span>
+</button>
+<button type="button" id="reload">Reload <span class="hint">r</span>
+</button>
+</div>
+</div>
+
+<div class="sect">Everything</div>
+<div class="buttons">
+<button type="button" id="newid">New circuits <span class="hint">n</span>
+</button>
+<button type="button" id="ident">New identity <span class="hint">i</span>
+</button>
+<button type="button" id="wipe">Wipe all <span class="hint">w</span>
+</button>
+<button type="button" id="sites">Sites <span class="hint">d</span>
+</button>
+<button type="button" id="options">Settings <span class="hint">o</span>
+</button>
+</div>
+<script type="text/javascript" src="popup.js"></script>
+</body>
+</html>

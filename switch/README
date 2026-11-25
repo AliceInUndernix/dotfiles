@@ -1,0 +1,137 @@
+switch: handoff notes
+=====================
+
+These notes carry the goal and the state of the work into another
+project. Read them before changing anything.
+
+
+1. The goal
+-----------
+
+A privacy WebExtension for GNU IceCat, called "switch", plus scripts
+that configure an IceCat that is already installed. It must:
+
+- look dark, in IceCat's style, with habamax colours (#1c1c1c ground,
+  #bcbcbc text, #5f87af links, #af87af visited);
+- be usable from the keyboard alone: every action has a key;
+- switch JavaScript off and on, globally and per site;
+- switch Tor on and off; with Tor on, every site gets its own Tor
+  circuit (SOCKS username, IsolateSOCKSAuth) and its own fingerprint
+  profile, tied together: one IP, one profile per site;
+- answer every fingerprint probe with silence or a lie;
+- wipe at quit every site that is not kept, with its profile; kept
+  sites keep their data and their profile across restarts;
+- show a "Sites" page with all data, profile and exit IP per site;
+- look up each site's exit IP by itself (check.torproject.org, through
+  that site's own circuit), again after ten minutes;
+- be HTTPS-only, with a per-site list of sites allowed plain HTTP;
+  .onion and local addresses are exempt;
+- detect other add-ons holding the "proxy" permission, which can send
+  traffic around Tor, and warn about them.
+
+Cookie banners are NOT handled by switch: that is left to the add-on
+"I don't care about cookies", which install.sh installs.
+
+
+2. The rules the work follows
+-----------------------------
+
+- Plain files, small and self-contained, no build system, no
+  dependencies beyond IceCat itself (and curl and sed for install.sh).
+- ASCII only, English only, lines at most 80 columns, 4-space indents,
+  C-like style even in JavaScript: declarations at the top of each
+  function, one side effect per statement, braces as in K&R with
+  function braces on their own lines.
+- XHTML 1.0 Transitional pages, CSS 1 plus a little CSS 2.
+- No telemetry, no update checks, no unique IDs; nothing identifying
+  (names, hosts, paths of a real user) in code or examples.
+- Our own data in flat formats only ("host secret" lines, one host
+  per line), never nested JSON of our own design.
+- Scripts never use sudo; they run as the user, or say clearly that
+  root is needed.
+
+
+3. Files
+--------
+
+icecat-switch/       the extension (manifest v2, version 0.12)
+  manifest.json      permissions include proxy, webRequest(Blocking),
+                     management, browsingData, cookies, contentScripts
+  background.js      everything: settings, Tor routing (proxy.onRequest),
+                     isolation, HTTPS upgrade, header lies, wipes, IP
+                     lookups, rival detection, messages from the pages
+  face.js            builds a site's profile from a seed (shared by the
+                     background and the page script)
+  inject.js          page script: the lies told inside each page
+  popup.html/.js     the toolbar popup
+  options.html/.js   settings, keys 1-6 jump to the sections
+  sites.html/.js     the per-site data, profile and IP page
+  nohttps.html/.js   shown when a site has no HTTPS: h once, a always,
+                     b or Esc back
+  style.css          shared dark style
+  icon.svg
+install.sh           configures an installed IceCat profile:
+                     ./install.sh [-n] [-u] [-x] [-f] [-d] [profile]
+                     -n dry run, -u uninstall, -x skip add-ons,
+                     -f replace add-ons, -d fetch without Tor
+                     env: TOR_SOCKS (127.0.0.1:9050), ICECAT_ROOT
+icecat.prefs         130 prefs written to user.js; one per line,
+                     "name value"; install.sh -u removes exactly these
+addons.txt           GNUzilla catalogue numbers of the add-ons to fetch
+                     (uBlock Origin, Dark Reader, I don't care about
+                     cookies)
+userChrome.css       habamax colours for IceCat's own window; replaced
+                     only if absent or carrying the "switch: habamax"
+                     marker
+tidy.sh              removes the empty storage/default/<origin>
+                     directories IceCat leaves behind, whose names leak
+                     the sites visited: ./tidy.sh [-n] [-r] [profile]
+
+
+4. Key design facts
+-------------------
+
+- Profiles: the seed is face_seed(secret, gen, site_gen, site). Kept
+  hosts have their own lasting secret (state.faces, "host secret"
+  lines); all other sites use the session secret, renewed at quit.
+  New identity renews everything, kept hosts included.
+- runtime.onStartup does not fire on the first start after an update,
+  so the wipe of unkept sites runs whenever background.js loads.
+- Another extension's proxy.onRequest can override ours; that is why
+  management is used to find and name such rivals.
+- install.sh sets network.proxy.failover_direct and allow_bypass to
+  false, turns off HTTP/3 and DNS-over-HTTPS (trr.mode 5), so nothing
+  escapes Tor; and keeps IceCat's own HTTPS-only mode off, because
+  switch does it.
+- install.sh refuses to run while that profile is in use (it reads the
+  profile's "lock" link and checks the PID in it).
+- GNUzilla's pages link fixed xpi files on addons.mozilla.org, from
+  2023; install.sh fetches the page and the xpi through Tor, checks
+  the add-on id, and copies it to extensions/<id>.xpi.
+
+
+5. State
+--------
+
+Version 0.12 is written and passed: syntax checks, the 80-column and
+ASCII checks, a unit test of the HTTPS upgrade logic, and a preview of
+the popup with test data.
+
+Not yet done or not yet checked:
+
+- 0.12 is not installed: IceCat was running. Close IceCat and run
+  ./install.sh.
+- The "no HTTPS" page has not been seen with a real site lacking
+  HTTPS; that needs a real IceCat.
+- A loose switch.xpi (an old build) may still lie in the old project
+  root; it can be deleted.
+
+
+6. Ideas not yet taken up
+-------------------------
+
+- "I still don't care about cookies" (GNUzilla 2766861), the fork free
+  of Avast, in place of the original; commented out in addons.txt.
+- Tridactyl, for vim keys throughout IceCat.
+- Bind "tidy.sh -r" to a key in dwm, so IceCat is always tidied after
+  it quits.

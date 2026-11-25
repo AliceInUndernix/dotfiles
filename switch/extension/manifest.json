@@ -1,0 +1,27 @@
+{
+    "manifest_version": 2,
+    "name": "switch",
+    "version": "0.12",
+    "description": "JavaScript, Tor and anti-fingerprinting switches",
+    "browser_specific_settings": {
+        "gecko": { "id": "switch@example.org" }
+    },
+    "permissions": [
+        "proxy", "webRequest", "webRequestBlocking", "storage",
+        "privacy", "browsingData", "tabs", "cookies", "history",
+        "downloads", "bookmarks", "sessions", "alarms", "management",
+        "<all_urls>"
+    ],
+    "background": { "scripts": ["face.js", "background.js"] },
+    "browser_action": {
+        "default_title": "switch",
+        "default_icon": "icon.svg",
+        "default_popup": "popup.html"
+    },
+    "options_ui": { "page": "options.html", "open_in_tab": true },
+    "commands": {
+        "_execute_browser_action": {
+            "suggested_key": { "default": "Alt+Shift+S" }
+        }
+    }
+}

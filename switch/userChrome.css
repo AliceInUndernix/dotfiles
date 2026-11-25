@@ -1,0 +1,25 @@
+/* switch: habamax colours for IceCat's own window (tabs, toolbars,
+ * menus). install.sh copies this into the profile's chrome directory
+ * only when you have no userChrome.css of your own. */
+
+:root {
+    --toolbox-bgcolor: #1c1c1c !important;
+    --toolbox-bgcolor-inactive: #1c1c1c !important;
+    --toolbox-textcolor: #bcbcbc !important;
+    --toolbar-bgcolor: #262626 !important;
+    --toolbar-color: #bcbcbc !important;
+    --toolbar-field-background-color: #1c1c1c !important;
+    --toolbar-field-color: #bcbcbc !important;
+    --toolbar-field-focus-background-color: #1c1c1c !important;
+    --toolbar-field-focus-color: #dadada !important;
+    --toolbar-field-focus-border-color: #5f87af !important;
+    --tab-selected-bgcolor: #262626 !important;
+    --tab-selected-textcolor: #dadada !important;
+    --lwt-accent-color: #1c1c1c !important;
+    --lwt-text-color: #bcbcbc !important;
+    --arrowpanel-background: #262626 !important;
+    --arrowpanel-color: #bcbcbc !important;
+    --focus-outline-color: #5f87af !important;
+    --urlbarView-highlight-background: #3a3a3a !important;
+    --urlbarView-highlight-color: #dadada !important;
+}

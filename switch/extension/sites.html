@@ -1,0 +1,115 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=us-ascii" />
+<title>switch sites</title>
+<link rel="stylesheet" type="text/css" href="style.css" />
+</head>
+<body>
+<div id="wide">
+<h1>switch sites</h1>
+<p class="intro">Every site with cookies, history, or a place in your
+lists. Keys: <span class="key">j</span>/<span class="key">k</span>
+move, <span class="key">/</span> filter, <span class="key">p</span>
+keep, <span class="key">f</span> forget, <span class="key">c</span> new
+face, <span class="key">i</span> look up IP, <span class="key">a</span>
+look up all, <span class="key">h</span> clear history,
+<span class="key">s</span> read storage, <span class="key">w</span> wipe
+unkept, <span class="key">r</span> refresh.</p>
+<p>
+<input type="text" class="text" id="filter" />
+<span id="count" class="key"></span>
+<span id="status" class="key"></span>
+</p>
+<table>
+<thead>
+<tr>
+<th>Site</th><th>Kept</th><th>JavaScript</th><th>Cookies</th>
+<th>History</th><th>Profile</th><th>Circuit</th><th>Exit IP</th>
+</tr>
+</thead>
+<tbody id="rows"></tbody>
+</table>
+
+<div id="detail">
+<h2 id="d_host"></h2>
+<div id="d_text"></div>
+<p>
+<button type="button" id="b_keep">Keep [p]</button>
+<button type="button" id="b_forget">Forget [f]</button>
+<button type="button" id="b_face">New face [c]</button>
+<button type="button" id="b_ip">Look up IP [i]</button>
+<button type="button" id="b_hist">Clear history [h]</button>
+<button type="button" id="b_storage">Read storage [s]</button>
+</p>
+
+<h3>Cookies</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th><th>Value</th><th>Domain</th><th>Path</th>
+<th>Expires</th><th>Flags</th><th>Stored under</th>
+</tr>
+</thead>
+<tbody id="d_cookies"></tbody>
+</table>
+
+<h3>Storage</h3>
+<p class="desc">Local storage, session storage and IndexedDB can be
+read only while a tab of this site is open; press s.</p>
+<table>
+<thead>
+<tr><th>Kind</th><th>Key</th><th>Value</th></tr>
+</thead>
+<tbody id="d_storage"></tbody>
+</table>
+
+<h3>History</h3>
+<table>
+<thead>
+<tr><th>Last visit</th><th>Visits</th><th>Title</th><th>Address</th></tr>
+</thead>
+<tbody id="d_history"></tbody>
+</table>
+
+<h3>Downloads</h3>
+<table>
+<thead>
+<tr><th>Started</th><th>File</th><th>Address</th><th>State</th></tr>
+</thead>
+<tbody id="d_downloads"></tbody>
+</table>
+
+<h3>Bookmarks</h3>
+<table>
+<thead>
+<tr><th>Title</th><th>Address</th></tr>
+</thead>
+<tbody id="d_bookmarks"></tbody>
+</table>
+
+<h3>Open tabs</h3>
+<table>
+<thead>
+<tr><th>Title</th><th>Address</th></tr>
+</thead>
+<tbody id="d_tabs"></tbody>
+</table>
+
+<h3>Recently closed tabs</h3>
+<table>
+<thead>
+<tr><th>Title</th><th>Address</th></tr>
+</thead>
+<tbody id="d_closed"></tbody>
+</table>
+
+<p class="desc">The cache cannot be listed by site; it is cleared
+whole. Saved passwords and site permissions are not open to
+extensions.</p>
+</div>
+</div>
+<script type="text/javascript" src="sites.js"></script>
+</body>
+</html>

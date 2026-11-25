@@ -1,0 +1,301 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=us-ascii" />
+<title>switch settings</title>
+<link rel="stylesheet" type="text/css" href="style.css" />
+</head>
+<body>
+<div id="page">
+<h1>switch settings</h1>
+<p class="intro">Every question a site asks gets either no answer or
+the same false answer that everyone else gives. Changes to page lies
+apply on the next page load.</p>
+<p id="toc">Jump: <a href="#s1">1 Network</a> &nbsp;
+<a href="#s2">2 Scripts</a> &nbsp; <a href="#s3">3 Fingerprinting</a>
+&nbsp; <a href="#s4">4 Tracking</a> &nbsp; <a href="#s5">5 Data</a>
+&nbsp; <a href="#s6">6 Actions</a>. Tab moves between settings,
+Space ticks a box. Every change is saved at once.</p>
+<div id="saved">Saved</div>
+
+<h2 id="s1">Network</h2>
+<div class="row">
+<input type="checkbox" id="tor" />
+<label for="tor">Route all traffic through Tor</label>
+<div class="desc">SOCKS5 at 127.0.0.1:9050 with remote DNS. Also
+covers IceCat's own background traffic. Nothing loads when Tor is not
+running; nothing ever goes around it.</div>
+</div>
+<div class="row">
+<input type="checkbox" id="https" />
+<label for="https">HTTPS only</label>
+<div class="desc">Turns plain http:// addresses into https://, so that
+no Tor exit relay can read or change your pages. A site without HTTPS
+shows a page where you may load it over HTTP once, or always.</div>
+</div>
+<div class="row">
+<label for="http_ok">Sites allowed plain HTTP</label>
+<div class="desc">One host name per line; a host also covers its
+subdomains. Onion and local addresses never need it.</div>
+<textarea id="http_ok" rows="3" cols="40"></textarea>
+</div>
+<div class="row">
+<label for="iso">Separate Tor circuits by</label>
+<div class="desc">Used only with uniform fingerprints. With profiles,
+each site gets its own circuit, paired with its own profile.</div>
+<select id="iso">
+<option value="both">Tab and site</option>
+<option value="tab">Tab</option>
+<option value="site">Site</option>
+</select>
+</div>
+<div class="row">
+<input type="checkbox" id="wipe_switch" />
+<label for="wipe_switch">Wipe data and circuits when Tor is
+switched</label>
+<div class="desc">Stops cookies from linking your Tor visits to your
+ordinary ones.</div>
+</div>
+<div class="row">
+<input type="checkbox" id="auto_ip" />
+<label for="auto_ip">Look up each site's exit IP by itself</label>
+<div class="desc">When a page has loaded, asks check.torproject.org,
+through that site's own circuit, which exit it uses. Repeated after
+ten minutes, when Tor changes circuits.</div>
+</div>
+<div class="row">
+<input type="checkbox" id="webrtc" />
+<label for="webrtc">Disable WebRTC</label>
+<div class="desc">WebRTC can reveal your real address behind a proxy
+or VPN. It is always disabled while Tor is on.</div>
+</div>
+<div class="row">
+<input type="checkbox" id="lan" />
+<label for="lan">Block sites from reaching your local network</label>
+<div class="desc">Stops web pages from scanning localhost ports and
+devices on your network.</div>
+</div>
+
+<h2 id="s2">Scripts</h2>
+<div class="row">
+<input type="checkbox" id="js" />
+<label for="js">Allow JavaScript</label>
+<div class="desc">When off, scripts are blocked on every new page
+load, except on the sites listed below.</div>
+</div>
+<div class="row">
+<label for="sites">Sites where JavaScript is always allowed</label>
+<div class="desc">One host name per line. A host also covers its
+subdomains.</div>
+<textarea id="sites" rows="4" cols="40"></textarea>
+</div>
+
+<h2 id="s3">Fingerprinting</h2>
+<div class="row">
+<label for="fp">Fingerprint</label>
+<div class="desc">Profiles: every site gets its own believable
+profile, with its own system, screen, processor count and faint
+canvas and audio noise, tied to its own Tor circuit. One IP, one
+profile; a site sees nothing that links it to another site. New
+circuits or a new identity give every site a new profile. Uniform: the
+same answers for everyone, with a blank canvas and no Web Audio.</div>
+<select id="fp">
+<option value="profile">A profile for each site and circuit</option>
+<option value="uniform">The same for everyone</option>
+</select>
+</div>
+<div class="row">
+<input type="checkbox" id="rfp" />
+<label for="rfp">Resist fingerprinting</label>
+<div class="desc">IceCat's own measures: UTC timezone, rounded window
+size, coarse timers. Keep this on; the lies below build on it.</div>
+</div>
+<div class="row">
+<label for="ua">Browser identity</label>
+<div class="desc">Used only with uniform fingerprints. Default keeps
+IceCat's own. The others lie in the headers and in navigator.</div>
+<select id="ua">
+<option value="default">Default (IceCat)</option>
+<option value="win">Firefox on Windows</option>
+<option value="linux">Firefox on Linux</option>
+</select>
+</div>
+<div class="row">
+<input type="checkbox" id="lang" />
+<label for="lang">Claim to speak American English</label>
+<div class="desc">The Accept-Language header and navigator.languages
+both say en-US.</div>
+</div>
+<div class="row">
+<input type="checkbox" id="hw" />
+<label for="hw">Hide hardware</label>
+<div class="desc">No WebGL, no cameras or microphones, no gamepads,
+no speech voices, and a fixed disk quota. Maps and 3D sites will
+break.</div>
+</div>
+<div class="row">
+<input type="checkbox" id="canvas" />
+<label for="canvas">Protect canvas readout</label>
+<div class="desc">With profiles, faint noise unique to the profile.
+Uniform: an empty image, the same for everyone.</div>
+</div>
+<div class="row">
+<input type="checkbox" id="audio" />
+<label for="audio">Protect Web Audio</label>
+<div class="desc">With profiles, inaudible noise unique to the
+profile. Uniform: Web Audio is removed, and some players and games
+will not work.</div>
+</div>
+<div class="row">
+<input type="checkbox" id="screen" />
+<label for="screen">Claim a 1920x1080 screen</label>
+<div class="desc">Used only with uniform fingerprints; profiles always
+claim a screen of their own.</div>
+</div>
+<div class="row">
+<label for="geo">Location</label>
+<div class="desc">Deny refuses every request. Fake answers with the
+place below.</div>
+<select id="geo">
+<option value="deny">Deny</option>
+<option value="fake">Fake</option>
+<option value="allow">Ask as usual</option>
+</select>
+<br />
+<input type="text" class="text" id="geo_lat" />
+<input type="text" class="text" id="geo_lon" />
+</div>
+<div class="row">
+<label for="exempt">Sites exempt from page lies</label>
+<div class="desc">One host name per line, for sites that break.
+Network protections still apply there.</div>
+<textarea id="exempt" rows="4" cols="40"></textarea>
+</div>
+
+<h2 id="s4">Tracking</h2>
+<div class="row">
+<input type="checkbox" id="ref" />
+<label for="ref">Hide where you came from</label>
+<div class="desc">Drops the Referer header and empties
+document.referrer when you cross to another host.</div>
+</div>
+<div class="row">
+<input type="checkbox" id="strip" />
+<label for="strip">Remove tracking parameters from addresses</label>
+<div class="desc">Strips utm_*, fbclid, gclid and similar tags.</div>
+</div>
+<div class="row">
+<input type="checkbox" id="skip" />
+<label for="skip">Skip redirect trackers</label>
+<div class="desc">Links wrapped by Google, Facebook, YouTube, Reddit,
+DuckDuckGo, VK, Steam and Slack go straight to their target.</div>
+</div>
+<div class="row">
+<input type="checkbox" id="beacon" />
+<label for="beacon">Block beacons and reports</label>
+<div class="desc">Cancels sendBeacon, link pings, CSP reports and
+speculative connections.</div>
+</div>
+<div class="row">
+<input type="checkbox" id="etag" />
+<label for="etag">Stop ETag tracking</label>
+<div class="desc">Cache tags can work as hidden cookies. Pages are
+fetched in full more often.</div>
+</div>
+<div class="row">
+<input type="checkbox" id="fonts" />
+<label for="fonts">Block web fonts</label>
+<div class="desc">Some icons will show as squares.</div>
+</div>
+<div class="row">
+<input type="checkbox" id="cookies" />
+<label for="cookies">Block third-party cookies</label>
+</div>
+<div class="row">
+<input type="checkbox" id="fpi" />
+<label for="fpi">Isolate each site</label>
+<div class="desc">First-party isolation of cookies, cache and
+storage. A few logins through another site may fail.</div>
+</div>
+<div class="row">
+<input type="checkbox" id="audit" />
+<label for="audit">Disable hyperlink auditing</label>
+</div>
+<div class="row">
+<input type="checkbox" id="predict" />
+<label for="predict">Disable prefetching</label>
+</div>
+
+<h2 id="s5">Data</h2>
+<div class="row">
+<input type="checkbox" id="forget" />
+<label for="forget">Forget a site when its last tab closes</label>
+<div class="desc">Removes its cookies and local storage.</div>
+</div>
+<div class="row">
+<label for="keep">Sites to keep</label>
+<div class="desc">One host name per line; a host also covers its
+subdomains. Their cookies, storage and profile survive every wipe
+except New identity and Wipe data now. Every other site gets a new
+profile at each quit.</div>
+<textarea id="keep" rows="4" cols="40"></textarea>
+</div>
+<div class="row">
+<input type="checkbox" id="wipe" />
+<label for="wipe">Wipe every site that is not kept, at quit</label>
+<div class="desc">Runs when the last window closes, and again at
+startup in case IceCat quit too fast. Removes cookies, local storage,
+IndexedDB and service workers of every site not kept, and the history,
+downloads list, form history and closed tabs as set below. The install
+script also makes IceCat itself clear its cache, form history,
+downloads list and logins at every quit, and keeps the disk cache
+off.</div>
+</div>
+<div class="row">
+<label for="hist">History at quit</label>
+<div class="desc">Unkept: the history of every unkept site is removed,
+and kept sites lose history older than the days below.</div>
+<select id="hist">
+<option value="unkept">Remove unkept sites</option>
+<option value="all">Remove all</option>
+<option value="off">Leave alone</option>
+</select>
+</div>
+<div class="row">
+<label for="hist_days">Keep history for this many days</label>
+<div class="desc">Older history is removed every hour and at quit.
+0 keeps it for ever.</div>
+<input type="text" class="text" id="hist_days" />
+</div>
+<div class="row">
+<label for="cache_min">Clear the cache every this many minutes</label>
+<div class="desc">The cache is always cleared at quit. 0 clears it
+only then.</div>
+<input type="text" class="text" id="cache_min" />
+</div>
+<div class="row">
+<input type="checkbox" id="dl" />
+<label for="dl">Clear the downloads list at quit</label>
+<div class="desc">Only the list; the files stay on disk.</div>
+</div>
+<div class="row">
+<input type="checkbox" id="forms" />
+<label for="forms">Clear form and search history at quit</label>
+</div>
+<div class="row">
+<input type="checkbox" id="closed" />
+<label for="closed">Forget recently closed tabs and windows at
+quit</label>
+</div>
+<h2 id="s6">Actions</h2>
+<div>
+<button type="button" id="showsites">Show sites</button>
+<button type="button" id="newid">New Tor circuits</button>
+<button type="button" id="ident">New identity</button>
+<button type="button" id="wipenow">Wipe everything now</button>
+</div>
+</div>
+<script type="text/javascript" src="options.js"></script>
+</body>
+</html>
