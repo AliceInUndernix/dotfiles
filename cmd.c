@@ -19,7 +19,9 @@ int ctx_ready(struct ctx *c)
     return 0;
 }
 
-int cmd_update(struct ctx *c)
+/* file: a CKAN-meta tarball already on disk (fetched some other way,
+   for example over Tor), or NULL to download c->repo */
+int cmd_update(struct ctx *c, const char *file)
 {
     char *part, *text;
     unsigned char *tar;
@@ -31,20 +33,29 @@ int cmd_update(struct ctx *c)
         fprintf(stderr, "kspkan: cannot create %s\n", c->shared);
         return 1;
     }
-    part = shared_path(c, "meta.tar.gz.part");
-    printf("fetching %s\n", c->repo);
-    rc = fetch_url(c->repo, part, 0);
-    if (rc < 0) {
-        fprintf(stderr, "kspkan: download failed\n");
+    if (file != NULL) {
+        printf("reading %s\n", file);
+        text = read_file(file, &len, 1L << 28);
+        if (text == NULL) {
+            fprintf(stderr, "kspkan: cannot read %s\n", file);
+            return 1;
+        }
+    } else {
+        part = shared_path(c, "meta.tar.gz.part");
+        printf("fetching %s\n", c->repo);
+        rc = fetch_url(c->repo, part, 0);
+        if (rc < 0) {
+            fprintf(stderr, "kspkan: download failed\n");
+            free(part);
+            return 1;
+        }
+        text = read_file(part, &len, 1L << 28);
+        unlink(part);
         free(part);
-        return 1;
-    }
-    text = read_file(part, &len, 1L << 28);
-    unlink(part);
-    free(part);
-    if (text == NULL) {
-        fprintf(stderr, "kspkan: cannot read download\n");
-        return 1;
+        if (text == NULL) {
+            fprintf(stderr, "kspkan: cannot read download\n");
+            return 1;
+        }
     }
     tar = gunzip_alloc((unsigned char *)text, len, 1L << 30, &tlen);
     free(text);
@@ -80,7 +91,7 @@ int cmd_search(struct ctx *c, const char *term)
             continue;
         }
         m = registry_find(&c->reg, s->id);
-        printf("%c %-30.30s %8ld  %-10s  %s\n", m != NULL ? 'i' : ' ',
+        printf("%c %-30s %8ld  %-10s  %s\n", m != NULL ? 'i' : ' ',
             s->id, s->downloads, s->date, s->name);
         shown++;
     }

@@ -15,15 +15,16 @@ python3 -I - "$W/www" <<'PY'
 import sys, zipfile
 www = sys.argv[1]
 for name, ver in (("Lib", "1.0"), ("App", "1.0"), ("Base", "1.0"),
-                  ("Base", "2.0"), ("Other", "1.0")):
+                  ("Base", "2.0"), ("Other", "1.0"), ("NeedsVirt", "1.0"),
+                  ("ProvA", "1.0"), ("ProvB", "1.0"), ("ProvC", "1.0")):
     z = zipfile.ZipFile("%s/%s-%s.zip" % (www, name, ver), "w")
     z.writestr("%s/%s.txt" % (name, name), "%s %s\n" % (name, ver))
     z.close()
 PY
 
-# addmod ID VERSION DEPENDS(json array or empty)
+# addmod ID VERSION DEPENDS(json array or empty) [PROVIDES [KSPMAX]]
 addmod() {
-    id=$1; ver=$2; deps=$3
+    id=$1; ver=$2; deps=$3; prov=${4:-}; kmax=${5:-}
     zip=$id-$ver.zip
     dep=
     [ -z "$deps" ] || dep="\"depends\":$deps,"
@@ -37,8 +38,9 @@ addmod() {
 "download_hash":{"sha256":"$sum"},$dep
 "install":[{"find":"$id","install_to":"GameData"}]}
 EOT
-    printf '%s\t%s\t%s-%s.ckan\t\t\t\tpackage\tstable\t\n' "$id" "$ver" \
-        "$id" "$ver" >> "$S/index"
+    printf '%s\t%s\t%s-%s.ckan\t\t\t%s\tpackage\tstable\t%s\n' "$id" \
+        "$ver" "$id" "$ver" "$kmax" "$prov" >> "$S/index"
+    [ -z "$prov" ] || printf '%s\t%s\n' "$prov" "$id" >> "$S/provides"
 }
 addsum() {
     printf '%s\t%s\t%s mod\tthe %s test module\t\t\t\t\t0\t\n' \
@@ -50,8 +52,13 @@ addmod App 1.0 '[{"name":"Lib"}]'
 addmod Base 2.0
 addmod Base 1.0
 addmod Lib 1.0
+addmod NeedsVirt 1.0 '[{"name":"Virt"}]'
 addmod Other 1.0
-addsum App 1.0; addsum Base 2.0; addsum Lib 1.0; addsum Other 1.0
+addmod ProvA 1.0 '' Virt
+addmod ProvB 1.0 '' Virt 1.0.5
+addmod ProvC 1.0
+addsum App 1.0; addsum Base 2.0; addsum Lib 1.0; addsum NeedsVirt 1.0
+addsum Other 1.0; addsum ProvA 1.0; addsum ProvB 1.0; addsum ProvC 1.0
 
 (cd "$W/www" && exec python3 -I -m http.server "$PORT" --bind 127.0.0.1 \
     >/dev/null 2>&1) &
@@ -196,6 +203,23 @@ t "the imported modpack installs" sh -c \
     "\"$KK\" -g '$G' -s '$S' -k 1.12.5 list | grep -q '^App 1.0$' &&
     \"$KK\" -g '$G' -s '$S' -k 1.12.5 list | grep -q '^Base 1.0$' &&
     \"$KK\" -g '$G' -s '$S' -k 1.12.5 list | grep -q '^Other 1.0$'"
+
+echo "== a dependency several mods provide"
+kk install NeedsVirt >/dev/null 2>&1
+t "the one provider that fits the game is taken" listed '^ProvA 1.0 (dep'
+kk remove NeedsVirt >/dev/null 2>&1
+t "and goes with what needed it" sh -c "! \"$KK\" -g '$G' -s '$S' \
+    -k 1.12.5 list | grep -q '^ProvA'"
+printf '%s\t%s\n' Virt ProvC >> "$S/provides"
+sed 's/^\(ProvC\t.*\t\)$/\1Virt/' "$S/index" > "$S/index.new"
+mv "$S/index.new" "$S/index"
+t "two that fit: refused, naming both" sh -c "\"$KK\" -g '$G' -s '$S' \
+    -k 1.12.5 -y install NeedsVirt 2>&1 | grep -q 'ProvA, ProvC'"
+kk install NeedsVirt ProvC >/dev/null 2>&1
+t "the one named with it wins" sh -c "\"$KK\" -g '$G' -s '$S' \
+    -k 1.12.5 list | grep -q '^ProvC 1.0' && ! \"$KK\" -g '$G' -s '$S' \
+    -k 1.12.5 list | grep -q '^ProvA'"
+kk remove NeedsVirt ProvC >/dev/null 2>&1
 
 echo "== unneeded dependencies"
 kk remove App >/dev/null 2>&1

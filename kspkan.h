@@ -250,7 +250,7 @@ int fetch_url(const char *url, const char *out, int quiet);
 #define DEFAULT_REPO \
     "https://github.com/KSP-CKAN/CKAN-meta/archive/master.tar.gz"
 
-int cmd_update(struct ctx *c);
+int cmd_update(struct ctx *c, const char *file);
 int cmd_search(struct ctx *c, const char *term);
 int cmd_show(struct ctx *c, const char *id);
 int cmd_list(struct ctx *c);

@@ -7,6 +7,14 @@
       "ckan list".  Only reading: nothing is written in CKAN's formats,
       and no JSON is kept.
     - modlists may name a mod without a version (newest that fits)
+    - update FILE reads a CKAN-meta .tar.gz you fetched yourself (over
+      Tor, on another computer), instead of downloading it
+    - fixed: a dependency that several mods provide (FAR, for one) was
+      refused even when only one of them fits the game; now only the
+      ones that fit count, one you name on the command line wins, and
+      the message lists the choices
+    - fixed: search cut long ids at 30 letters, so two could look the
+      same
     - tests/modlist.sh checks every import format
 
 0.2.0  2026-11-24

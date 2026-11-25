@@ -18,7 +18,8 @@ Then  kspkan  opens a full screen mode on the game you used last.  Press
 
 COMMANDS
 
-    kspkan update                   fetch the module list
+    kspkan update [FILE]            fetch the module list (FILE: a
+                                    CKAN-meta .tar.gz fetched elsewhere)
     kspkan search [QUERY]           list modules (see SEARCH)
     kspkan show ID                  describe a module
     kspkan list                     installed modules

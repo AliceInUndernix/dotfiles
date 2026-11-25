@@ -1387,7 +1387,7 @@ static void do_update(struct ctx *c, struct view *v)
     int rc;
 
     raw_off();
-    cmd_update(c);
+    cmd_update(c, NULL);
     memset(&c->ix, 0, sizeof(c->ix));
     rc = index_load(c);
     if (rc < 0) {

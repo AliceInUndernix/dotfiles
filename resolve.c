@@ -29,6 +29,9 @@ struct solver {
     long steps;
     char *err;
     int errsz;
+    char **want;
+    int nwant;
+    char choices[200];
 };
 
 static void set_err(struct solver *s, const char *a, const char *b,
@@ -225,8 +228,69 @@ static int id_chosen(struct solver *s, const char *id)
     return 0;
 }
 
-/* candidates answering alt, newest first.  Returns the count; sets
-   *ambig when the name is virtual and several modules provide it */
+/* is id one of the modules asked for (as id or id=version)? */
+static int asked_for(struct solver *s, const char *id)
+{
+    long n;
+    int i;
+
+    n = (long)strlen(id);
+    for (i = 0; i < s->nwant; i++) {
+        if (strncmp(s->want[i], id, (unsigned long)n) == 0 &&
+            (s->want[i][n] == 0 || s->want[i][n] == '='))
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* the usable versions of one module for alt, newest first, added to
+   out from n on; the new count */
+static int usable(struct solver *s, const struct req *alt, const char *id,
+    struct entry **out, int n)
+{
+    struct ctx *c;
+    struct entry *e;
+    int cnt, i;
+
+    c = s->c;
+    e = index_find(&c->ix, id, &cnt);
+    if (e == NULL || id_chosen(s, e->id)) {
+        return n;
+    }
+    for (i = 0; i < cnt && n < MAX_CANDS; i++) {
+        if (strcmp(e[i].kind, "dlc") == 0) {
+            continue;
+        }
+        if (!c->testing && alt->exact == NULL &&
+            strcmp(e[i].status, "stable") != 0)
+        {
+            continue;
+        }
+        if (!entry_compat(c, &e[i])) {
+            continue;
+        }
+        if (strcmp(e[i].id, alt->name) == 0 &&
+            !version_ok(e[i].version, alt))
+        {
+            continue;
+        }
+        if (strcmp(e[i].id, alt->name) != 0 &&
+            !has_provide(&e[i], alt->name))
+        {
+            continue;
+        }
+        out[n] = &e[i];
+        n++;
+    }
+    return n;
+}
+
+/* candidates answering alt, newest first.  Returns the count.  A
+   virtual name that several modules can answer in this game sets
+   *ambig and lists them in s->choices, unless just one of them is
+   among the modules asked for */
 static int candidates(struct solver *s, const struct req *alt,
     struct entry **out, int *ambig)
 {
@@ -235,68 +299,75 @@ static int candidates(struct solver *s, const struct req *alt,
     char *ids[16];
     char *line, *tab;
     long nl;
-    int cnt, n, i, k, nids, same;
+    int cnt, n, i, k, nids, same, nuse, asked, m;
 
     c = s->c;
     *ambig = 0;
-    n = 0;
-    nids = 0;
-    ids[0] = NULL;
     e = index_find(&c->ix, alt->name, &cnt);
     if (e != NULL) {
-        ids[0] = e->id;
-        nids = 1;
-    } else {
-        nl = (long)strlen(alt->name);
-        for (i = 0; i < c->ix.np; i++) {
-            line = c->ix.prov[i];
-            if (strncmp(line, alt->name, (unsigned long)nl) != 0 ||
-                line[nl] != '\t')
-            {
-                continue;
-            }
-            tab = line + nl + 1;
-            same = 0;
-            for (k = 0; k < nids; k++) {
-                if (strcmp(ids[k], tab) == 0) {
-                    same = 1;
-                }
-            }
-            if (!same && nids < 16) {
-                ids[nids] = tab;
-                nids++;
-            }
-        }
-        if (nids > 1) {
-            *ambig = 1;
-            return 0;
-        }
+        return usable(s, alt, e->id, out, 0);
     }
-    for (k = 0; k < nids; k++) {
-        e = index_find(&c->ix, ids[k], &cnt);
-        if (e == NULL || id_chosen(s, e->id)) {
+    nids = 0;
+    nl = (long)strlen(alt->name);
+    for (i = 0; i < c->ix.np; i++) {
+        line = c->ix.prov[i];
+        if (strncmp(line, alt->name, (unsigned long)nl) != 0 ||
+            line[nl] != '\t')
+        {
             continue;
         }
-        for (i = 0; i < cnt && n < MAX_CANDS; i++) {
-            if (strcmp(e[i].kind, "dlc") == 0) {
-                continue;
+        tab = line + nl + 1;
+        same = 0;
+        for (k = 0; k < nids; k++) {
+            if (strcmp(ids[k], tab) == 0) {
+                same = 1;
             }
-            if (!c->testing && alt->exact == NULL &&
-                strcmp(e[i].status, "stable") != 0)
-            {
-                continue;
-            }
-            if (!entry_compat(c, &e[i])) {
-                continue;
-            }
-            if (strcmp(e[i].id, alt->name) == 0 &&
-                !version_ok(e[i].version, alt))
-            {
-                continue;
-            }
-            out[n] = &e[i];
-            n++;
         }
+        if (!same && nids < 16) {
+            ids[nids] = tab;
+            nids++;
+        }
+    }
+    /* keep the modules that have a usable version; of those, the ones
+       asked for by name win */
+    nuse = 0;
+    asked = 0;
+    for (k = 0; k < nids; k++) {
+        if (usable(s, alt, ids[k], out, 0) == 0) {
+            continue;
+        }
+        ids[nuse] = ids[k];
+        nuse++;
+        if (asked_for(s, ids[k])) {
+            asked++;
+        }
+    }
+    if (asked > 0) {
+        m = 0;
+        for (k = 0; k < nuse; k++) {
+            if (asked_for(s, ids[k])) {
+                ids[m] = ids[k];
+                m++;
+            }
+        }
+        nuse = m;
+    }
+    if (nuse > 1) {
+        *ambig = 1;
+        s->choices[0] = 0;
+        for (k = 0; k < nuse; k++) {
+            if (strlen(s->choices) + strlen(ids[k]) + 3 <
+                sizeof(s->choices))
+            {
+                strcat(s->choices, k > 0 ? ", " : "");
+                strcat(s->choices, ids[k]);
+            }
+        }
+        return 0;
+    }
+    n = 0;
+    for (k = 0; k < nuse; k++) {
+        n = usable(s, alt, ids[k], out, n);
     }
     return n;
 }
@@ -371,8 +442,8 @@ static int solve(struct solver *s, struct goal *g)
         }
         nc = candidates(s, &alts[a], cand, &ambig);
         if (ambig) {
-            set_err(s, alts[a].name, " is provided by several modules; ",
-                "install the one you want by name", "");
+            set_err(s, alts[a].name, " is provided by several modules (",
+                s->choices, "); install the one you want with it");
             continue;
         }
         for (i = 0; i < nc; i++) {
@@ -462,6 +533,9 @@ int resolve(struct ctx *c, char **want, int nwant, char **skip, int nskip,
     s.steps = 0;
     s.err = err;
     s.errsz = errsz;
+    s.want = want;
+    s.nwant = nwant;
+    s.choices[0] = 0;
     locals = (struct entry *)xalloc((long)(c->reg.n + 1) *
         (long)sizeof(struct entry));
     nlocal = 0;

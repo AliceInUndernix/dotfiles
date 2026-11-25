@@ -18,8 +18,11 @@ With no command it opens a full screen mode; press
 there for the keys.
 .SH COMMANDS
 .TP
-.B update
-Fetch the module list.
+.BI update " [file]"
+Fetch the module list.  With a
+.IR file ,
+read a CKAN-meta .tar.gz fetched some other way (over Tor, on another
+computer) instead of downloading.
 .TP
 .BI search " [query]"
 List modules.  Words are ANDed; a leading \- excludes a word.  Also:

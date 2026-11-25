@@ -9,7 +9,8 @@ static void usage(void)
     fputs("usage: kspkan [-g GAMEDIR] [-k KSPVERSION] [-a] [-t] [-f] [-y]\n"
         "              [-p] [-r URL] [-i NAME] [COMMAND [ARGS]]\n\n"
         "  no command            full screen mode (? shows the keys)\n"
-        "  update                fetch the module list\n"
+        "  update [FILE]         fetch the module list (or read a\n"
+        "                        CKAN-meta .tar.gz you fetched)\n"
         "  search [QUERY]        list modules (author:x dl>5k sort:new ...)\n"
         "  show ID               describe a module\n"
         "  list                  installed modules\n"
@@ -252,7 +253,7 @@ int main(int argc, char **argv)
         return 1;
     }
     if (strcmp(cmd, "update") == 0) {
-        return cmd_update(&c);
+        return cmd_update(&c, i < argc ? argv[i] : NULL);
     }
     if (cmd[0] == 0) {
         return cmd_tui(&c);

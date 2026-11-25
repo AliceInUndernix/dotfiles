@@ -388,7 +388,7 @@ int inst_first_run(struct ctx *c)
     if (rc != 0) {
         ask("Fetch the module list now? [Y/n] ", line, sizeof(line));
         if (line[0] != 'n' && line[0] != 'N') {
-            cmd_update(c);
+            cmd_update(c, NULL);
         }
     }
     return 0;
