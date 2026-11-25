@@ -742,7 +742,8 @@ static struct entry *reg_entry(struct ctx *c, struct inst *m)
             return &e[k];
         }
     }
-    return NULL;
+    /* a found module of a version not known: what the newest needs */
+    return m->found ? e : NULL;
 }
 
 /* ids to remove: those asked for, installed modules that need them, and

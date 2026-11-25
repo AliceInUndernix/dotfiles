@@ -1,4 +1,4 @@
-.TH KSPKAN 1 2026-11-25 "kspkan 0.3.2"
+.TH KSPKAN 1 2026-11-25 "kspkan 0.4.0"
 .SH NAME
 kspkan \- small mod manager for Kerbal Space Program
 .SH SYNOPSIS
@@ -38,7 +38,18 @@ Describe a module.
 .B list
 Installed modules: those you chose, then the dependencies, each with
 the modules that need it.  A dependency nothing needs is pointed out
-(autoremove takes it).
+(autoremove takes it).  Modules found in the game are marked (found);
+then the DLCs and the GameData directories the module list does not
+know.
+.TP
+.B scan
+Find the mods already in the game, put there by CKAN (from
+CKAN/registry.json) or by hand (matched by the directories and files
+their metadata would make; the version from a file name or a .version
+file, else ?), and mark them found.  This also happens on its own when
+GameData or CKAN/registry.json has changed.  Found mods can be
+upgraded and removed; their files are never moved.  DLCs and unknown
+directories are only named.
 .TP
 .BI install " id[=version] ..."
 Install modules and what they need.  Recommended and suggested modules

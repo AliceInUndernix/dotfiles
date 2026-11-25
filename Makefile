@@ -1,4 +1,4 @@
-VERSION = 0.3.2
+VERSION = 0.4.0
 CC = cc
 CFLAGS = -std=c89 -pedantic -Wall -Wextra -Wno-long-long \
     -D_POSIX_C_SOURCE=200809L -O2
@@ -9,7 +9,7 @@ MANDIR = $(PREFIX)/share/man/man1
 OBJS = main.o util.o sha1.o sha256.o crc32.o hashfile.o version.o \
     inflate.o archive.o json.o rx.o registry.o index.o fetch.o \
     instances.o cmd.o resolve.o install.o tui.o query.o modlist.o \
-    ckan.o
+    ckan.o scan.o
 
 all: kspkan
 

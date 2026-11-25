@@ -1,3 +1,14 @@
+0.4.0  2026-11-25
+    - mods already in the game are found and marked "found" (f in the
+      full screen mode, (found) in list, search is:found): what CKAN
+      installed, from CKAN/registry.json, and what was put in by hand,
+      matched against the module list (version from a file name or a
+      .version file, else ?).  On its own when GameData or CKAN's
+      registry changed; kspkan scan by hand.  The DLCs and directories
+      the module list does not know (Principia) are named, never
+      touched.
+    - tests/modlist.sh checks it
+
 0.3.2  2026-11-25
     - a dependency that several mods provide (ClassicStockResources-
       PlayMode, Kerbalism-Config, RSSTextures) no longer stops an

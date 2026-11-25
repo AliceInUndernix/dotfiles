@@ -16,6 +16,7 @@ int ctx_ready(struct ctx *c)
     }
     registry_load(c);
     ksp_detect(c);
+    scan_run(c, 1);
     return 0;
 }
 
@@ -203,19 +204,24 @@ int cmd_show(struct ctx *c, const char *id)
 int cmd_list(struct ctx *c)
 {
     struct inst *m;
+    struct strs more;
     int i, pass;
 
     if (c->ix.n == 0 && index_load(c) < 0) {
         memset(&c->ix, 0, sizeof(c->ix));
     }
+    ksp_detect(c);
+    scan_run(c, 1);
     for (pass = 0; pass < 2; pass++) {
         for (i = 0; i < c->reg.n; i++) {
             m = &c->reg.v[i];
             if (m->autoinst != pass) {
                 continue;
             }
-            printf("%s %s%s", m->id, m->version,
-                m->autoinst ? " (dependency)" : "");
+            printf("%s %s%s%s", m->id, m->found &&
+                strcmp(m->version, "0") == 0 ? "?" : m->version,
+                m->autoinst ? " (dependency)" : "", m->found ?
+                " (found)" : "");
             if (m->autoinst && is_orphan(c, m->id) && c->ix.n > 0) {
                 printf(" nothing needs it (kspkan autoremove)");
             }
@@ -225,6 +231,20 @@ int cmd_list(struct ctx *c)
             }
         }
     }
+    more.v = NULL;
+    more.n = 0;
+    more.cap = 0;
+    scan_dlcs(c, &more);
+    for (i = 0; i < more.n; i++) {
+        printf("%s (DLC, part of the game)\n", more.v[i]);
+    }
+    strs_free(&more);
+    scan_others(c, &more);
+    for (i = 0; i < more.n; i++) {
+        printf("GameData/%s (found, not in the module list; left alone)\n",
+            more.v[i]);
+    }
+    strs_free(&more);
     return 0;
 }
 

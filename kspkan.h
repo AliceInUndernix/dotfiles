@@ -1,7 +1,7 @@
 #ifndef KSPKAN_H
 #define KSPKAN_H
 
-#define KSPKAN_VERSION "0.3.2"
+#define KSPKAN_VERSION "0.4.0"
 
 /* ---- util.c ---- */
 
@@ -177,6 +177,7 @@ struct inst {
     char *id;
     char *version;
     int autoinst;
+    int found;
     struct strs files;
 };
 
@@ -208,6 +209,7 @@ struct ctx {
     int mono;
     int withsug;
     struct strs picks;
+    int noscan;
     struct index ix;
     struct registry reg;
 };
@@ -378,6 +380,13 @@ int cmd_forget(struct ctx *c, const char *name);
 int cmd_use(struct ctx *c, const char *name);
 int cmd_instances(struct ctx *c);
 
+
+/* ---- scan.c: mods already in the game ---- */
+
+int scan_run(struct ctx *c, int quiet);
+void scan_stamp(struct ctx *c);
+void scan_others(struct ctx *c, struct strs *out);
+void scan_dlcs(struct ctx *c, struct strs *out);
 
 void collect_extras(struct ctx *c, struct entry **ents, int n,
     const char *key, struct strs *out);

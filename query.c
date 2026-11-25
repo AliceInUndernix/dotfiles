@@ -88,7 +88,7 @@ static int starts(const char *s, const char *prefix)
 
 /* Words are ANDed.  A leading - negates a word.  Forms:
    author:X tag:X license:X needs:X dl>N dl<N after:DATE before:DATE
-   size<N is:installed is:chosen is:dep is:needed is:orphan is:update
+   size<N is:installed is:chosen is:dep is:needed is:orphan is:found is:update
    is:new sort:pop|name|new|small|big */
 void query_parse(struct query *q, const char *text)
 {
@@ -228,6 +228,9 @@ static int term_hit(struct ctx *c, const struct qterm *t,
         }
         if (starts(t->text, "orph") || starts(t->text, "unneed")) {
             return m != NULL && is_orphan(c, s->id);
+        }
+        if (starts(t->text, "found")) {
+            return m != NULL && m->found;
         }
         if (starts(t->text, "need")) {
             return m != NULL && needed_by(c, s->id, NULL) > 0;

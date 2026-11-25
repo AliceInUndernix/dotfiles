@@ -68,6 +68,7 @@ struct inst *registry_add(struct registry *r, const char *id,
     m->id = xstrdup(id);
     m->version = xstrdup(version);
     m->autoinst = autoinst;
+    m->found = 0;
     m->files.v = NULL;
     m->files.n = 0;
     m->files.cap = 0;
@@ -109,7 +110,9 @@ const char *registry_owner(struct registry *r, const char *path)
     return NULL;
 }
 
-/* lines: "M<TAB>id<TAB>version<TAB>auto" then "F<TAB>path" lines */
+/* lines: "M<TAB>id<TAB>version<TAB>auto" then "F<TAB>path" lines;
+   auto is 0 or 1, with an f after it for a module found in the game
+   (put there by CKAN or by hand) rather than installed by kspkan */
 int registry_load(struct ctx *c)
 {
     char *p, *text, *line, *nl, *f1, *f2, *f3;
@@ -146,6 +149,7 @@ int registry_load(struct ctx *c)
                 *f3 = 0;
                 f3++;
                 cur = registry_add(&c->reg, f1, f2, f3[0] == '1');
+                cur->found = f3[0] != 0 && f3[1] == 'f';
             }
         } else if (line[0] == 'F' && line[1] == '\t' && cur != NULL) {
             strs_add(&cur->files, xstrdup(line + 2));
@@ -174,7 +178,8 @@ int registry_save(struct ctx *c)
         buf_adds(&b, c->reg.v[i].id);
         buf_adds(&b, "\t");
         buf_adds(&b, c->reg.v[i].version);
-        buf_adds(&b, c->reg.v[i].autoinst ? "\t1\n" : "\t0\n");
+        buf_adds(&b, c->reg.v[i].autoinst ? "\t1" : "\t0");
+        buf_adds(&b, c->reg.v[i].found ? "f\n" : "\n");
         for (k = 0; k < c->reg.v[i].files.n; k++) {
             buf_adds(&b, "F\t");
             buf_adds(&b, c->reg.v[i].files.v[k]);
@@ -186,5 +191,7 @@ int registry_save(struct ctx *c)
     rc = write_file(p, b.p, b.n);
     free(p);
     buf_free(&b);
+    /* what kspkan itself put in is no reason to scan again */
+    scan_stamp(c);
     return rc;
 }

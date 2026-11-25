@@ -274,6 +274,51 @@ t "the one named with it wins" sh -c "\"$KK\" -g '$G' -s '$S' \
     -k 1.12.5 list | grep -q '^ProvA'"
 kk remove NeedsVirt ProvC >/dev/null 2>&1
 
+echo "== mods already in the game"
+G2=$W/game2
+mkdir -p "$G2/GameData/Other" "$G2/GameData/Base" "$G2/GameData/Principia" \
+    "$G2/GameData/SquadExpansion/MakingHistory" "$G2/CKAN"
+echo by hand > "$G2/GameData/Other/Other.txt"
+printf '{"VERSION":{"MAJOR":1,"MINOR":0,"PATCH":0}}' \
+    > "$G2/GameData/Other/Other.version"
+echo ckan > "$G2/GameData/Base/Base.txt"
+echo x > "$G2/GameData/Principia/principia.so"
+cat > "$G2/CKAN/registry.json" <<'EOT'
+{"installed_modules":{"Base":{"source_module":{"identifier":"Base",
+"version":"1.0"},"installed_files":{"GameData/Base/Base.txt":{},
+"GameData/Base/gone.txt":{}},"auto_installed":false}}}
+EOT
+k2() { "$KK" -g "$G2" -s "$S" -k 1.12.5 -y "$@"; }
+mv "$S/installed" "$W/installed.1"
+k2 scan > "$W/scan" 2>&1
+t "CKAN's mod is found, at CKAN's version" grep -q '^found   Base 1.0$' \
+    "$W/scan"
+t "a mod put in by hand is found, version from its .version" \
+    grep -q '^found   Other 1.0$' "$W/scan"
+t "a directory CKAN does not know is only named" \
+    grep -q '^other   GameData/Principia' "$W/scan"
+t "list marks them found" sh -c "k() { \"$KK\" -g '$G2' -s '$S' \
+    -k 1.12.5 list; }; k | grep -q '^Base 1.0 (found)' &&
+    k | grep -q '^Other 1.0 (found)'"
+t "is:found finds them" sh -c "\"$KK\" -g '$G2' -s '$S' -k 1.12.5 \
+    search is:found 2>/dev/null | grep -q '^i Other'"
+t "only files that are there are kept" sh -c \
+    "! grep -q gone.txt '$S/installed'"
+k2 remove Other >/dev/null 2>&1
+t "a found mod can be removed" test ! -e "$G2/GameData/Other"
+t "and the unknown one is left alone" test -f \
+    "$G2/GameData/Principia/principia.so"
+k2 list >/dev/null 2>&1
+t "it is not found again after kspkan removed it" sh -c \
+    "! \"$KK\" -g '$G2' -s '$S' -k 1.12.5 list | grep -q '^Other'"
+mkdir -p "$G2/GameData/Other"
+echo again > "$G2/GameData/Other/Other.txt"
+touch "$G2/GameData"
+t "put back by hand, the next command finds it on its own" sh -c \
+    "\"$KK\" -g '$G2' -s '$S' -k 1.12.5 list 2>&1 | grep -q '^Other ? (found)'"
+mv "$W/installed.1" "$S/installed"
+rm -f "$S/scanned"
+
 echo "== unneeded dependencies"
 kk remove App >/dev/null 2>&1
 t "removing App took Lib too" sh -c "! \"$KK\" -g '$G' -s '$S' -k 1.12.5 \

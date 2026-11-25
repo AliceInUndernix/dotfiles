@@ -790,9 +790,14 @@ static void pane_build(struct ctx *c, struct view *v, struct pane *p)
         ln_color(l, CL_DIM);
         ln_text(l, "installed   ", -1);
         ln_color(l, CL_INST);
-        ln_text(l, m->version, -1);
+        ln_text(l, m->found && strcmp(m->version, "0") == 0 ?
+            "version not known" : m->version, -1);
         ln_text(l, m->autoinst ? ", as a dependency" : ", chosen by you",
             -1);
+        if (m->found) {
+            ln_text(l, ", found in the game (not put there by kspkan)",
+                -1);
+        }
         by.v = NULL;
         by.n = 0;
         by.cap = 0;
@@ -927,9 +932,11 @@ static void draw_row(struct ctx *c, struct view *v, struct buf *out,
     } else {
         ln_text(&l, " ", -1);
     }
-    /* i: chosen by you, d: a dependency; then u: a newer one fits */
+    /* i: chosen by you, d: a dependency, f: found in the game (put
+       there by CKAN or by hand); then u: a newer one fits */
     ln_color(&l, CL_INST);
-    ln_text(&l, m == NULL ? " " : (m->autoinst ? "d" : "i"), -1);
+    ln_text(&l, m == NULL ? " " : (m->found ? "f" : (m->autoinst ? "d" :
+        "i")), -1);
     ln_color(&l, CL_UPD);
     ln_text(&l, st == 'u' ? "u " : "  ", -1);
     ln_field(&l, dim ? CL_DIM : (m != NULL ? CL_INST : CL_TEXT), s->id,
@@ -981,7 +988,8 @@ static void draw_bottom(struct ctx *c, struct view *v, struct buf *b,
         ln_color(&l, CL_DIM);
         ln_text(&l, " words  -word  author:x  tag:x  license:x  needs:x  "
             "dl>5k  after:2024-01-01  size<5  is:installed  is:chosen  "
-            "is:dep  is:orphan  is:update  sort:new|pop|small|big", -1);
+            "is:dep  is:orphan  is:found  is:update  "
+            "sort:new|pop|small|big", -1);
         ln_put(&l, b, 0);
         ln_start(&l, cols, BG_BAR);
         ln_color(&l, CL_TITLE);
@@ -1244,7 +1252,8 @@ static void help_screen(int rows, int cols)
         "/", "search; words are ANDed, a leading - excludes a word",
         "", "author:x  tag:x  license:x  needs:x",
         "", "dl>5k  dl<100  after:2024-01-01  before:...  size<5 (MB)",
-        "", "is:installed is:chosen is:dep is:needed is:orphan is:update",
+        "", "is:installed is:chosen is:dep is:needed is:orphan is:found",
+        "", "is:update",
         "", "is:new   sort:pop  sort:new  sort:small  sort:big  sort:name",
         "Esc", "clear the search, then show all again",
         "i  I", "show: all, installed, chosen by you, dependencies,",
@@ -1638,7 +1647,7 @@ int cmd_tui(struct ctx *c)
     struct view v;
     struct winsize ws;
     char mode[4];
-    int key, rows, cols, rc, page, running, i, lastrow;
+    int key, rows, cols, rc, page, running, i, lastrow, found;
 
     if (!isatty(0) || !isatty(1)) {
         fprintf(stderr, "kspkan: full screen mode needs a terminal\n");
@@ -1650,12 +1659,17 @@ int cmd_tui(struct ctx *c)
     }
     registry_load(c);
     ksp_detect(c);
+    found = c->ix.ns > 0 ? scan_run(c, 2) : 0;
     tui_color = !c->mono && getenv("NO_COLOR") == NULL &&
         (getenv("TERM") == NULL || strcmp(getenv("TERM"), "dumb") != 0);
     memset(&v, 0, sizeof(v));
     v.onlycompat = 1;
     v.pane = PANE_BOTTOM;
     settings_load(c, &v);
+    if (found > 0) {
+        sprintf(v.msg, "found %d mod%s already in the game, marked f "
+            "(I: show them all)", found, found == 1 ? "" : "s");
+    }
     view_build(c, &v);
     refilter(c, &v);
     mode[0] = 0;

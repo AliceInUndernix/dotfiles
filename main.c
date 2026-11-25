@@ -13,7 +13,10 @@ static void usage(void)
         "                        CKAN-meta .tar.gz you fetched)\n"
         "  search [QUERY]        list modules (author:x dl>5k sort:new ...)\n"
         "  show ID               describe a module\n"
-        "  list                  installed modules\n"
+        "  list                  installed modules (and those found)\n",
+        stderr);
+    fputs(
+        "  scan                  find mods already in the game\n"
         "  version               print the version\n", stderr);
     fputs("  install ID[=VER]...   install modules and what they need\n"
         "  remove ID...          remove modules\n"
@@ -248,6 +251,7 @@ int main(int argc, char **argv)
     if (strcmp(cmd, "use") == 0 && i < argc) {
         return cmd_use(&c, argv[i]);
     }
+    c.noscan = strcmp(cmd, "scan") == 0;
     rc = pick_context(&c, inst, gset, sset);
     if (rc < 0) {
         return 1;
@@ -293,6 +297,10 @@ int main(int argc, char **argv)
     }
     if (strcmp(cmd, "modlist") == 0) {
         return cmd_modlist(&c, argv + i, argc - i);
+    }
+    if (strcmp(cmd, "scan") == 0) {
+        scan_run(&c, 0);
+        return 0;
     }
     if (strcmp(cmd, "upgrade") == 0) {
         return cmd_upgrade(&c, argv + i, argc - i);
