@@ -1,3 +1,17 @@
+0.5.0  2026-11-25
+    - compat VERSION...: other game versions whose mods count as
+      fitting, as CKAN's "compatible game versions" (1.12 is every
+      1.12.x); kept per game.  modlist import says which ones a CKAN
+      pack was made for.
+    - modlist install leaves out (and names) the mods that cannot go
+      in, and installs the rest, instead of stopping
+    - a mod that clashes with one already chosen is no choice for a
+      dependency several provide; conflicts now name both mods
+    - the cache keeps each download once, under its checksum (mods
+      that share a zip no longer download it again); clean removes
+      every archive there, old names too
+    - tests/modlist.sh checks them
+
 0.4.0  2026-11-25
     - mods already in the game are found and marked "found" (f in the
       full screen mode, (found) in list, search is:found): what CKAN

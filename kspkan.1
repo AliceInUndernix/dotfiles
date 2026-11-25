@@ -1,4 +1,4 @@
-.TH KSPKAN 1 2026-11-25 "kspkan 0.4.0"
+.TH KSPKAN 1 2026-11-25 "kspkan 0.5.0"
 .SH NAME
 kspkan \- small mod manager for Kerbal Space Program
 .SH SYNOPSIS
@@ -41,6 +41,11 @@ the modules that need it.  A dependency nothing needs is pointed out
 (autoremove takes it).  Modules found in the game are marked (found);
 then the DLCs and the GameData directories the module list does not
 know.
+.TP
+.BI compat " [version ... | none]"
+Other game versions whose modules count as fitting this game too, as
+CKAN's compatible game versions; 1.12 stands for every 1.12.x.  Kept
+for each game; with no version, shows them.
 .TP
 .B scan
 Find the mods already in the game, put there by CKAN (from

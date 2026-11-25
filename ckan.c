@@ -147,6 +147,12 @@ static int from_json(const char *text, long len, struct ckanimp *r)
         from_registry(im, &r->ml, &r->skipped, &r->deps);
     } else {
         r->kind = "CKAN modpack";
+        if (json_str(root, "ksp_version_min") != NULL) {
+            strncat(r->kmin, json_str(root, "ksp_version_min"), 15);
+        }
+        if (json_str(root, "ksp_version_max") != NULL) {
+            strncat(r->kmax, json_str(root, "ksp_version_max"), 15);
+        }
         from_rels(json_get(root, "depends"), &r->ml, &r->skipped);
         from_rels(json_get(root, "recommends"), &r->ml, &r->skipped);
         im = json_get(root, "suggests");
@@ -342,6 +348,8 @@ int ckan_import(const char *file, struct ckanimp *r)
     r->skipped = 0;
     r->deps = 0;
     r->suggests = 0;
+    r->kmin[0] = 0;
+    r->kmax[0] = 0;
     text = read_file(file, &len, CK_MAX);
     if (text == NULL) {
         return -1;

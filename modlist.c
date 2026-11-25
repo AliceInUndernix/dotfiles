@@ -332,6 +332,71 @@ static int ml_show(struct ctx *c, struct modlist *ml)
     return 0;
 }
 
+/* when the whole list cannot be installed, take its mods one by one
+   and leave out (and name) each one that cannot go in with those
+   before it, so that one missing or clashing mod does not stop the
+   rest */
+static void ml_fit(struct ctx *c, struct strs *want)
+{
+    struct entry **ents;
+    struct strs skip;
+    char err[512];
+    char **ok;
+    int i, n, nents, rc, left;
+
+    /* as install does: a pinned version replaces the installed one */
+    skip.v = NULL;
+    skip.n = 0;
+    skip.cap = 0;
+    for (i = 0; i < want->n; i++) {
+        if (strchr(want->v[i], '=') != NULL) {
+            strs_add(&skip, xstrndup(want->v[i], (long)(strchr(want->v[i],
+                '=') - want->v[i])));
+        }
+    }
+    rc = resolve(c, want->v, want->n, skip.v, skip.n, &ents, &nents, err,
+        sizeof(err));
+    if (rc == 0) {
+        free(ents);
+        strs_free(&skip);
+        return;
+    }
+    /* each mod of the list counts as asked for, while only some are
+       tried: where several mods could fill a need, the list's own
+       one wins */
+    for (i = 0; i < want->n; i++) {
+        strs_add(&c->picks, strchr(want->v[i], '=') != NULL ?
+            xstrndup(want->v[i], (long)(strchr(want->v[i], '=') -
+            want->v[i])) : xstrdup(want->v[i]));
+    }
+    ok = (char **)xalloc((long)want->n * (long)sizeof(char *));
+    n = 0;
+    left = 0;
+    for (i = 0; i < want->n; i++) {
+        ok[n] = want->v[i];
+        rc = resolve(c, ok, n + 1, skip.v, skip.n, &ents, &nents, err,
+            sizeof(err));
+        if (rc == 0) {
+            free(ents);
+            n++;
+        } else {
+            fprintf(stderr, "kspkan: left out %s: %s\n", want->v[i], err);
+            free(want->v[i]);
+            left++;
+        }
+    }
+    for (i = 0; i < n; i++) {
+        want->v[i] = ok[i];
+    }
+    want->n = n;
+    free(ok);
+    strs_free(&skip);
+    if (left > 0) {
+        fprintf(stderr, "kspkan: %d of the modlist left out; installing "
+            "the other %d\n", left, n);
+    }
+}
+
 /* install what the modlist has and the game has not; pin: the versions
    written in it, else the newest that fits.  sync: then remove the
    modules you chose that are not in it. */
@@ -383,6 +448,9 @@ static int ml_install(struct ctx *c, struct modlist *ml, int pin, int sync)
     rv = 0;
     if (gone.n > 0) {
         rv = cmd_remove(c, gone.v, gone.n);
+    }
+    if (want.n > 0 && rv == 0) {
+        ml_fit(c, &want);
     }
     if (want.n > 0 && rv == 0) {
         rv = cmd_install(c, want.v, want.n);
@@ -442,6 +510,37 @@ int modlist_open(struct ctx *c, const char *arg, struct modlist *ml,
     }
     *saved = name;
     return 0;
+}
+
+/* a pack made for a range of game versions (CKAN's compatible game
+   versions): say how to let the same mods in here */
+static void compat_hint(struct ctx *c, struct ckanimp *r)
+{
+    long a, b, m;
+    const char *p;
+
+    if (r->kmin[0] == 0 || r->kmax[0] == 0 || c->compat.n > 0 ||
+        strncmp(r->kmin, "1.", 2) != 0 || strncmp(r->kmax, "1.", 2) != 0)
+    {
+        return;
+    }
+    a = 0;
+    for (p = r->kmin + 2; is_digit(*p); p++) {
+        a = a * 10 + (*p - '0');
+    }
+    b = 0;
+    for (p = r->kmax + 2; is_digit(*p); p++) {
+        b = b * 10 + (*p - '0');
+    }
+    if (a > b || b - a > 20) {
+        return;
+    }
+    printf("the pack was made for game versions %s to %s; to let its mods "
+        "in here too:\n    kspkan compat", r->kmin, r->kmax);
+    for (m = b; m >= a; m--) {
+        printf(" 1.%ld", m);
+    }
+    printf("\n");
 }
 
 /* kspkan modlist import FILE [NAME]: a list CKAN wrote, kept as a
@@ -527,6 +626,7 @@ static int ml_import(struct ctx *c, const char *file, const char *name)
         printf("passed over %d lines or entries that name no mod\n",
             r.skipped);
     }
+    compat_hint(c, &r);
     printf("next: kspkan modlist show %s, then kspkan modlist install %s "
         "(or pin)\n", name, name);
     modlist_free(&r.ml);

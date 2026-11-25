@@ -829,6 +829,8 @@ struct summary *summary_find(struct index *ix, const char *id)
 
 /* ---- game version compatibility ---- */
 
+static int game_compat(struct ctx *c, struct entry *e);
+
 /* compare g with v over the components that v has */
 static int comp_cmp(const char *g, const char *v)
 {
@@ -861,11 +863,79 @@ static int comp_cmp(const char *g, const char *v)
     return 0;
 }
 
+/* compare g with v over the components both have: "1.12" against
+   "1.12.4" is equal, so "1.12" stands for every 1.12.x */
+static int part_cmp(const char *g, const char *v)
+{
+    long a, b;
+
+    while (*v && *g) {
+        if (!is_digit(*v) || !is_digit(*g)) {
+            return 0;
+        }
+        a = 0;
+        while (is_digit(*g)) {
+            a = a * 10 + (*g - '0');
+            g++;
+        }
+        b = 0;
+        while (is_digit(*v)) {
+            b = b * 10 + (*v - '0');
+            v++;
+        }
+        if (a != b) {
+            return a < b ? -1 : 1;
+        }
+        if (*g == '.') {
+            g++;
+        }
+        if (*v == '.') {
+            v++;
+        }
+    }
+    return 0;
+}
+
+/* does e fit one of the other game versions you allowed (kspkan
+   compat)? */
+static int extra_compat(struct ctx *c, struct entry *e)
+{
+    const char *x;
+    int i;
+
+    for (i = 0; i < c->compat.n; i++) {
+        x = c->compat.v[i];
+        if (e->kexact[0] != 0) {
+            if (part_cmp(x, e->kexact) == 0) {
+                return 1;
+            }
+            continue;
+        }
+        if (e->kmin[0] != 0 && part_cmp(x, e->kmin) < 0) {
+            continue;
+        }
+        if (e->kmax[0] != 0 && part_cmp(x, e->kmax) > 0) {
+            continue;
+        }
+        return 1;
+    }
+    return 0;
+}
+
 int entry_compat(struct ctx *c, struct entry *e)
 {
     if (c->anyver || c->kspver == NULL) {
         return 1;
     }
+    if (game_compat(c, e)) {
+        return 1;
+    }
+    return c->compat.n > 0 && extra_compat(c, e);
+}
+
+/* does e fit the game's own version? */
+static int game_compat(struct ctx *c, struct entry *e)
+{
     if (e->kexact[0] != 0) {
         if (strcmp(e->kexact, "any") == 0) {
             return 1;
@@ -947,12 +1017,43 @@ static char *find_version(const char *text)
     return NULL;
 }
 
+/* the other game versions you allowed for this game, from "compat"
+   in its state directory: one a line, as 1.12 or 1.11.2 */
+void compat_load(struct ctx *c)
+{
+    char *p, *text, *line, *nl;
+
+    strs_free(&c->compat);
+    p = state_path(c, "compat");
+    text = read_file(p, NULL, 4096);
+    free(p);
+    if (text == NULL) {
+        return;
+    }
+    line = text;
+    while (*line) {
+        nl = strchr(line, '\n');
+        if (nl != NULL) {
+            *nl = 0;
+        }
+        if (is_digit(line[0]) && strlen(line) < 16) {
+            strs_add(&c->compat, xstrdup(line));
+        }
+        if (nl == NULL) {
+            break;
+        }
+        line = nl + 1;
+    }
+    free(text);
+}
+
 int ksp_detect(struct ctx *c)
 {
     static const char *names[] = { "buildID.txt", "readme.txt", NULL };
     char *p, *text;
     int i;
 
+    compat_load(c);
     if (c->kspver != NULL) {
         return 0;
     }

@@ -1,7 +1,7 @@
 #ifndef KSPKAN_H
 #define KSPKAN_H
 
-#define KSPKAN_VERSION "0.4.0"
+#define KSPKAN_VERSION "0.5.0"
 
 /* ---- util.c ---- */
 
@@ -210,6 +210,7 @@ struct ctx {
     int withsug;
     struct strs picks;
     int noscan;
+    struct strs compat;
     struct index ix;
     struct registry reg;
 };
@@ -234,6 +235,8 @@ extern const char *sort_names[];
 int entry_compat(struct ctx *c, struct entry *e);
 struct jnode *entry_json(struct ctx *c, struct entry *e);
 int ksp_detect(struct ctx *c);
+void compat_load(struct ctx *c);
+int cmd_compat(struct ctx *c, char **v, int n);
 
 int registry_load(struct ctx *c);
 int registry_save(struct ctx *c);
@@ -336,6 +339,8 @@ struct ckanimp {
     int skipped;
     int deps;
     int suggests;
+    char kmin[16];
+    char kmax[16];
 };
 
 int ckan_import(const char *file, struct ckanimp *r);

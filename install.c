@@ -546,12 +546,39 @@ static int hash_matches(const char *path, struct jnode *hashes)
 }
 
 /* where the archive of a module version is kept */
+/* the cache keeps a download once, under its checksum, however many
+   modules share it (Scatterer, Scatterer-config and Scatterer-sunflare
+   are one zip); without a checksum, under id-version */
 char *cache_file(struct ctx *c, struct entry *e)
 {
+    struct jnode *hashes;
+    const char *h;
     char *dir, *name, *full;
-    int i;
+    int i, hex;
 
     dir = shared_path(c, "cache");
+    hashes = json_get(entry_json(c, e), "download_hash");
+    h = json_str(hashes, "sha256");
+    if (h == NULL) {
+        h = json_str(hashes, "sha1");
+    }
+    hex = h != NULL && strlen(h) >= 40 && strlen(h) <= 64;
+    for (i = 0; hex && h[i]; i++) {
+        if (!is_digit(h[i]) && !((h[i] >= 'a' && h[i] <= 'f') ||
+            (h[i] >= 'A' && h[i] <= 'F')))
+        {
+            hex = 0;
+        }
+    }
+    if (hex) {
+        name = (char *)xalloc((long)strlen(h) + 8);
+        strcpy(name, h);
+        strcat(name, ".zip");
+        full = join_path(dir, name);
+        free(dir);
+        free(name);
+        return full;
+    }
     name = (char *)xalloc((long)(strlen(e->id) + strlen(e->version)) + 16);
     strcpy(name, e->id);
     strcat(name, "-");

@@ -1,4 +1,4 @@
-kspkan 0.4.0 - a small mod manager for Kerbal Space Program
+kspkan 0.5.0 - a small mod manager for Kerbal Space Program
 
 Read this first.  Everything here was written with an AI (vibecoded).
 It was made for one person's computer and works there; it is not
@@ -24,6 +24,8 @@ COMMANDS
     kspkan show ID                  describe a module
     kspkan list                     installed modules, and those found
     kspkan scan                     find the mods already in the game
+    kspkan compat [VER...|none]     other game versions whose mods fit
+                                    too (CKAN's "compatible versions")
     kspkan install ID[=VER]...      install, with what they need (asks
                                     when several mods could fill one)
     kspkan remove ID...             remove, with what needs them
@@ -98,6 +100,13 @@ CKAN's formats; it never writes them.  It understands:
         installed there, without the ones CKAN put in as dependencies
     a saved mod list: plain text, Markdown, BBCode, CSV or TSV
     the output of "ckan list"
+
+A pack made with CKAN often counts mods for older game versions as
+fitting (CKAN's "compatible game versions"); import says so, and
+kspkan compat 1.12 1.11 ...  does the same here (1.12 stands for every
+1.12.x).  A mod of the list that still cannot go in (it fits no allowed
+version, or clashes with another) is left out and named, and the rest
+is installed.
 
 Then  kspkan modlist show NAME  says what the game lacks, and install or
 pin puts it in (or give the file to install straight away).  In the full

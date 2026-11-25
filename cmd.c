@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <dirent.h>
 #include "kspkan.h"
 
 /* load index and registry, find the game version; 0 if usable */
@@ -711,28 +712,96 @@ int cmd_upgrade(struct ctx *c, char **ids, int n)
 }
 
 /* delete the downloaded archives (and any unfinished downloads) */
+/* every .zip and .part in the cache, whatever it is named (older
+   versions named them id-version) */
 int cmd_clean(struct ctx *c)
 {
-    char *full, *part;
-    int i, rc, count;
+    DIR *d;
+    struct dirent *de;
+    char *dir, *full;
+    long n;
+    int rc, count;
 
     count = 0;
-    for (i = 0; i < c->ix.n; i++) {
-        full = cache_file(c, &c->ix.e[i]);
-        part = (char *)xalloc((long)strlen(full) + 8);
-        strcpy(part, full);
-        strcat(part, ".part");
+    dir = shared_path(c, "cache");
+    d = opendir(dir);
+    if (d == NULL) {
+        free(dir);
+        printf("removed 0 downloaded archives\n");
+        return 0;
+    }
+    while ((de = readdir(d)) != NULL) {
+        n = (long)strlen(de->d_name);
+        if (de->d_name[0] == '.' || n < 5 ||
+            (strcmp(de->d_name + n - 4, ".zip") != 0 &&
+            strcmp(de->d_name + n - 5, ".part") != 0))
+        {
+            continue;
+        }
+        full = (char *)xalloc((long)(strlen(dir) + strlen(de->d_name)) + 2);
+        strcpy(full, dir);
+        strcat(full, "/");
+        strcat(full, de->d_name);
         rc = unlink(full);
         if (rc == 0) {
             count++;
         }
-        rc = unlink(part);
-        if (rc == 0) {
-            count++;
-        }
-        free(part);
         free(full);
     }
+    closedir(d);
+    free(dir);
     printf("removed %d downloaded archives\n", count);
     return 0;
+}
+
+/* kspkan compat [VERSION... | none]: other game versions whose mods
+   count as fitting this game too, as CKAN's "compatible game versions"
+   (1.12 stands for every 1.12.x) */
+int cmd_compat(struct ctx *c, char **v, int n)
+{
+    struct buf b;
+    char *p;
+    int i, k, rc;
+
+    if (n == 0) {
+        printf("game %s", c->kspver != NULL ? c->kspver : "?");
+        if (c->compat.n > 0) {
+            printf("; mods for these count as fitting too:");
+        }
+        for (i = 0; i < c->compat.n; i++) {
+            printf(" %s", c->compat.v[i]);
+        }
+        printf("\n");
+        return 0;
+    }
+    b.p = NULL;
+    b.n = 0;
+    b.cap = 0;
+    buf_add(&b, "", 0);
+    for (i = 0; i < n && strcmp(v[0], "none") != 0; i++) {
+        for (k = 0; v[i][k]; k++) {
+            if (!is_digit(v[i][k]) && v[i][k] != '.') {
+                break;
+            }
+        }
+        if (v[i][k] != 0 || !is_digit(v[i][0]) || k > 15) {
+            fprintf(stderr, "kspkan: not a game version: %s (as 1.12 "
+                "or 1.11.2)\n", v[i]);
+            buf_free(&b);
+            return 2;
+        }
+        buf_adds(&b, v[i]);
+        buf_adds(&b, "\n");
+    }
+    make_dirs(c->state);
+    p = state_path(c, "compat");
+    rc = write_file(p, b.p, b.n);
+    free(p);
+    buf_free(&b);
+    if (rc < 0) {
+        fprintf(stderr, "kspkan: cannot write the compat setting\n");
+        return 1;
+    }
+    compat_load(c);
+    return cmd_compat(c, NULL, 0);
 }

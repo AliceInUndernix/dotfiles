@@ -17,6 +17,7 @@ static void usage(void)
         stderr);
     fputs(
         "  scan                  find mods already in the game\n"
+        "  compat [VER...|none]  other game versions whose mods fit too\n"
         "  version               print the version\n", stderr);
     fputs("  install ID[=VER]...   install modules and what they need\n"
         "  remove ID...          remove modules\n"
@@ -297,6 +298,9 @@ int main(int argc, char **argv)
     }
     if (strcmp(cmd, "modlist") == 0) {
         return cmd_modlist(&c, argv + i, argc - i);
+    }
+    if (strcmp(cmd, "compat") == 0) {
+        return cmd_compat(&c, argv + i, argc - i);
     }
     if (strcmp(cmd, "scan") == 0) {
         scan_run(&c, 0);

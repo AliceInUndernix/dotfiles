@@ -16,7 +16,8 @@ import sys, zipfile
 www = sys.argv[1]
 for name, ver in (("Lib", "1.0"), ("App", "1.0"), ("Base", "1.0"),
                   ("Base", "2.0"), ("Other", "1.0"), ("NeedsVirt", "1.0"),
-                  ("ProvA", "1.0"), ("ProvB", "1.0"), ("ProvC", "1.0")):
+                  ("ProvA", "1.0"), ("ProvB", "1.0"), ("ProvC", "1.0"),
+                  ("OldMod", "1.0")):
     z = zipfile.ZipFile("%s/%s-%s.zip" % (www, name, ver), "w")
     z.writestr("%s/%s.txt" % (name, name), "%s %s\n" % (name, ver))
     z.close()
@@ -53,12 +54,14 @@ addmod Base 2.0
 addmod Base 1.0
 addmod Lib 1.0
 addmod NeedsVirt 1.0 '[{"name":"Virt"}]'
+addmod OldMod 1.0 '' '' 1.11.4
 addmod Other 1.0
 addmod ProvA 1.0 '' Virt
 addmod ProvB 1.0 '' Virt 1.0.5
 addmod ProvC 1.0
 addsum App 1.0; addsum Base 2.0; addsum Lib 1.0; addsum NeedsVirt 1.0
-addsum Other 1.0; addsum ProvA 1.0; addsum ProvB 1.0; addsum ProvC 1.0
+addsum OldMod 1.0; addsum Other 1.0; addsum ProvA 1.0; addsum ProvB 1.0
+addsum ProvC 1.0
 
 (cd "$W/www" && exec python3 -I -m http.server "$PORT" --bind 127.0.0.1 \
     >/dev/null 2>&1) &
@@ -318,6 +321,23 @@ t "put back by hand, the next command finds it on its own" sh -c \
     "\"$KK\" -g '$G2' -s '$S' -k 1.12.5 list 2>&1 | grep -q '^Other ? (found)'"
 mv "$W/installed.1" "$S/installed"
 rm -f "$S/scanned"
+
+echo "== a mod that does not fit, and compat"
+printf 'OldMod\nOther\n' > "$W/old"
+kk modlist install "$W/old" > "$W/oldout" 2>&1
+t "a mod that does not fit is left out, and named" \
+    grep -q 'left out OldMod' "$W/oldout"
+t "the rest is installed" listed '^Other 1.0$'
+kk compat 1.11 >/dev/null 2>&1
+t "compat 1.11 is kept" grep -q '^1.11$' "$S/compat"
+kk modlist install "$W/old" >/dev/null 2>&1
+t "then a mod for 1.11.x fits" listed '^OldMod 1.0$'
+kk compat none >/dev/null 2>&1
+kk remove OldMod Other >/dev/null 2>&1
+t "the cache keeps downloads by checksum" sh -c \
+    "ls '$S/cache' | grep -q '^[0-9a-f]\{64\}\.zip$'"
+kk clean >/dev/null 2>&1
+t "clean empties it" sh -c "[ -z \"\$(ls '$S/cache')\" ]"
 
 echo "== unneeded dependencies"
 kk remove App >/dev/null 2>&1

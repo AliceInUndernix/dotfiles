@@ -34,6 +34,7 @@ struct solver {
     char **want;
     int nwant;
     char choices[200];
+    char clash[240];
 };
 
 static void set_err(struct solver *s, const char *a, const char *b,
@@ -232,6 +233,8 @@ static int id_chosen(struct solver *s, const char *id)
 
 /* is id one of the modules asked for (as id or id=version), or one
    picked on the terminal for a name several modules provide? */
+static int conflicts_chosen(struct solver *s, struct entry *cand);
+
 static int asked_for(struct solver *s, const char *id)
 {
     long n;
@@ -355,7 +358,7 @@ static int candidates(struct solver *s, const struct req *alt,
     char *ids[16];
     char *line, *tab;
     long nl;
-    int cnt, n, i, k, nids, same, nuse, asked, m;
+    int cnt, n, i, k, nids, same, nuse, asked, m, nv, ok, hadclash;
 
     c = s->c;
     *ambig = 0;
@@ -389,7 +392,19 @@ static int candidates(struct solver *s, const struct req *alt,
     nuse = 0;
     asked = 0;
     for (k = 0; k < nids; k++) {
-        if (usable(s, alt, ids[k], out, 0) == 0) {
+        nv = usable(s, alt, ids[k], out, 0);
+        /* one that clashes with what is chosen already is no choice */
+        hadclash = s->clash[0] != 0;
+        ok = 0;
+        for (i = 0; i < nv; i++) {
+            if (!conflicts_chosen(s, out[i])) {
+                ok = 1;
+            }
+        }
+        if (!hadclash) {
+            s->clash[0] = 0;
+        }
+        if (!ok) {
             continue;
         }
         ids[nuse] = ids[k];
@@ -468,6 +483,11 @@ static int conflicts_chosen(struct solver *s, struct entry *cand)
         if (conflicts_of(s, cand, s->chosen[i]) ||
             conflicts_of(s, s->chosen[i], cand))
         {
+            if (s->clash[0] == 0) {
+                sprintf(s->clash, ": %.60s %.30s conflicts with %.60s "
+                    "%.30s", cand->id, cand->version, s->chosen[i]->id,
+                    s->chosen[i]->version);
+            }
             return 1;
         }
     }
@@ -533,7 +553,7 @@ static int solve(struct solver *s, struct goal *g)
             g->r.from ? ", needed by " : "", g->r.from ? g->r.from : "");
     } else {
         set_err(s, "conflict while choosing ",
-            alts[0].name ? alts[0].name : "?", "", "");
+            alts[0].name ? alts[0].name : "?", s->clash, "");
     }
     return 0;
 }
@@ -597,6 +617,7 @@ int resolve(struct ctx *c, char **want, int nwant, char **skip, int nskip,
     s.want = want;
     s.nwant = nwant;
     s.choices[0] = 0;
+    s.clash[0] = 0;
     locals = (struct entry *)xalloc((long)(c->reg.n + 1) *
         (long)sizeof(struct entry));
     nlocal = 0;

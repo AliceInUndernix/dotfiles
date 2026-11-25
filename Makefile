@@ -1,4 +1,4 @@
-VERSION = 0.4.0
+VERSION = 0.5.0
 CC = cc
 CFLAGS = -std=c89 -pedantic -Wall -Wextra -Wno-long-long \
     -D_POSIX_C_SOURCE=200809L -O2
