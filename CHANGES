@@ -1,4 +1,9 @@
 0.5.0  2026-11-25
+    - a download that fails at its own address is fetched from CKAN's
+      copy on archive.org (the checksum decides, as always)
+    - fixed: with a single download address, the other strings of the
+      metadata were tried as addresses too (so the error named
+      "netkan")
     - compat VERSION...: other game versions whose mods count as
       fitting, as CKAN's "compatible game versions" (1.12 is every
       1.12.x); kept per game.  modlist import says which ones a CKAN

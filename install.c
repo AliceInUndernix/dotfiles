@@ -624,6 +624,49 @@ char *cache_file(struct ctx *c, struct entry *e)
     return full;
 }
 
+/* where CKAN keeps a copy of a download on archive.org:
+   download/ID-VERSION/SHA1PREFIX-ID-VERSION.EXT, ":" made "-" */
+static char *archive_url(struct entry *e, struct jnode *hashes,
+    const char *type)
+{
+    const char *sha1;
+    char *v, *u;
+    int i;
+
+    sha1 = json_str(hashes, "sha1");
+    if (sha1 == NULL || strlen(sha1) < 8 || strlen(e->id) > 200 ||
+        strlen(e->version) > 100)
+    {
+        return NULL;
+    }
+    v = xstrdup(e->version);
+    for (i = 0; v[i]; i++) {
+        if (v[i] == ':') {
+            v[i] = '-';
+        }
+    }
+    u = (char *)xalloc((long)(2 * strlen(e->id) + 2 * strlen(v)) + 80);
+    strcpy(u, "https://archive.org/download/");
+    strcat(u, e->id);
+    strcat(u, "-");
+    strcat(u, v);
+    strcat(u, "/");
+    strncat(u, sha1, 8);
+    for (i = (int)strlen(u) - 8; u[i]; i++) {
+        if (u[i] >= 'a' && u[i] <= 'f') {
+            u[i] = (char)(u[i] - 'a' + 'A');
+        }
+    }
+    strcat(u, "-");
+    strcat(u, e->id);
+    strcat(u, "-");
+    strcat(u, v);
+    strcat(u, type != NULL && strstr(type, "gzip") != NULL ? ".tar.gz" :
+        ".zip");
+    free(v);
+    return u;
+}
+
 /* fetch the module's archive into the cache, checking its hash; every
    download address is tried in turn */
 int module_download(struct ctx *c, struct entry *e, char **path,
@@ -631,9 +674,11 @@ int module_download(struct ctx *c, struct entry *e, char **path,
 {
     struct jnode *j, *dl, *hashes, *u;
     struct stat st;
-    char *dir, *full, *part;
+    char *dir, *full, *part, *arch, *tried;
     const char *url;
-    int rc;
+    int rc, k;
+
+    tried = NULL;
 
     j = entry_json(c, e);
     dl = json_get(j, "download");
@@ -672,12 +717,27 @@ int module_download(struct ctx *c, struct entry *e, char **path,
     strcat(part, ".part");
     printf("downloading %s %s\n", e->id, e->version);
     set_msg(err, errsz, "no usable download address for ", e->id);
-    u = dl->type == J_ARR ? dl->child : dl;
-    for (; u != NULL; u = u->next) {
-        if (u->type != J_STR) {
+    /* the addresses of the metadata, then CKAN's copy on archive.org;
+       the checksum decides what is taken */
+    arch = archive_url(e, hashes, json_str(j, "download_content_type"));
+    u = dl->type == J_ARR ? dl->child : NULL;
+    for (k = 0; ; k++) {
+        if (dl->type == J_STR && k == 0) {
+            url = dl->str;
+        } else if (u != NULL) {
+            url = u->type == J_STR ? u->str : NULL;
+            u = u->next;
+        } else if (arch != NULL) {
+            url = arch;
+            tried = arch;
+            arch = NULL;
+            printf("trying the copy at archive.org\n");
+        } else {
+            break;
+        }
+        if (url == NULL) {
             continue;
         }
-        url = u->str;
         rc = fetch_url(url, part, 0);
         if (rc < 0) {
             set_msg(err, errsz, "download failed: ", url);
@@ -694,10 +754,14 @@ int module_download(struct ctx *c, struct entry *e, char **path,
             break;
         }
         free(part);
+        free(arch);
+        free(tried);
         *path = full;
         return 0;
     }
     free(part);
     free(full);
+    free(arch);
+    free(tried);
     return -1;
 }
