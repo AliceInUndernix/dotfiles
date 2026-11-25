@@ -336,7 +336,7 @@ static int ml_show(struct ctx *c, struct modlist *ml)
    and leave out (and name) each one that cannot go in with those
    before it, so that one missing or clashing mod does not stop the
    rest */
-static void ml_fit(struct ctx *c, struct strs *want)
+void fit_wants(struct ctx *c, struct strs *want)
 {
     struct entry **ents;
     struct strs skip;
@@ -392,7 +392,7 @@ static void ml_fit(struct ctx *c, struct strs *want)
     free(ok);
     strs_free(&skip);
     if (left > 0) {
-        fprintf(stderr, "kspkan: %d of the modlist left out; installing "
+        fprintf(stderr, "kspkan: %d left out; installing "
             "the other %d\n", left, n);
     }
 }
@@ -450,7 +450,7 @@ static int ml_install(struct ctx *c, struct modlist *ml, int pin, int sync)
         rv = cmd_remove(c, gone.v, gone.n);
     }
     if (want.n > 0 && rv == 0) {
-        ml_fit(c, &want);
+        fit_wants(c, &want);
     }
     if (want.n > 0 && rv == 0) {
         rv = cmd_install(c, want.v, want.n);

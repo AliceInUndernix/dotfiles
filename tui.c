@@ -5,6 +5,9 @@
 #include <poll.h>
 #include <termios.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
+#include <dirent.h>
+#include <sys/times.h>
 #include "kspkan.h"
 
 #define KEY_UP 1000
@@ -15,6 +18,11 @@
 #define KEY_END 1005
 #define KEY_ESC 27
 #define KEY_ENTER 13
+#define KEY_MOUSE 1010
+
+/* the last mouse event: button (0 left, 1 middle, 2 right, 64 wheel
+   up, 65 wheel down), column and row from 1, and whether pressed */
+static int mouse_b, mouse_x, mouse_y, mouse_down;
 
 static struct termios saved_term;
 static int term_saved;
@@ -33,13 +41,13 @@ static void raw_on(void)
     t.c_cc[VMIN] = 1;
     t.c_cc[VTIME] = 0;
     tcsetattr(0, TCSAFLUSH, &t);
-    fputs("\033[?1049h", stdout);
+    fputs("\033[?1049h\033[?1000h\033[?1006h", stdout);
     fflush(stdout);
 }
 
 static void raw_off(void)
 {
-    fputs("\033[0m\033[?25h\033[?1049l", stdout);
+    fputs("\033[?1006l\033[?1000l\033[0m\033[?25h\033[?1049l", stdout);
     fflush(stdout);
     if (term_saved) {
         tcsetattr(0, TCSAFLUSH, &saved_term);
@@ -58,6 +66,40 @@ static int byte_ready(void)
 
 /* a key read after Esc that was not part of an escape sequence */
 static int pending_key = -1;
+
+/* the rest of "ESC [ < b ; x ; y M" (pressed) or "... m" (let go) */
+static int read_mouse(void)
+{
+    unsigned char ch;
+    int v[3], k;
+    long r;
+
+    v[0] = v[1] = v[2] = 0;
+    k = 0;
+    for (;;) {
+        if (!byte_ready()) {
+            return 0;
+        }
+        r = (long)read(0, &ch, 1);
+        if (r <= 0) {
+            return 0;
+        }
+        if (ch >= '0' && ch <= '9' && v[k] < 10000) {
+            v[k] = v[k] * 10 + (ch - '0');
+        } else if (ch == ';' && k < 2) {
+            k++;
+        } else if (ch == 'M' || ch == 'm') {
+            break;
+        } else {
+            return 0;
+        }
+    }
+    mouse_b = v[0] & ~(4 | 8 | 16 | 32);
+    mouse_x = v[1];
+    mouse_y = v[2];
+    mouse_down = ch == 'M';
+    return KEY_MOUSE;
+}
 
 static int read_key(void)
 {
@@ -93,6 +135,9 @@ static int read_key(void)
     r = (long)read(0, s, 1);
     if (r <= 0) {
         return KEY_ESC;
+    }
+    if (s[0] == '<') {
+        return read_mouse();
     }
     if (s[0] == 'A') {
         return KEY_UP;
@@ -162,7 +207,12 @@ struct view {
     char find[128];
     char input[256];
     char msg[200];
+    char hint[400];
 };
+
+/* the list that o opened, waiting for "add on top" or "replace" */
+static struct modlist pend;
+static char pend_name[100];
 
 /* newest stable release that fits the game, per summary line */
 static void view_build(struct ctx *c, struct view *v)
@@ -890,14 +940,88 @@ static int mark_recommended(struct ctx *c, struct view *v)
     return count;
 }
 
+/* where draw put the list: its first screen row, how many rows, its
+   width, and whether the pane is on the right */
+static int lay_y0, lay_avail, lay_lw, lay_right;
+
+/* a second click on the same row soon after the first */
+static int dbl_click(int row)
+{
+    static long last;
+    static int lastrow = -1;
+    struct tms t;
+    long now;
+    int dbl;
+
+    /* times() counts in hundredths of a second on Linux */
+    now = (long)times(&t);
+    dbl = row == lastrow && now - last >= 0 && now - last < 40;
+    last = now;
+    lastrow = dbl ? -1 : row;
+    return dbl;
+}
+
+/* where the key hints of the bottom bar are, so that a click on one
+   works as its key */
+struct hintpos {
+    int x0;
+    int x1;
+    int key;
+};
+
+static struct hintpos hints[24];
+static int nhints;
+static int hint_rec;
+
+static int key_code(const char *k)
+{
+    if (strcmp(k, "Space") == 0) {
+        return ' ';
+    }
+    if (strncmp(k, "Enter", 5) == 0) {
+        return KEY_ENTER;
+    }
+    if (strcmp(k, "Tab") == 0) {
+        return 9;
+    }
+    if (strncmp(k, "Esc", 3) == 0) {
+        return KEY_ESC;
+    }
+    if (strchr(k, '/') != NULL && k[1] != 0) {
+        return 0;
+    }
+    return (unsigned char)k[0];
+}
+
 static void key_hint(struct line *l, const char *key, const char *what)
 {
+    if (hint_rec && nhints < 24) {
+        hints[nhints].x0 = l->vis + 1;
+        hints[nhints].key = key_code(key);
+    }
     ln_color(l, CL_KEY);
     ln_text(l, key, -1);
     ln_color(l, CL_DIM);
     ln_text(l, " ", -1);
     ln_text(l, what, -1);
+    if (hint_rec && nhints < 24) {
+        hints[nhints].x1 = l->vis;
+        nhints++;
+    }
     ln_text(l, "   ", -1);
+}
+
+/* the key of the hint at column x of the bottom bar, or 0 */
+static int hint_at(int x)
+{
+    int i;
+
+    for (i = 0; i < nhints; i++) {
+        if (x >= hints[i].x0 && x <= hints[i].x1) {
+            return hints[i].key;
+        }
+    }
+    return 0;
 }
 
 /* one line of the list; with nl 0 the line is left open, for the right
@@ -1002,47 +1126,60 @@ static void draw_bottom(struct ctx *c, struct view *v, struct buf *b,
         ln_put(&l, b, 1);
         return;
     }
-    if (mode[0] == 'O') {
+    if (mode[0] == 'h') {
         ln_start(&l, cols, 0);
-        ln_color(&l, CL_DIM);
-        ln_text(&l, " a .ckan modpack, CKAN/registry.json, or a mod list "
-            "CKAN saved (txt, md, csv, tsv); ~/ is your home", -1);
+        ln_color(&l, CL_TEXT);
+        ln_text(&l, " ", -1);
+        ln_text(&l, v->msg[0] ? v->msg : pend_name, -1);
         ln_put(&l, b, 0);
         ln_start(&l, cols, BG_BAR);
         ln_color(&l, CL_TITLE);
-        ln_text(&l, " import the CKAN file ", -1);
-        ln_color(&l, CL_TEXT);
-        ln_text(&l, v->input, -1);
-        ln_text(&l, "_", -1);
-        ln_color(&l, CL_DIM);
-        ln_text(&l, "    Enter: go, Esc: back", -1);
+        ln_text(&l, " apply it how?  ", -1);
+        hint_rec = 1;
+        nhints = 0;
+        key_hint(&l, "a", "add on top of what the game has");
+        key_hint(&l, "r", "replace: also mark for removal the mods you "
+            "chose that it lacks");
+        key_hint(&l, "Esc", "leave it");
+        hint_rec = 0;
         ln_put(&l, b, 1);
         return;
     }
     if (mode[0] == 'w' || mode[0] == 'o') {
-        names.v = NULL;
-        names.n = 0;
-        names.cap = 0;
-        modlist_names(c, &names);
         ln_start(&l, cols, 0);
-        ln_color(&l, CL_DIM);
-        ln_text(&l, names.n > 0 ? " modlists: " : " no modlists yet", -1);
-        for (i = 0; i < names.n; i++) {
+        if (v->hint[0] != 0) {
             ln_color(&l, CL_KEY);
-            ln_text(&l, names.v[i], -1);
-            ln_text(&l, "  ", -1);
+            ln_text(&l, " ", -1);
+            ln_text(&l, v->hint, -1);
+        } else {
+            names.v = NULL;
+            names.n = 0;
+            names.cap = 0;
+            modlist_names(c, &names);
+            ln_color(&l, CL_DIM);
+            ln_text(&l, mode[0] == 'o' ? " a modlist, or a file: kspkan "
+                "modlist, .ckan, registry.json, CKAN's txt md csv tsv;"
+                " Tab completes;" : " a modlist name, or a path with / "
+                "for a file; Tab completes;", -1);
+            ln_text(&l, names.n > 0 ? " modlists: " : " no modlists yet",
+                -1);
+            for (i = 0; i < names.n; i++) {
+                ln_color(&l, CL_KEY);
+                ln_text(&l, names.v[i], -1);
+                ln_text(&l, "  ", -1);
+            }
+            strs_free(&names);
         }
-        strs_free(&names);
         ln_put(&l, b, 0);
         ln_start(&l, cols, BG_BAR);
         ln_color(&l, CL_TITLE);
-        ln_text(&l, mode[0] == 'w' ? " save the modules you chose as " :
-            " mark for installing what is in the modlist or file ", -1);
+        ln_text(&l, mode[0] == 'w' ? " export the mods you chose to " :
+            " open (import) ", -1);
         ln_color(&l, CL_TEXT);
         ln_text(&l, v->input, -1);
         ln_text(&l, "_", -1);
         ln_color(&l, CL_DIM);
-        ln_text(&l, "    Enter: go, Esc: back", -1);
+        ln_text(&l, "    Tab: complete  Enter: go  Esc: back", -1);
         ln_put(&l, b, 1);
         return;
     }
@@ -1055,6 +1192,8 @@ static void draw_bottom(struct ctx *c, struct view *v, struct buf *b,
         return;
     }
     ln_text(&l, " ", -1);
+    hint_rec = 1;
+    nhints = 0;
     key_hint(&l, "j/k", "move");
     key_hint(&l, "Space", "mark");
     key_hint(&l, "Enter", "apply");
@@ -1062,9 +1201,12 @@ static void draw_bottom(struct ctx *c, struct view *v, struct buf *b,
     key_hint(&l, "i", "show");
     key_hint(&l, "s", "order");
     key_hint(&l, "p", "pane");
-    key_hint(&l, "w/o/O", "modlist");
+    key_hint(&l, "o", "import");
+    key_hint(&l, "w", "export");
+    key_hint(&l, "Tab", "games");
     key_hint(&l, "?", "help");
     key_hint(&l, "q", "quit");
+    hint_rec = 0;
     ln_put(&l, b, 1);
 }
 
@@ -1136,6 +1278,10 @@ static void draw(struct ctx *c, struct view *v, int rows, int cols,
         }
     }
     v->pshown = right ? p.n - h : 0;
+    lay_y0 = 3;
+    lay_avail = avail;
+    lay_lw = lw;
+    lay_right = right;
     buf_adds(&b, "\033[H");
 
     /* title bar */
@@ -1265,14 +1411,20 @@ static void help_screen(int rows, int cols)
         "Space", "mark: + will be installed, x will be removed",
         "r", "mark the recommended modules of this one",
         "C", "clear all marks",
-        "Enter  a", "carry out the marks (asks before it acts)",
+        "Enter  a", "carry out the marks (asks before it acts); what",
+        "", "cannot go in stays marked, and marks are kept on quit",
         "e", "installed: make it your choice, or a dependency",
-        "w", "save the modules you chose as a modlist",
-        "o", "open a modlist or file: marks what it has for installing",
-        "O", "import a CKAN modpack or mod list, then open it",
+        "o  O", "import: a modlist, kspkan modlist file, .ckan modpack,",
+        "", "CKAN/registry.json, or a list CKAN saved; Tab completes;",
+        "", "then a: add on top, r: replace what you chose",
+        "w", "export the mods you chose: a modlist name, or a path",
         "U", "upgrade everything installed",
         "u", "fetch a new module list",
-        "Tab", "switch to the next game instance",
+        "Tab", "the games on this computer (found on their own)",
+        "mouse", "wheel scrolls the list or the right pane; click",
+        "", "picks; double click, right click or the mark column",
+        "", "marks; the keys in the bottom bar can be clicked;",
+        "", "Shift with the mouse selects text in most terminals",
         "q", "quit",
         NULL
     };
@@ -1357,44 +1509,164 @@ static void pause_for_enter(void)
     (void)p;
 }
 
+/* the marks are kept in the game's state ("marks", one id a line),
+   so that quitting, switching games, an update or a failed install
+   never loses them */
+static void marks_save(struct ctx *c, struct view *v)
+{
+    struct buf b;
+    char *p;
+    int i;
+
+    if (c->state == NULL || v->marks == NULL) {
+        return;
+    }
+    b.p = NULL;
+    b.n = 0;
+    b.cap = 0;
+    buf_add(&b, "", 0);
+    for (i = 0; i < c->ix.ns; i++) {
+        if (v->marks[i]) {
+            buf_adds(&b, c->ix.s[i].id);
+            buf_adds(&b, "\n");
+        }
+    }
+    p = state_path(c, "marks");
+    if (b.n == 0) {
+        unlink(p);
+    } else {
+        write_file(p, b.p, b.n);
+    }
+    free(p);
+    buf_free(&b);
+}
+
+static void marks_load(struct ctx *c, struct view *v)
+{
+    struct summary *s;
+    char *p, *text, *line, *nl;
+    long len;
+
+    if (c->state == NULL) {
+        return;
+    }
+    p = state_path(c, "marks");
+    text = read_file(p, &len, 1L << 22);
+    free(p);
+    if (text == NULL) {
+        return;
+    }
+    line = text;
+    while (*line) {
+        nl = strchr(line, '\n');
+        if (nl != NULL) {
+            *nl = 0;
+        }
+        s = summary_find(&c->ix, line);
+        if (s != NULL) {
+            v->marks[s - c->ix.s] = 1;
+        }
+        if (nl == NULL) {
+            break;
+        }
+        line = nl + 1;
+    }
+    free(text);
+}
+
+static int count_marks(struct ctx *c, struct view *v)
+{
+    int i, n;
+
+    n = 0;
+    for (i = 0; i < c->ix.ns; i++) {
+        if (v->marks[i]) {
+            n++;
+        }
+    }
+    return n;
+}
+
+/* carry out the marks.  A mark goes only once its module really is in
+   (or out); the rest stay marked, so nothing chosen is lost when
+   something clashes or the answer is no.  What fits is installed even
+   when some marked module cannot go in. */
 static void apply(struct ctx *c, struct view *v)
 {
     struct strs ins, rem;
-    int i;
+    char *wasin;
+    int i, npicks, done, kept, have;
 
     ins.v = rem.v = NULL;
     ins.n = rem.n = ins.cap = rem.cap = 0;
+    wasin = (char *)xalloc((long)c->ix.ns + 1);
     for (i = 0; i < c->ix.ns; i++) {
+        wasin[i] = registry_find(&c->reg, c->ix.s[i].id) != NULL;
         if (!v->marks[i]) {
             continue;
         }
-        if (registry_find(&c->reg, c->ix.s[i].id) != NULL) {
+        if (wasin[i]) {
             strs_add(&rem, xstrdup(c->ix.s[i].id));
         } else {
             strs_add(&ins, xstrdup(c->ix.s[i].id));
         }
-        v->marks[i] = 0;
     }
     if (ins.n == 0 && rem.n == 0) {
+        free(wasin);
+        sprintf(v->msg, "nothing marked: Space marks a module");
         return;
     }
+    marks_save(c, v);
     raw_off();
     if (rem.n > 0) {
         cmd_remove(c, rem.v, rem.n);
     }
+    npicks = c->picks.n;
+    if (ins.n > 0) {
+        fit_wants(c, &ins);
+    }
     if (ins.n > 0) {
         cmd_install(c, ins.v, ins.n);
+    }
+    while (c->picks.n > npicks) {
+        c->picks.n--;
+        free(c->picks.v[c->picks.n]);
+    }
+    done = kept = 0;
+    for (i = 0; i < c->ix.ns; i++) {
+        if (!v->marks[i]) {
+            continue;
+        }
+        have = registry_find(&c->reg, c->ix.s[i].id) != NULL;
+        if (have != wasin[i]) {
+            v->marks[i] = 0;
+            done++;
+        } else {
+            kept++;
+        }
+    }
+    marks_save(c, v);
+    if (kept > 0) {
+        printf("\n%d done; %d still marked (the reasons are above); "
+            "they stay marked until they go in or you clear them\n",
+            done, kept);
     }
     pause_for_enter();
     strs_free(&ins);
     strs_free(&rem);
+    free(wasin);
     raw_on();
+    if (kept > 0) {
+        sprintf(v->msg, "%d done, %d still marked: i shows marked, "
+            "C clears", done, kept);
+    }
 }
 
 static void do_update(struct ctx *c, struct view *v)
 {
     int rc;
 
+    marks_save(c, v);
     raw_off();
     cmd_update(c, NULL);
     memset(&c->ix, 0, sizeof(c->ix));
@@ -1403,25 +1675,243 @@ static void do_update(struct ctx *c, struct view *v)
         memset(&c->ix, 0, sizeof(c->ix));
     }
     view_build(c, v);
+    marks_load(c, v);
     v->nrows = 0;
     refilter(c, v);
     pause_for_enter();
     raw_on();
 }
 
-static void next_instance(struct ctx *c)
+/* a mouse event in the list view: the wheel scrolls the list, or the
+   right pane under the pointer; a click picks a row, a click in the
+   mark column, a double click or a right click marks it; a click on a
+   key in the bottom bar works as that key.  The key to act on, or 0. */
+static int mouse_main(struct ctx *c, struct view *v, int rows)
 {
-    int i;
+    int idx, step;
 
-    for (i = 0; i < c->inames.n; i++) {
-        if (c->instname != NULL &&
-            strcmp(c->inames.v[i], c->instname) == 0)
-        {
+    if (!mouse_down) {
+        return 0;
+    }
+    if (mouse_b == 64 || mouse_b == 65) {
+        step = mouse_b == 64 ? -3 : 3;
+        if (lay_right && mouse_x > lay_lw + 1) {
+            v->pscroll += step;
+            if (v->pscroll > v->pshown) {
+                v->pscroll = v->pshown;
+            }
+            if (v->pscroll < 0) {
+                v->pscroll = 0;
+            }
+            return 0;
+        }
+        v->cur += step;
+        if (v->cur >= v->nrows) {
+            v->cur = v->nrows - 1;
+        }
+        if (v->cur < 0) {
+            v->cur = 0;
+        }
+        return 0;
+    }
+    if (mouse_y == rows && mouse_b == 0) {
+        return hint_at(mouse_x);
+    }
+    if (mouse_y == 2 && mouse_b == 0) {
+        return 's';
+    }
+    if (mouse_y < lay_y0 || mouse_y >= lay_y0 + lay_avail ||
+        (lay_right && mouse_x > lay_lw))
+    {
+        return 0;
+    }
+    idx = v->top + mouse_y - lay_y0;
+    if (idx >= v->nrows || (mouse_b != 0 && mouse_b != 2)) {
+        return 0;
+    }
+    v->cur = idx;
+    if (mouse_b == 2 || mouse_x <= 3 || dbl_click(idx)) {
+        v->marks[v->rows[idx]] = (char)!v->marks[v->rows[idx]];
+        marks_save(c, v);
+    }
+    return 0;
+}
+
+/* Tab: the games on this computer, found on their own, with what is
+   in each; Enter switches to the one under the cursor */
+static int games_screen(struct ctx *c, int rows, int cols)
+{
+    struct gameinfo *gi;
+    struct buf b;
+    struct line l;
+    char tmp[200];
+    int i, n, cur, key, y, top, per, pick, rescan;
+    long w;
+
+    pick = -1;
+    rescan = 1;
+    gi = NULL;
+    n = 0;
+    cur = 0;
+    top = 0;
+    for (;;) {
+        if (rescan) {
+            for (i = 0; i < n; i++) {
+                game_info_free(&gi[i]);
+            }
+            free(gi);
+            games_autoadd(c, 1);
+            n = c->inames.n;
+            gi = (struct gameinfo *)xalloc((long)(n + 1) *
+                (long)sizeof(*gi));
+            for (i = 0; i < n; i++) {
+                game_info(c, i, &gi[i]);
+                if (c->instname != NULL &&
+                    strcmp(c->inames.v[i], c->instname) == 0 && rescan == 1)
+                {
+                    cur = i;
+                }
+            }
+            rescan = 0;
+        }
+        per = (rows - 4) / 3;
+        if (per < 1) {
+            per = 1;
+        }
+        if (cur < top) {
+            top = cur;
+        }
+        if (cur >= top + per) {
+            top = cur - per + 1;
+        }
+        b.p = NULL;
+        b.n = 0;
+        b.cap = 0;
+        buf_add(&b, "", 0);
+        buf_adds(&b, "\033[H\033[0m\033[2J");
+        ln_start(&l, cols, BG_BAR);
+        ln_color(&l, CL_TITLE);
+        ln_text(&l, " kspkan games   ", -1);
+        ln_color(&l, CL_DIM);
+        sprintf(tmp, "%d found on this computer", n);
+        ln_text(&l, tmp, -1);
+        ln_put(&l, &b, 0);
+        ln_start(&l, cols, 0);
+        ln_put(&l, &b, 0);
+        y = 2;
+        for (i = top; i < n && i < top + per; i++) {
+            ln_start(&l, cols, i == cur ? BG_SEL : 0);
+            ln_color(&l, CL_INST);
+            ln_text(&l, c->instname != NULL &&
+                strcmp(c->instname, c->inames.v[i]) == 0 ? " * " : "   ",
+                -1);
+            ln_color(&l, CL_TITLE);
+            ln_text(&l, c->inames.v[i], -1);
+            ln_color(&l, CL_DIM);
+            ln_text(&l, "  game ", -1);
+            ln_color(&l, CL_TEXT);
+            ln_text(&l, gi[i].version != NULL ? gi[i].version : "?", -1);
+            ln_color(&l, CL_DIM);
+            ln_text(&l, "  ", -1);
+            ln_color(&l, CL_LINK);
+            ln_text(&l, c->igames.v[i], -1);
+            ln_put(&l, &b, 0);
+            ln_start(&l, cols, i == cur ? BG_SEL : 0);
+            ln_color(&l, CL_DIM);
+            sprintf(tmp, "     %d chosen, %d dependencies, %d found; "
+                "%d folders in GameData; DLC: ", gi[i].chosen, gi[i].deps,
+                gi[i].found, gi[i].folders);
+            ln_text(&l, tmp, -1);
+            ln_color(&l, gi[i].dlcs[0] ? CL_ADD : CL_DIM);
+            ln_text(&l, gi[i].dlcs[0] ? gi[i].dlcs : "none", -1);
+            ln_put(&l, &b, 0);
+            ln_start(&l, cols, 0);
+            ln_put(&l, &b, 0);
+            y += 3;
+        }
+        if (n == 0) {
+            ln_start(&l, cols, 0);
+            ln_color(&l, CL_DIM);
+            ln_text(&l, "   no game found; from a shell: kspkan add NAME "
+                "GAMEDIR", -1);
+            ln_put(&l, &b, 0);
+            y++;
+        }
+        for (; y < rows - 1; y++) {
+            ln_start(&l, cols, 0);
+            ln_put(&l, &b, 0);
+        }
+        ln_start(&l, cols, BG_BAR);
+        ln_text(&l, " ", -1);
+        hint_rec = 1;
+        nhints = 0;
+        key_hint(&l, "j/k", "move");
+        key_hint(&l, "Enter", "use this game");
+        key_hint(&l, "r", "search again");
+        key_hint(&l, "Esc q", "back");
+        hint_rec = 0;
+        ln_put(&l, &b, 1);
+        w = (long)write(1, b.p, (unsigned long)b.n);
+        buf_free(&b);
+        if (w < 0) {
+            break;
+        }
+        key = read_key();
+        if (key == KEY_MOUSE) {
+            key = 0;
+            if (mouse_down && (mouse_b == 64 || mouse_b == 65)) {
+                key = mouse_b == 64 ? 'k' : 'j';
+            } else if (mouse_down && mouse_b == 0 && mouse_y == rows) {
+                key = hint_at(mouse_x);
+            } else if (mouse_down && mouse_b == 0 && mouse_y >= 3 &&
+                top + (mouse_y - 3) / 3 < n)
+            {
+                cur = top + (mouse_y - 3) / 3;
+                key = dbl_click(cur) ? KEY_ENTER : 0;
+            }
+        }
+        if (key < 0 || key == 'q' || key == KEY_ESC || key == 9) {
+            break;
+        }
+        if ((key == 'j' || key == KEY_DOWN) && cur + 1 < n) {
+            cur++;
+        } else if ((key == 'k' || key == KEY_UP) && cur > 0) {
+            cur--;
+        } else if (key == 'g' || key == KEY_HOME) {
+            cur = 0;
+        } else if ((key == 'G' || key == KEY_END) && n > 0) {
+            cur = n - 1;
+        } else if (key == 'r') {
+            rescan = 2;
+        } else if ((key == KEY_ENTER || key == 10) && n > 0) {
+            pick = cur;
             break;
         }
     }
-    i = (i + 1) % c->inames.n;
+    for (i = 0; i < n; i++) {
+        game_info_free(&gi[i]);
+    }
+    free(gi);
+    return pick;
+}
+
+/* make game i the current one: its own installed list and marks */
+static void switch_game(struct ctx *c, struct view *v, int i)
+{
+    int found;
+
+    if (c->instname != NULL && strcmp(c->inames.v[i], c->instname) == 0) {
+        return;
+    }
+    marks_save(c, v);
     inst_select(c, c->inames.v[i]);
+    found = c->ix.ns > 0 ? scan_run(c, 2) : 0;
+    view_build(c, v);
+    marks_load(c, v);
+    v->nrows = 0;
+    refilter(c, v);
+    sprintf(v->msg, "now %.40s: %d mods installed%s", c->instname,
+        c->reg.n, found > 0 ? ", some found in the game (f)" : "");
 }
 
 static void do_upgrade(struct ctx *c)
@@ -1467,107 +1957,265 @@ static void settings_save(struct ctx *c, struct view *v)
     free(p);
 }
 
-/* mark for installing what a modlist has and the game has not */
-static void open_modlist(struct ctx *c, struct view *v, const char *name)
+/* "~/x" made into a path under HOME; malloc'd */
+static char *expand_home(const char *s)
 {
-    struct modlist ml;
-    struct summary *s;
-    const char *kind;
-    char *saved;
-    int i, marked, have, unknown, rc;
+    const char *home;
+    char *p;
 
-    rc = modlist_open(c, name, &ml, &saved, &kind);
+    home = getenv("HOME");
+    if (s[0] == '~' && (s[1] == '/' || s[1] == 0) && home != NULL) {
+        p = (char *)xalloc((long)(strlen(home) + strlen(s)) + 2);
+        strcpy(p, home);
+        strcat(p, s + 1);
+        return p;
+    }
+    return xstrdup(s);
+}
+
+/* o: a saved modlist, a kspkan modlist file, a .ckan modpack, a CKAN
+   registry.json (or the game folder holding CKAN/), or a mod list CKAN
+   saved.  Then the h prompt asks how to apply it. */
+static int open_list(struct ctx *c, struct view *v, const char *arg)
+{
+    struct stat st;
+    const char *kind;
+    char *path, *reg, *saved;
+    int rc;
+
+    path = expand_home(arg);
+    if (stat(path, &st) == 0 && S_ISDIR(st.st_mode)) {
+        reg = (char *)xalloc((long)strlen(path) + 24);
+        strcpy(reg, path);
+        strcat(reg, "/CKAN/registry.json");
+        if (access(reg, R_OK) != 0) {
+            sprintf(v->msg, "%.60s is a directory; give a file in it "
+                "(Tab lists them)", arg);
+            free(reg);
+            free(path);
+            return -1;
+        }
+        free(path);
+        path = reg;
+    }
+    modlist_free(&pend);
+    rc = modlist_open(c, path, &pend, &saved, &kind);
     if (rc == -2) {
-        sprintf(v->msg, "no mods found in %.60s", name);
-        return;
+        sprintf(v->msg, "no mods found in %.60s", arg);
+    } else if (rc < 0) {
+        sprintf(v->msg, "no modlist or file %.60s", arg);
     }
     if (rc < 0) {
-        sprintf(v->msg, "no modlist or file %.60s", name);
-        return;
+        free(path);
+        return -1;
     }
+    sprintf(pend_name, "%.60s", saved != NULL ? saved : arg);
     if (saved != NULL) {
-        name = saved;
+        sprintf(v->msg, "%s, %d mods, kept as the modlist %s", kind,
+            pend.n, pend_name);
+    } else {
+        sprintf(v->msg, "%s, %d mods", kind, pend.n);
     }
-    marked = have = unknown = 0;
-    for (i = 0; i < ml.n; i++) {
-        s = summary_find(&c->ix, ml.v[i].id);
+    free(saved);
+    free(path);
+    return 0;
+}
+
+/* mark what the opened list has and the game has not; replace: also
+   mark for removal the mods you chose that the list does not have */
+static void apply_list(struct ctx *c, struct view *v, int replace)
+{
+    struct summary *s;
+    struct inst *m;
+    int i, k, marked, have, unknown, gone, inlist;
+
+    marked = have = unknown = gone = 0;
+    for (i = 0; i < pend.n; i++) {
+        s = summary_find(&c->ix, pend.v[i].id);
         if (s == NULL) {
             unknown++;
-        } else if (registry_find(&c->reg, ml.v[i].id) != NULL) {
+        } else if (registry_find(&c->reg, pend.v[i].id) != NULL) {
             have++;
+            v->marks[s - c->ix.s] = 0;
         } else {
             v->marks[s - c->ix.s] = 1;
             marked++;
         }
     }
-    modlist_free(&ml);
-    sprintf(v->msg, "%.60s: %d marked for installing, %d already in, "
-        "%d not in the module list; Enter installs", name, marked, have,
-        unknown);
-    free(saved);
-    if (marked > 0) {
+    for (i = 0; replace && i < c->reg.n; i++) {
+        m = &c->reg.v[i];
+        s = summary_find(&c->ix, m->id);
+        if (m->autoinst || s == NULL || (strlen(m->id) > 4 &&
+            strcmp(m->id + strlen(m->id) - 4, "-DLC") == 0))
+        {
+            continue;
+        }
+        inlist = 0;
+        for (k = 0; k < pend.n; k++) {
+            if (strcmp(pend.v[k].id, m->id) == 0) {
+                inlist = 1;
+            }
+        }
+        if (!inlist) {
+            v->marks[s - c->ix.s] = 1;
+            gone++;
+        }
+    }
+    marks_save(c, v);
+    sprintf(v->msg, "%.40s: + %d to install, x %d to remove, %d already "
+        "in, %d unknown; Enter carries it out", pend_name, marked, gone,
+        have, unknown);
+    modlist_free(&pend);
+    if (marked + gone > 0) {
         v->show = SH_MARKED;
         refilter(c, v);
     }
 }
 
-static void save_modlist(struct ctx *c, struct view *v, const char *name)
+/* w: the modules you chose, as a saved modlist (a plain name) or a
+   file (a path; a directory gets a file named after the game) */
+static void save_modlist(struct ctx *c, struct view *v, const char *arg)
 {
+    struct stat st;
+    char *path, *dir;
     int rc, count;
 
-    if (strchr(name, '/') == NULL && !name_valid(name)) {
-        sprintf(v->msg, "a name of letters, digits, _ - . please");
-        return;
-    }
-    rc = modlist_write(c, name, &count);
-    if (rc < 0) {
-        sprintf(v->msg, "could not save the modlist %.60s", name);
+    if (strchr(arg, '/') == NULL && arg[0] != '~') {
+        if (!name_valid(arg)) {
+            sprintf(v->msg, "a name of letters, digits, _ - . please, "
+                "or a path with a /");
+            return;
+        }
+        path = xstrdup(arg);
     } else {
-        sprintf(v->msg, "saved %d modules you chose as %.60s", count,
-            name);
+        path = expand_home(arg);
+        if (stat(path, &st) == 0 && S_ISDIR(st.st_mode)) {
+            dir = path;
+            path = (char *)xalloc((long)strlen(dir) + 64);
+            strcpy(path, dir);
+            free(dir);
+            strcat(path, "/");
+            strcat(path, c->instname != NULL ? c->instname : "modlist");
+            strcat(path, ".kspkan");
+        }
     }
+    rc = modlist_write(c, path, &count);
+    if (rc < 0) {
+        sprintf(v->msg, "could not write %.60s", path);
+    } else if (strchr(path, '/') == NULL) {
+        sprintf(v->msg, "saved the %d modules you chose as the modlist "
+            "%.60s", count, path);
+    } else {
+        sprintf(v->msg, "wrote the %d modules you chose to %.100s",
+            count, path);
+    }
+    free(path);
 }
 
-/* O: a file CKAN wrote becomes a modlist, which is then opened */
-static void import_modlist(struct ctx *c, struct view *v, const char *file)
-{
-    struct ckanimp r;
-    const char *home;
-    char *path, *name;
-    char note[80], tmp[200];
-    int rc, n;
+/* ---- Tab completion of paths and modlist names ---- */
 
-    home = getenv("HOME");
-    if (file[0] == '~' && file[1] == '/' && home != NULL) {
-        path = (char *)xalloc((long)(strlen(home) + strlen(file)));
-        strcpy(path, home);
-        strcat(path, file + 1);
+static int has_prefix(const char *s, const char *p)
+{
+    return strncmp(s, p, strlen(p)) == 0;
+}
+
+/* complete the last word of t (at most max chars); the choices, when
+   there are several, go to v->hint */
+static void complete(struct ctx *c, struct view *v, char *t, int max)
+{
+    struct strs cand;
+    struct stat st;
+    DIR *d;
+    struct dirent *de;
+    char *slash, *dir, *full, *pre;
+    int i, n, k, isdir;
+    long dl;
+
+    cand.v = NULL;
+    cand.n = 0;
+    cand.cap = 0;
+    v->hint[0] = 0;
+    slash = strrchr(t, '/');
+    pre = slash != NULL ? slash + 1 : t;
+    if (slash == NULL && t[0] != '~') {
+        modlist_names(c, &cand);
+        k = 0;
+        for (i = 0; i < cand.n; i++) {
+            if (has_prefix(cand.v[i], t)) {
+                cand.v[k] = cand.v[i];
+                k++;
+            } else {
+                free(cand.v[i]);
+            }
+        }
+        cand.n = k;
+        dir = xstrdup(".");
+    } else if (slash == NULL) {
+        strcpy(t, "~/");
+        return;
     } else {
-        path = xstrdup(file);
+        dl = (long)(slash - t);
+        full = xstrndup(t, dl == 0 ? 1 : dl);
+        dir = expand_home(full);
+        free(full);
     }
-    rc = ckan_import(path, &r);
-    if (rc < 0 || r.ml.n == 0) {
-        sprintf(v->msg, rc < 0 && strcmp(r.kind, "file") == 0 ?
-            "cannot read %.60s" : "no mods found in %.60s", file);
-        modlist_free(&r.ml);
-        free(path);
+    d = opendir(dir);
+    while (d != NULL && (de = readdir(d)) != NULL) {
+        if (strcmp(de->d_name, ".") == 0 || strcmp(de->d_name, "..") == 0
+            || (de->d_name[0] == '.' && pre[0] != '.') ||
+            !has_prefix(de->d_name, pre))
+        {
+            continue;
+        }
+        full = (char *)xalloc((long)(strlen(dir) +
+            strlen(de->d_name)) + 4);
+        strcpy(full, dir);
+        strcat(full, "/");
+        strcat(full, de->d_name);
+        isdir = stat(full, &st) == 0 && S_ISDIR(st.st_mode);
+        free(full);
+        full = (char *)xalloc((long)strlen(de->d_name) + 4);
+        strcpy(full, de->d_name);
+        if (isdir) {
+            strcat(full, "/");
+        }
+        strs_add(&cand, full);
+    }
+    if (d != NULL) {
+        closedir(d);
+    }
+    free(dir);
+    if (cand.n == 0) {
+        sprintf(v->hint, "nothing starts with %.60s", pre);
+        strs_free(&cand);
         return;
     }
-    name = ckan_list_name(path);
-    sprintf(note, "imported from the %.60s", r.kind);
-    rc = modlist_store(c, name, &r.ml, note);
-    n = r.ml.n;
-    modlist_free(&r.ml);
-    free(path);
-    if (rc < 0) {
-        sprintf(v->msg, "could not save the modlist %.60s", name);
-        free(name);
-        return;
+    /* the longest start that all choices share */
+    n = (int)strlen(cand.v[0]);
+    for (i = 1; i < cand.n; i++) {
+        for (k = 0; k < n && cand.v[i][k] == cand.v[0][k]; k++) {
+            continue;
+        }
+        n = k;
     }
-    open_modlist(c, v, name);
-    strcpy(tmp, v->msg);
-    sprintf(v->msg, "%d imported; %.180s", n, tmp);
-    free(name);
+    if ((int)(pre - t) + n < max) {
+        memcpy(pre, cand.v[0], (unsigned long)n);
+        pre[n] = 0;
+    }
+    if (cand.n > 1) {
+        sort_strs(cand.v, cand.n, strcmp);
+        for (i = 0; i < cand.n; i++) {
+            if (strlen(v->hint) + strlen(cand.v[i]) + 3 >=
+                sizeof(v->hint))
+            {
+                strcat(v->hint, "...");
+                break;
+            }
+            strcat(v->hint, cand.v[i]);
+            strcat(v->hint, "  ");
+        }
+    }
+    strs_free(&cand);
 }
 
 /* e: a module you chose becomes a dependency, and the other way */
@@ -1599,18 +2247,46 @@ static void prompt_key(struct ctx *c, struct view *v, char *mode, int key)
     char *t;
     int n, max;
 
+    if (mode[0] == 'h') {
+        if (key == 'a' || key == 'A') {
+            apply_list(c, v, 0);
+            mode[0] = 0;
+        } else if (key == 'r' || key == 'R') {
+            apply_list(c, v, 1);
+            mode[0] = 0;
+        } else if (key == KEY_ESC || key == 'q') {
+            modlist_free(&pend);
+            sprintf(v->msg, "left as it was; %.60s is kept as a modlist "
+                "if it was imported", pend_name);
+            mode[0] = 0;
+        } else {
+            sprintf(v->msg, "a adds on top, r replaces, Esc leaves it");
+        }
+        return;
+    }
     t = mode[0] == '/' ? v->find : v->input;
-    max = mode[0] == '/' ? 120 : mode[0] == 'w' ? 60 : 250;
+    max = mode[0] == '/' ? 120 : 250;
     n = (int)strlen(t);
+    if (key != 9) {
+        v->hint[0] = 0;
+    }
     if (key == KEY_ENTER || key == 10) {
         if (mode[0] == 'w' && n > 0) {
             save_modlist(c, v, t);
+            mode[0] = 0;
         } else if (mode[0] == 'o' && n > 0) {
-            open_modlist(c, v, t);
-        } else if (mode[0] == 'O' && n > 0) {
-            import_modlist(c, v, t);
+            if (open_list(c, v, t) == 0) {
+                mode[0] = 'h';
+            } else {
+                /* stay, so that the path can be put right */
+                strcpy(v->hint, v->msg);
+                v->msg[0] = 0;
+            }
+        } else {
+            mode[0] = 0;
         }
-        mode[0] = 0;
+    } else if (key == 9 && t != v->find) {
+        complete(c, v, t, max);
     } else if (key == KEY_ESC) {
         if (mode[0] == '/') {
             t[0] = 0;
@@ -1629,6 +2305,15 @@ static void prompt_key(struct ctx *c, struct view *v, char *mode, int key)
         if (mode[0] == '/') {
             refilter(c, v);
         }
+    } else if (key == 23 && t != v->find) {
+        /* ctrl-w: back to the previous / */
+        while (n > 0 && t[n - 1] == '/') {
+            n--;
+        }
+        while (n > 0 && t[n - 1] != '/') {
+            n--;
+        }
+        t[n] = 0;
     } else if (key == KEY_UP && v->cur > 0) {
         v->cur--;
     } else if (key == KEY_DOWN && v->cur + 1 < v->nrows) {
@@ -1671,6 +2356,11 @@ int cmd_tui(struct ctx *c)
             "(I: show them all)", found, found == 1 ? "" : "s");
     }
     view_build(c, &v);
+    marks_load(c, &v);
+    if (count_marks(c, &v) > 0 && v.msg[0] == 0) {
+        sprintf(v.msg, "%d still marked from last time: Enter carries "
+            "them out, C clears them", count_marks(c, &v));
+    }
     refilter(c, &v);
     mode[0] = 0;
     running = 1;
@@ -1698,7 +2388,23 @@ int cmd_tui(struct ctx *c)
         if (key < 0) {
             break;
         }
+        if (key == KEY_MOUSE && (!mouse_down || mouse_b == 1)) {
+            continue;
+        }
         v.msg[0] = 0;
+        if (key == KEY_MOUSE && mode[0] != 0) {
+            if (!mouse_down || mouse_b != 0 || mouse_y != rows ||
+                mode[0] != 'h')
+            {
+                continue;
+            }
+            key = hint_at(mouse_x);
+        } else if (key == KEY_MOUSE) {
+            key = mouse_main(c, &v, rows);
+            if (key == 0) {
+                continue;
+            }
+        }
         if (mode[0] != 0) {
             prompt_key(c, &v, mode, key);
             continue;
@@ -1737,19 +2443,18 @@ int cmd_tui(struct ctx *c)
             }
         } else if (key == '/') {
             strcpy(mode, "/");
-        } else if (key == 'w') {
+        } else if (key == 'w' || key == 'W') {
             strcpy(mode, "w");
             v.input[0] = 0;
+            v.hint[0] = 0;
             if (c->instname != NULL) {
                 strncpy(v.input, c->instname, sizeof(v.input) - 1);
                 v.input[sizeof(v.input) - 1] = 0;
             }
-        } else if (key == 'o') {
+        } else if (key == 'o' || key == 'O') {
             strcpy(mode, "o");
             v.input[0] = 0;
-        } else if (key == 'O') {
-            strcpy(mode, "O");
-            v.input[0] = 0;
+            v.hint[0] = 0;
         } else if (key == KEY_ESC && v.find[0] != 0) {
             v.find[0] = 0;
             refilter(c, &v);
@@ -1790,11 +2495,13 @@ int cmd_tui(struct ctx *c)
         } else if (key == ' ' && v.nrows > 0) {
             i = v.rows[v.cur];
             v.marks[i] = (char)!v.marks[i];
+            marks_save(c, &v);
             if (v.cur + 1 < v.nrows) {
                 v.cur++;
             }
         } else if (key == 'C') {
             memset(v.marks, 0, (unsigned long)c->ix.ns + 1);
+            marks_save(c, &v);
             if (v.show == SH_MARKED) {
                 refilter(c, &v);
             }
@@ -1804,14 +2511,15 @@ int cmd_tui(struct ctx *c)
         } else if (key == 'r') {
             sprintf(v.msg, "%d recommended modules marked",
                 mark_recommended(c, &v));
+            marks_save(c, &v);
         } else if (key == 'U') {
             do_upgrade(c);
             refilter(c, &v);
-        } else if (key == 9 && c->inames.n > 1) {
-            next_instance(c);
-            view_build(c, &v);
-            v.nrows = 0;
-            refilter(c, &v);
+        } else if (key == 9) {
+            i = games_screen(c, rows, cols);
+            if (i >= 0) {
+                switch_game(c, &v, i);
+            }
         } else if (key == 'u') {
             do_update(c, &v);
         }

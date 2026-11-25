@@ -1,4 +1,4 @@
-kspkan 0.5.0 - a small mod manager for Kerbal Space Program
+kspkan 0.6.0 - a small mod manager for Kerbal Space Program
 
 Read this first.  Everything here was written with an AI (vibecoded).
 It was made for one person's computer and works there; it is not
@@ -10,10 +10,15 @@ list.  It is one static program in plain C89, with no libraries; the
 only other program it runs is curl, to download.
 
     make && make install        builds, and installs to ~/.system/bin
-    kspkan                      first start: finds the game and asks a name
+    kspkan                      first start: finds the games on its own
 
-Then  kspkan  opens a full screen mode on the game you used last.  Press
-? there for the keys.  Everything works from the keyboard.
+The first start looks for the game where Steam, GOG and Heroic put it,
+in every Steam library, and in your home directory a few levels down,
+and remembers each copy it finds (it asks for the folder only when it
+finds none).  Then  kspkan  opens a full screen mode on the game you
+used last; Tab there lists the games with their mods and DLCs.  Press
+? for the keys.  Everything works from the keyboard, and the mouse
+works too.
 
 
 COMMANDS
@@ -35,7 +40,8 @@ COMMANDS
     kspkan modlist [...]            saved lists of mods (see MODLISTS)
     kspkan clean                    delete downloaded archives
     kspkan add NAME [GAMEDIR]       remember a game folder
-    kspkan instances                list them (* is the one in use)
+    kspkan instances                find games, list them with their
+                                    mods and DLCs (* is the one in use)
     kspkan use NAME | forget NAME   choose one, or forget it
     kspkan version
 
@@ -110,8 +116,11 @@ is installed.
 
 Then  kspkan modlist show NAME  says what the game lacks, and install or
 pin puts it in (or give the file to install straight away).  In the full
-screen mode, O asks for the file (~/ works), imports it and marks what
-the game lacks for installing; o takes a file too.
+screen mode, o (or O) asks for a modlist or any of these files, with
+Tab completing the path, and then how to apply it: a adds what the game
+lacks on top, r also marks for removal the mods you chose that the list
+does not have.  Nothing happens until Enter.  w writes the mods you
+chose to a modlist name or to a file (a path with a /).
 
 
 MODS ALREADY IN THE GAME
@@ -151,10 +160,25 @@ The keys that matter most:
                 or more), or off; remembered.  J K scroll it.
     Space       mark (+ install, x remove), Enter carries the marks out
     e           make an installed mod your choice, or a dependency
-    w  o        save the mods you chose as a modlist; open one (marks
-                what the game lacks of it)
-    O           import a CKAN modpack or mod list, then open it
+    o  O        import: a modlist, a kspkan modlist file, a .ckan
+                modpack, CKAN/registry.json (or the game folder that
+                has it), a list CKAN saved; Tab completes; then a: add
+                on top, r: replace what you chose
+    w           export the mods you chose: a modlist name or a path
+    Tab         the games on this computer, found on their own, with
+                their version, mods and DLCs; Enter uses one
     /  s  c     search, order, show mods that do not fit the game
+
+Marks are kept on disk for each game: quitting, switching games,
+fetching a new list or an install that fails never loses them.  When
+some marked mods cannot go in (a clash, a missing dependency), the rest
+are installed, the reasons are shown, and those stay marked.
+
+The mouse: the wheel scrolls the list, or the right pane under the
+pointer; a click picks a row; a double click, a right click or a click
+in the mark column marks it; a click on a column heading changes the
+order; the keys in the bottom bar can be clicked.  Hold Shift to select
+text with the mouse, as in most terminals.
 
 The right pane shows everything about the mod: the long description,
 what it needs, recommends, suggests and conflicts with, which of your
@@ -176,8 +200,8 @@ WHAT IT DOES WITH MODS
   - the DLCs are detected from their folders
 
 Not done: zip64 archives; offering providers of a virtual name in
-recommends; detecting mods installed by hand; extra "compatible game
-versions"; importing archives you downloaded yourself.
+recommends; importing archives you downloaded yourself; writing CKAN's
+own formats (kspkan reads them, it never writes them).
 
 
 FILES
@@ -190,6 +214,7 @@ $XDG_DATA_HOME/kspkan, or ~/.local/share/kspkan:
     modlists/            the saved modlists
     settings             where the full screen mode puts the description
     inst/NAME/installed  what was installed into that game
+    inst/NAME/marks      the marks of the full screen mode
 
 All are plain text.  Nothing is written into the game folder except the
 mods themselves.

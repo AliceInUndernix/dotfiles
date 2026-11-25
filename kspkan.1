@@ -1,4 +1,4 @@
-.TH KSPKAN 1 2026-11-25 "kspkan 0.5.0"
+.TH KSPKAN 1 2026-11-25 "kspkan 0.6.0"
 .SH NAME
 kspkan \- small mod manager for Kerbal Space Program
 .SH SYNOPSIS
@@ -130,7 +130,12 @@ Delete downloaded archives.
 Remember a game folder (the folder that holds GameData) as an instance.
 .TP
 .BR instances ", " use " \fIname\fR, " forget " \fIname\fR"
-List, choose or forget instances.  Forgetting never touches the game.
+Find the games on the disk (Steam and its libraries, GOG, Heroic, the
+home directory a few levels down) and list them with their version,
+mods and DLCs; choose one; or forget one.  Forgetting never touches the
+game, and a forgotten game is not added back unless
+.B add
+names it.
 .TP
 .B version
 Print the version.
@@ -154,14 +159,28 @@ about the module: what needs it, the long description, links;
 scroll it), or turns it off; the choice is remembered.
 .B e
 makes an installed module your choice or a dependency.
+.BR o " or " O
+imports: a modlist, a kspkan modlist file, a .ckan modpack,
+CKAN/registry.json (or the game folder holding it) or a list CKAN
+saved; Tab completes the path.  Then
+.B a
+marks what the game lacks (add on top), and
+.B r
+also marks for removal the mods you chose that the list lacks
+(replace).  Nothing happens before Enter.
 .B w
-saves the modules you chose as a modlist;
-.B o
-opens one and marks what the game lacks of it, ready for Enter.
-.B O
-imports a file CKAN wrote (see
-.BR "modlist import" )
-and opens it the same way.
+exports the mods you chose to a modlist name or, given a path, to a
+file.
+.B Tab
+lists the games on this computer, found on their own, with their
+version, mods and DLCs; Enter switches.
+.PP
+Marks are kept on disk for each game and survive quitting, switching
+and a failed install: a mark goes only when its module went in or out.
+.PP
+The mouse works too: the wheel scrolls the list or the right pane, a
+click picks a row, a double click, a right click or a click in the mark
+column marks it, and the keys in the bottom bar can be clicked.
 .B ?
 shows every key.
 .SH OPTIONS

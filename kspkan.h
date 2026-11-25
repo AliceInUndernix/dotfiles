@@ -1,7 +1,7 @@
 #ifndef KSPKAN_H
 #define KSPKAN_H
 
-#define KSPKAN_VERSION "0.5.0"
+#define KSPKAN_VERSION "0.6.0"
 
 /* ---- util.c ---- */
 
@@ -197,6 +197,7 @@ struct ctx {
     long listdays;
     struct strs inames;
     struct strs igames;
+    struct strs iskip;
     char *idefault;
     char *kspver;
     char *repo;
@@ -235,6 +236,7 @@ extern const char *sort_names[];
 int entry_compat(struct ctx *c, struct entry *e);
 struct jnode *entry_json(struct ctx *c, struct entry *e);
 int ksp_detect(struct ctx *c);
+char *game_version(const char *dir);
 void compat_load(struct ctx *c);
 int cmd_compat(struct ctx *c, char **v, int n);
 
@@ -330,6 +332,7 @@ int modlist_names(struct ctx *c, struct strs *out);
 int modlist_open(struct ctx *c, const char *arg, struct modlist *ml,
     char **saved, const char **kind);
 int cmd_modlist(struct ctx *c, char **args, int n);
+void fit_wants(struct ctx *c, struct strs *want);
 
 /* ---- ckan.c: reading the mod lists CKAN writes (never writing) ---- */
 
@@ -384,6 +387,26 @@ int cmd_add(struct ctx *c, const char *name, const char *dir);
 int cmd_forget(struct ctx *c, const char *name);
 int cmd_use(struct ctx *c, const char *name);
 int cmd_instances(struct ctx *c);
+int inst_save(struct ctx *c);
+int inst_index(struct ctx *c, const char *name);
+
+/* ---- games.c: finding game folders, and what is in them ---- */
+
+struct gameinfo {
+    char *version;
+    int mods;
+    int chosen;
+    int deps;
+    int found;
+    int folders;
+    char dlcs[80];
+};
+
+int games_search(struct strs *out);
+int games_autoadd(struct ctx *c, int quiet);
+int same_dir(const char *a, const char *b);
+void game_info(struct ctx *c, int idx, struct gameinfo *g);
+void game_info_free(struct gameinfo *g);
 
 
 /* ---- scan.c: mods already in the game ---- */

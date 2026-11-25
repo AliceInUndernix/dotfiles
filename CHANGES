@@ -1,3 +1,24 @@
+0.6.0  2026-11-25
+    - fixed: carrying out marks in the full screen mode cleared them
+      all first, so a clash or a missing dependency lost every mark.
+      Now a mark goes only when its mod really went in or out, what
+      fits is installed and the rest stays marked with the reasons.
+    - marks are kept on disk per game: quitting, Tab, u keep them
+    - games are found on their own (Steam and its libraries, GOG,
+      Heroic, home a few levels down) and remembered; first start asks
+      only when none is found.  instances shows each game's version,
+      mods and DLCs; forget keeps a game from being added back.
+    - Tab in the full screen mode: the games, with mods and DLCs;
+      Enter (or a double click) switches
+    - o and O: one import for every kind of list (modlist, kspkan
+      file, .ckan, registry.json or the game folder with it, CKAN's
+      txt md csv tsv), Tab completes paths and modlist names, then a
+      (add on top) or r (replace what you chose)
+    - w exports to a modlist name, a file, or a directory
+    - the mouse: wheel, click, double click, right click, column
+      headings and the keys of the bottom bar
+    - tests/tui.sh drives the full screen through a terminal
+
 0.5.0  2026-11-25
     - find in an install stanza ignores letter case, as in CKAN
       (kOS-SCANSat ships GameData/kOS-SCANsat)

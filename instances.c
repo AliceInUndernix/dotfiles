@@ -7,7 +7,8 @@
 
 /* datadir/instances holds lines
      I<TAB>name<TAB>game folder
-     D<TAB>name            (the one used when none is named)  */
+     D<TAB>name            (the one used when none is named)
+     X<TAB>game folder     (forgotten: not added again when found) */
 
 char *data_dir(void)
 {
@@ -49,7 +50,7 @@ int name_valid(const char *s)
     return s[0] != '.';
 }
 
-static int inst_index(struct ctx *c, const char *name)
+int inst_index(struct ctx *c, const char *name)
 {
     int i;
 
@@ -66,8 +67,9 @@ int inst_load(struct ctx *c)
     char *p, *text, *line, *nl, *tab;
     long len;
 
-    c->inames.v = c->igames.v = NULL;
+    c->inames.v = c->igames.v = c->iskip.v = NULL;
     c->inames.n = c->igames.n = c->inames.cap = c->igames.cap = 0;
+    c->iskip.n = c->iskip.cap = 0;
     c->idefault = NULL;
     if (c->datadir == NULL) {
         return -1;
@@ -95,6 +97,8 @@ int inst_load(struct ctx *c)
                     strs_add(&c->igames, xstrdup(tab + 1));
                 }
             }
+        } else if (line[0] == 'X' && line[1] == '\t' && line[2] == '/') {
+            strs_add(&c->iskip, xstrdup(line + 2));
         } else if (line[0] == 'D' && line[1] == '\t') {
             free(c->idefault);
             c->idefault = xstrdup(line + 2);
@@ -108,7 +112,7 @@ int inst_load(struct ctx *c)
     return 0;
 }
 
-static int inst_save(struct ctx *c)
+int inst_save(struct ctx *c)
 {
     struct buf b;
     char *p;
@@ -123,6 +127,11 @@ static int inst_save(struct ctx *c)
         buf_adds(&b, c->inames.v[i]);
         buf_adds(&b, "\t");
         buf_adds(&b, c->igames.v[i]);
+        buf_adds(&b, "\n");
+    }
+    for (i = 0; i < c->iskip.n; i++) {
+        buf_adds(&b, "X\t");
+        buf_adds(&b, c->iskip.v[i]);
         buf_adds(&b, "\n");
     }
     if (c->idefault != NULL) {
@@ -227,6 +236,14 @@ int cmd_add(struct ctx *c, const char *name, const char *dir)
         free(full);
         return 1;
     }
+    for (i = 0; i < c->iskip.n; i++) {
+        if (same_dir(c->iskip.v[i], full)) {
+            free(c->iskip.v[i]);
+            c->iskip.n--;
+            c->iskip.v[i] = c->iskip.v[c->iskip.n];
+            i--;
+        }
+    }
     i = inst_index(c, name);
     if (i >= 0) {
         free(c->igames.v[i]);
@@ -257,7 +274,7 @@ int cmd_forget(struct ctx *c, const char *name)
         return 1;
     }
     free(c->inames.v[i]);
-    free(c->igames.v[i]);
+    strs_add(&c->iskip, c->igames.v[i]);
     for (; i + 1 < c->inames.n; i++) {
         c->inames.v[i] = c->inames.v[i + 1];
         c->igames.v[i] = c->igames.v[i + 1];
@@ -269,7 +286,8 @@ int cmd_forget(struct ctx *c, const char *name)
         c->idefault = c->inames.n > 0 ? xstrdup(c->inames.v[0]) : NULL;
     }
     inst_save(c);
-    printf("forgot %s (the game folder and its mods are untouched)\n", name);
+    printf("forgot %s (the game folder and its mods are untouched; "
+        "kspkan add brings it back)\n", name);
     return 0;
 }
 
@@ -286,18 +304,29 @@ int cmd_use(struct ctx *c, const char *name)
     return 0;
 }
 
+/* the remembered games, with what is in each; games found on the
+   disk that are not remembered yet are added first */
 int cmd_instances(struct ctx *c)
 {
+    struct gameinfo g;
     int i;
 
+    games_autoadd(c, 0);
     if (c->inames.n == 0) {
-        printf("no instances yet; add one: kspkan add NAME GAMEDIR\n");
+        printf("no game found; add one: kspkan add NAME GAMEDIR\n");
         return 0;
     }
     for (i = 0; i < c->inames.n; i++) {
+        game_info(c, i, &g);
         printf("%c %-14s %s\n", c->idefault != NULL &&
             strcmp(c->idefault, c->inames.v[i]) == 0 ? '*' : ' ',
             c->inames.v[i], c->igames.v[i]);
+        printf("  game %s, %d mods by kspkan (%d chosen, %d dependencies),"
+            " %d found, %d folders in GameData; DLC: %s\n",
+            g.version != NULL ? g.version : "?", g.chosen + g.deps,
+            g.chosen, g.deps, g.found, g.folders,
+            g.dlcs[0] ? g.dlcs : "none");
+        game_info_free(&g);
     }
     return 0;
 }
@@ -322,70 +351,43 @@ static void ask(const char *prompt, char *out, int size)
     }
 }
 
-/* first start: find the game, remember it, offer to fetch the list */
+/* first start: find the games on the disk and remember them all; ask
+   only when none is found.  Then offer to fetch the list. */
 int inst_first_run(struct ctx *c)
 {
-    static const char *where[] = {
-        "GOG Games/Kerbal Space Program/game",
-        ".steam/steam/steamapps/common/Kerbal Space Program",
-        ".local/share/Steam/steamapps/common/Kerbal Space Program",
-        "KSP", "Games/KSP", "ksp", NULL
-    };
-    char found[8][512];
-    char line[512], name[64];
-    const char *h;
+    char line[512];
     char *p;
-    int i, nf, pick, rc;
+    int rc;
 
-    if (!isatty(0)) {
-        fprintf(stderr, "kspkan: no game folder known; run: "
-            "kspkan add NAME GAMEDIR\n");
-        return -1;
-    }
-    printf("Welcome.  kspkan needs to know where Kerbal Space Program is.\n");
-    h = getenv("HOME");
-    nf = 0;
-    for (i = 0; h != NULL && where[i] != NULL && nf < 8; i++) {
-        if (strlen(h) + strlen(where[i]) + 2 >= 512) {
-            continue;
+    games_autoadd(c, 0);
+    if (c->inames.n == 0) {
+        if (!isatty(0)) {
+            fprintf(stderr, "kspkan: no game folder found; run: "
+                "kspkan add NAME GAMEDIR\n");
+            return -1;
         }
-        strcpy(found[nf], h);
-        strcat(found[nf], "/");
-        strcat(found[nf], where[i]);
-        if (is_game_dir(found[nf])) {
-            nf++;
+        printf("No Kerbal Space Program found in the usual places.\n");
+        ask("The folder that holds GameData: ", line, sizeof(line));
+        rc = cmd_add(c, "ksp", line);
+        if (rc != 0) {
+            return -1;
         }
     }
-    for (i = 0; i < nf; i++) {
-        printf("  %d) %s\n", i + 1, found[i]);
-    }
-    ask(nf > 0 ? "Number, or the folder that holds GameData [1]: " :
-        "The folder that holds GameData: ", line, sizeof(line));
-    pick = 0;
-    if (line[0] == 0 && nf > 0) {
-        pick = 1;
-    } else if (is_digit(line[0]) && line[1] == 0) {
-        pick = line[0] - '0';
-    }
-    if (pick >= 1 && pick <= nf) {
-        strcpy(line, found[pick - 1]);
-    }
-    ask("A short name for it [ksp]: ", name, sizeof(name));
-    if (name[0] == 0) {
-        strcpy(name, "ksp");
-    }
-    rc = cmd_add(c, name, line);
-    if (rc != 0) {
-        return -1;
-    }
-    rc = inst_select(c, name);
+    rc = inst_select(c, c->idefault != NULL ? c->idefault :
+        c->inames.v[0]);
     if (rc < 0) {
         return -1;
+    }
+    if (c->inames.n > 1) {
+        printf("using %s; switch with: kspkan use NAME, or Tab in the "
+            "full screen\n", c->instname);
     }
     p = shared_path(c, "index");
     rc = access(p, R_OK);
     free(p);
-    if (rc != 0) {
+    if (rc != 0 && !isatty(0)) {
+        printf("no module list yet: kspkan update fetches it\n");
+    } else if (rc != 0) {
         ask("Fetch the module list now? [Y/n] ", line, sizeof(line));
         if (line[0] != 'n' && line[0] != 'N') {
             cmd_update(c, NULL);

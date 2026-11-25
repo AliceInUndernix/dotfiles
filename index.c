@@ -1047,30 +1047,37 @@ void compat_load(struct ctx *c)
     free(text);
 }
 
-int ksp_detect(struct ctx *c)
+/* the game version written in a game folder, or NULL; malloc'd */
+char *game_version(const char *dir)
 {
     static const char *names[] = { "buildID.txt", "readme.txt", NULL };
-    char *p, *text;
+    char *p, *text, *v;
     int i;
 
-    compat_load(c);
-    if (c->kspver != NULL) {
-        return 0;
-    }
     for (i = 0; names[i] != NULL; i++) {
-        p = (char *)xalloc((long)(strlen(c->game) + 32));
-        strcpy(p, c->game);
+        p = (char *)xalloc((long)(strlen(dir) + 32));
+        strcpy(p, dir);
         strcat(p, "/");
         strcat(p, names[i]);
         text = read_file(p, NULL, 1L << 20);
         free(p);
         if (text != NULL) {
-            c->kspver = find_version(text);
+            v = find_version(text);
             free(text);
-            if (c->kspver != NULL) {
-                return 0;
+            if (v != NULL) {
+                return v;
             }
         }
     }
-    return -1;
+    return NULL;
+}
+
+int ksp_detect(struct ctx *c)
+{
+    compat_load(c);
+    if (c->kspver != NULL) {
+        return 0;
+    }
+    c->kspver = game_version(c->game);
+    return c->kspver != NULL ? 0 : -1;
 }
