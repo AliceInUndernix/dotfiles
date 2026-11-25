@@ -355,6 +355,14 @@ dropped vowel, a word plus an ending, two words with a star). Each
 says why and whether it is free; one already taken gets an AE or a
 star version too.
 
+"your dictionaries" also lists the outlines that only dictionaries
+you turned off have (space in the status screen), dim and marked
+(off): KA*T old-base (off). They type nothing now, so the rules count
+them as free, but they say how you used to write the word; choose one
+and Enter saves it again where the word belongs. steno -l WORD lists
+them too, under "is written in dictionaries that are off", and -l
+OUTLINE marks such a dictionary "(file, off)".
+
 While the outline box has the focus, your strokes come here instead
 of being typed: the engine sends them through the FIFO "outline"
 while steno -W holds it open (the window has to have X's focus: st

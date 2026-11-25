@@ -3,7 +3,8 @@
  * how it sounds (British and American, in IPA and in Russian
  * letters), its syllables as written and as spoken, its meaning, the
  * outlines made for it by Dotterel's rules (gen.c), Lapwing's and the
- * ones your dictionaries have; you stroke or type an outline, Enter
+ * ones your dictionaries have (the ones turned off too, marked off);
+ * you stroke or type an outline, Enter
  * saves it into the dictionary the word belongs in (word-homes.txt:
  * base, proper-nouns, affixes ...) and it quits, so the window goes.
  *
@@ -53,6 +54,7 @@ static long common;            /* place in frequency.txt, 0 none */
 static char lap[LIST_MAX][GEN_TEXT];
 static int nlap;
 static char have[LIST_MAX][GEN_TEXT], have_dict[LIST_MAX][64];
+static int have_off[LIST_MAX]; /* from a dictionary turned off */
 static int nhave;
 static int list, sel[3];
 static int asking_drop;
@@ -218,7 +220,7 @@ static void dict_short(const char *says, char *out, int size)
         a += 9;
     b = strstr(a, ".dict");
     if (!b)
-        b = strchr(a, ')');
+        b = strpbrk(a, ",)");
     if (!b)
         b = a + strlen(a);
     if (b - a >= size)
@@ -231,7 +233,7 @@ static void look_up(void)
 {
     char l[4][GEN_TEXT], o[TEXT_MAX * 2], says[TEXT_MAX];
     char *t;
-    int i, n;
+    int i, n, k;
 
     clean_word(word);
     if (!word[0]) {
@@ -290,7 +292,20 @@ static void look_up(void)
         for (i = 0; i < nhave; i++) {
             outline_says(have[i], says, sizeof(says));
             dict_short(says, have_dict[i], sizeof(have_dict[i]));
+            have_off[i] = 0;
         }
+    }
+    /* then the ones only dictionaries turned off have */
+    if (nhave < LIST_MAX &&
+        dict_off_outlines(word, o, sizeof(o), LIST_MAX - nhave))
+    {
+        split_into(o, have + nhave, &k, LIST_MAX - nhave);
+        for (i = nhave; i < nhave + k; i++) {
+            outline_off_says(have[i], says, sizeof(says));
+            dict_short(says, have_dict[i], sizeof(have_dict[i]));
+            have_off[i] = 1;
+        }
+        nhave += k;
     }
     sel[0] = sel[1] = sel[2] = 0;
     list = l_made;
@@ -536,9 +551,11 @@ static void draw_lists(int y, int w, int h)
     /* yours */
     top = sel[l_dict] >= n ? sel[l_dict] - n + 1 : 0;
     for (i = top, r = y + 1; i < nhave && r < y + h - 1; i++, r++) {
-        sprintf(s, "%-18.100s %.100s", have[i], have_dict[i]);
+        sprintf(s, "%-18.100s %.100s%s", have[i], have_dict[i],
+            have_off[i] ? " (off)" : "");
         put_sel(r, a + b + 1, c - 2, list == l_dict && i == sel[l_dict],
-            strncmp(have_dict[i], "old-", 4) ? C_GREEN : C_TEXT, s);
+            have_off[i] ? C_DIM : strncmp(have_dict[i], "old-", 4) ?
+            C_GREEN : C_TEXT, s);
     }
     if (!nhave)
         put(y + 1, a + b + 2, c - 4, C_DIM, "no outline yet");

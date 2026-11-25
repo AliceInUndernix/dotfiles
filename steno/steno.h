@@ -28,6 +28,7 @@ void dict_reload(void);        /* files that changed */
 const char *dict_path(int i);
 const char *dict_peek(const long *st, int n);
 int dict_outlines(const char *text, char *out, int size, int max);
+int dict_off_outlines(const char *text, char *out, int size, int max);
 long dict_entries(void);
 void dict_set_origin(int i, const char *name, int user);
 const char *dict_name(int i, int *user);
@@ -133,6 +134,7 @@ int add_stroke(const char *outline, const char *text, char *msg, int size);
 int tool_add_loop(void);
 int word_guesses(const char *w, char *out, int size, int max);
 void outline_says(const char *outline, char *out, int size);
+void outline_off_says(const char *outline, char *out, int size);
 int word_main(const char *cfg);              /* word.c, steno -W */
 int gen_main(const char *word);             /* gen.c, steno -G */
 int capture_stroke(long st);

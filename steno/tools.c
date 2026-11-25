@@ -1110,7 +1110,7 @@ int tool_lookup(const char *s)
     char out[TEXT_MAX * 8], norm[STROKE_MAX * 32], parts[TEXT_MAX * 2];
     char *o, *e;
     long st[STROKE_MAX];
-    int n, found, got, end, w;
+    int n, found, got, end, w, old;
 
     found = 0;
     n = outline_parse(s, st, STROKE_MAX);
@@ -1170,6 +1170,24 @@ int tool_lookup(const char *s)
         }
         found = 1;
     }
+    old = dict_off_outlines(s, out, sizeof(out), 50);
+    if (old) {
+        /* the old ones you turned off: how you used to write it */
+        printf("%s is written in dictionaries that are off\n", s);
+        for (o = out; *o; o = end ? e : e + 1) {
+            while (*o == ' ')
+                o++;
+            if (!*o)
+                break;
+            e = o;
+            while (*e && *e != ' ')
+                e++;
+            end = !*e;
+            *e = 0;
+            outline_off_says(o, parts, sizeof(parts));
+            printf("  %-24s  %s\n", o, parts);
+        }
+    }
     if (!found && one_word(s) && strlen(s) < TEXT_MAX) {
         /* no entry: the ways to write it that work, as the
          * suggestions give them */
@@ -1202,7 +1220,8 @@ int tool_lookup(const char *s)
         }
     }
     if (!found)
-        printf("%s: not in the dictionaries\n", s);
+        printf("%s: not in the dictionaries%s\n", s, old ? " that are on" :
+            "");
     return found ? 0 : 1;
 }
 
@@ -1711,11 +1730,18 @@ int word_guesses(const char *w, char *out, int size, int max)
     return r;
 }
 
+/* a line of dict_explain's from a dictionary that is turned off */
+static int off_line(const char *p, const char *nl)
+{
+    return nl - p >= 6 && !strncmp(nl - 6, ", off)", 6);
+}
+
 /* what an outline types now: "TEXT  (dictionary)" a line, or what its
- * strokes type when it is no entry ("cats  (no entry)"), or "" */
+ * strokes type when it is no entry ("cats  (no entry)"), or "".
+ * Dictionaries that are turned off type nothing, so they don't count. */
 void outline_says(const char *outline, char *out, int size)
 {
-    char t[TEXT_MAX * 8], *p;
+    char t[TEXT_MAX * 8], *p, *nl;
     long st[STROKE_MAX];
     int n;
 
@@ -1723,18 +1749,56 @@ void outline_says(const char *outline, char *out, int size)
     n = outline_parse(outline, st, STROKE_MAX);
     if (n <= 0)
         return;
-    if (dict_explain(st, n, t, sizeof(t))) {
-        /* "  cat  (dotterel-base.dict)\n...": the first line */
-        p = t;
-        while (*p == ' ')
-            p++;
-        scopy(out, p, size);
-        return;
+    n = dict_explain(st, n, t, sizeof(t));
+    for (p = t; n && *p; p = nl + 1) {
+        /* "  cat  (dotterel-base.dict)\n...": the first one on */
+        nl = strchr(p, '\n');
+        if (!nl)
+            nl = p + strlen(p);
+        if (!off_line(p, nl)) {
+            *nl = 0;
+            while (*p == ' ')
+                p++;
+            scopy(out, p, size);
+            return;
+        }
+        if (!*nl)
+            break;
     }
+    n = outline_parse(outline, st, STROKE_MAX);
     outline_typed(st, n, t, sizeof(t));
     if (t[0] && strcmp(t, outline)) {
         scopy(out, t, size);
         scat(out, "  (no entry: its strokes)", size);
+    }
+}
+
+/* the first dictionary that is turned off and has the outline, as
+ * "cat  (dotterel-old-base.dict, off)", or "" */
+void outline_off_says(const char *outline, char *out, int size)
+{
+    char t[TEXT_MAX * 8], *p, *nl;
+    long st[STROKE_MAX];
+    int n;
+
+    out[0] = 0;
+    n = outline_parse(outline, st, STROKE_MAX);
+    if (n <= 0)
+        return;
+    n = dict_explain(st, n, t, sizeof(t));
+    for (p = t; n && *p; p = nl + 1) {
+        nl = strchr(p, '\n');
+        if (!nl)
+            nl = p + strlen(p);
+        if (off_line(p, nl)) {
+            *nl = 0;
+            while (*p == ' ')
+                p++;
+            scopy(out, p, size);
+            return;
+        }
+        if (!*nl)
+            break;
     }
 }
 

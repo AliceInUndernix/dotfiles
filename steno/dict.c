@@ -1740,8 +1740,10 @@ static void text_index(struct table *t)
 /* The outlines that write text, shortest first, as "KAT  KA*T". Only
  * ones a lookup would really reach (no higher dictionary has them).
  * When none writes it exactly, ones that differ only in case. One
- * pass over the entries. */
-static int outlines_found(const char *text, char *out, int size, int max)
+ * pass over the entries. With off, the ones in the dictionaries that
+ * are turned off instead, but not those the ones on write so too. */
+static int outlines_found(const char *text, char *out, int size, int max,
+    int off)
 {
     unsigned long th;
     long e, *k, fk[FOUND_MAX];
@@ -1755,7 +1757,9 @@ static int outlines_found(const char *text, char *out, int size, int max)
     exact = 0;
     th = fold_hash(text);
     for (i = 0; i < ndicts; i++) {
-        if (!dicts[i].enabled || dicts[i].kind != dk_json)
+        if (dicts[i].kind != dk_json)
+            continue;
+        if (off ? dict_enabled(i) : !dicts[i].enabled)
             continue;
         t = &dicts[i].t;
         text_index(t);
@@ -1771,8 +1775,12 @@ static int outlines_found(const char *text, char *out, int size, int max)
                 continue;
             k = t->keys + t->ent_key[e];
             v = peek_at(k + 1, (int)k[0], &at);
-            if (!v || at != i || !same_text(v, text, 1))
+            if (off) {
+                if (v && !strcmp(v, t->vals + t->ent_val[e]))
+                    continue;  /* written so already, by one on */
+            } else if (!v || at != i || !same_text(v, text, 1)) {
                 continue;
+            }
             if (m && !exact) {
                 exact = 1;
                 nf = 0;        /* drop the ones that only fold */
@@ -1856,7 +1864,8 @@ static int is_symbol(const char *s)
  * with typographic quotes (don't: don\342\200\231t, as -a saves it) and a
  * symbol as the meta that writes it ({.} for ., {?}, {^-^}). Their
  * outlines together, shortest first, each once. */
-static int outlines_any(const char *text, char *out, int size, int max)
+static int outlines_any(const char *text, char *out, int size, int max,
+    int off)
 {
     static char forms[FORMS][TEXT_MAX];
     static char got[TEXT_MAX * 2];
@@ -1895,7 +1904,7 @@ static int outlines_any(const char *text, char *out, int size, int max)
     }
     n = 0;
     for (i = 0; i < nforms; i++) {
-        if (!outlines_found(forms[i], got, sizeof(got), FOUND_MAX))
+        if (!outlines_found(forms[i], got, sizeof(got), FOUND_MAX, off))
             continue;
         for (p = got; *p && n < FOUND_MAX; p = q) {
             while (*p == ' ')
@@ -1978,7 +1987,7 @@ int dict_outlines(const char *text, char *out, int size, int max)
             return a->n;
         }
     }
-    n = outlines_any(text, out, size, max);
+    n = outlines_any(text, out, size, max, 0);
     if ((int)strlen(text) < OUTLINES_TEXT && (int)strlen(out) <
         OUTLINES_OUT && (int)strlen(out) < size - 1)
     {
@@ -1993,8 +2002,17 @@ int dict_outlines(const char *text, char *out, int size, int max)
     return n;
 }
 
-/* Every dictionary that has the outline, highest first: "file: text"
- * lines, for steno -l and -a. */
+/* The outlines that write text in the dictionaries that are turned
+ * off, as dict_outlines gives them, for steno -W and -l: the old ones
+ * you turned off still say how you used to write a word. */
+int dict_off_outlines(const char *text, char *out, int size, int max)
+{
+    return outlines_any(text, out, size, max, 1);
+}
+
+/* Every dictionary that has the outline, highest first: "  text
+ * (file)" lines, "(file, off)" for one that is turned off; for steno
+ * -l and -a. */
 int dict_explain(const long *st, int n, char *out, int size)
 {
     int i, c;
@@ -2011,7 +2029,8 @@ int dict_explain(const long *st, int n, char *out, int size)
             continue;
         f = strrchr(dicts[i].path, '/');
         f = f ? f + 1 : dicts[i].path;
-        sprintf(line, "  %.*s  (%.200s)\n", TEXT_MAX, v, f);
+        sprintf(line, "  %.*s  (%.200s%s)\n", TEXT_MAX, v, f,
+            dict_enabled(i) ? "" : ", off");
         scat(out, line, size);
         c++;
     }
