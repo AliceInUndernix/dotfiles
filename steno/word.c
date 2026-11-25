@@ -116,15 +116,49 @@ static long freq_place(const char *w)
     return 0;
 }
 
-/* trim it to the word: spaces, quotes and full stops around it go */
-static void clean_word(char *w)
+/* "Mr." is an abbreviation, not "Mr" at the end of a sentence: a full
+ * stop inside it too (e.g., U.S.), or the word list or a dictionary
+ * has it, as it is or as Dotterel writes a title (Mr.{-|}) */
+static int abbreviation(const char *w)
 {
-    char t[TEXT_MAX];
-    int n, a;
+    char t[TEXT_MAX], h[32], k[96], o[TEXT_MAX];
+    int n;
 
+    n = strlen(w);
+    if (n < 2 || w[n - 1] != '.' || n >= TEXT_MAX - 4)
+        return 0;
+    if (strchr(w, '.') != w + n - 1)
+        return 1;
+    sprintf(t, "%s{-|}", w);
+    return home_of(w, h, sizeof(h), k, sizeof(k)) ||
+        home_of(t, h, sizeof(h), k, sizeof(k)) ||
+        dict_outlines(w, o, sizeof(o), 1) ||
+        dict_off_outlines(w, o, sizeof(o), 1);
+}
+
+/* trim it to the word: spaces, quotes and brackets around it go. A
+ * full stop at the end stays in a word you typed (Mr.); in the last
+ * word written it goes, as a sentence's, unless it is an abbreviation.
+ * A word with braces stays as it is: {^ing}, Mr.{-|}. */
+static void clean_word(char *w, int typed)
+{
+    static const char *const ends[] = { " \t\n,;:!?\"')]",
+        " \t\n.,;:!?\"')]}" };
+    char t[TEXT_MAX];
+    int n, a, e;
+
+    n = strlen(w);
+    while (n > 0 && strchr(" \t\n", w[n - 1]))
+        n--;
+    w[n] = 0;
+    a = 0;
+    while (w[a] && strchr(" \t\n", w[a]))
+        a++;
+    if (a)
+        memmove(w, w + a, strlen(w + a) + 1);
     /* an affix stays one: {^ing}, {re^}; ^ing and re^ get braces */
     n = strlen(w);
-    if (n > 1 && w[0] == '{' && w[n - 1] == '}' && strchr(w, '^'))
+    if (n > 1 && w[n - 1] == '}' && strchr(w, '{'))
         return;
     if (n > 1 && n < (int)sizeof(word) - 2 && !strchr(w, '{') &&
         (w[0] == '^' || w[n - 1] == '^'))
@@ -133,9 +167,14 @@ static void clean_word(char *w)
         strcpy(w, t);
         return;
     }
-    while (n > 0 && strchr(" \t\n.,;:!?\"')]}", w[n - 1]))
-        n--;
-    w[n] = 0;
+    /* first all but full stops, then those too unless they belong */
+    for (e = 0; e < 2; e++) {
+        while (n > 0 && strchr(ends[e], w[n - 1]))
+            n--;
+        w[n] = 0;
+        if (typed || !n || w[n - 1] != '.' || abbreviation(w))
+            break;
+    }
     a = 0;
     while (w[a] && strchr(" \t\n\"'([{", w[a]))
         a++;
@@ -235,7 +274,7 @@ static void look_up(void)
     char *t;
     int i, n, k;
 
-    clean_word(word);
+    clean_word(word, 1);
     if (!word[0]) {
         looked = 0;
         return;
@@ -257,7 +296,13 @@ static void look_up(void)
         gen_word(word, &g);
     }
     looked = 1;
-    if (!home_of(word, home, sizeof(home), kinds, sizeof(kinds))) {
+    k = home_of(word, home, sizeof(home), kinds, sizeof(kinds));
+    n = (int)strlen(word);
+    if (!k && n > 1 && word[n - 1] == '.' && n < TEXT_MAX - 4) {
+        sprintf(says, "%s{-|}", word);     /* Mr.: as Mr.{-|} */
+        k = home_of(says, home, sizeof(home), kinds, sizeof(kinds));
+    }
+    if (!k) {
         /* not in the list: a capital is a proper noun, {^...} an
          * affix, else the base */
         kinds[0] = 0;
@@ -1059,7 +1104,7 @@ int word_main(const char *cfg)
     /* the last word you wrote, looked up: stroke its outline now, or
      * Esc to type another word */
     ask_last(word, sizeof(word));
-    clean_word(word);
+    clean_word(word, 0);
     fix_case(word);
     mode = m_word;
     if (word[0]) {

@@ -326,6 +326,13 @@ word is there, looked up. A capital that only starts a sentence goes
 (She: she) unless data/word-homes.txt says it is a proper noun;
 ^K switches the case.
 
+A full stop you type stays part of the word: Mr., e.g., Dr. In the
+last word written, one at the end goes as a sentence's (cat.: cat),
+but not from an abbreviation the word list or a dictionary knows, as
+it is or as Dotterel writes a title (Mr.{-|}), or one with a full stop
+inside too (e.g.). A word with braces is taken as it is: Mr.{-|}
+saves the title that capitalizes the next word.
+
     +-word------------------------------------------------------------+
     | > beautiful                                                     |
     | adjective    goes to dotterel-base.dict    common #578          |

@@ -1884,6 +1884,10 @@ static int outlines_any(const char *text, char *out, int size, int max,
     typographic(text, forms[nforms], TEXT_MAX);
     if (strcmp(forms[nforms], text))
         nforms++;
+    /* Mr.: also as Dotterel writes a title, Mr.{-|} */
+    len = (int)strlen(text);
+    if (len > 1 && text[len - 1] == '.' && len < TEXT_MAX - 4)
+        sprintf(forms[nforms++], "%s{-|}", text);
     /* a straight quote alone: the typographic ones */
     if (!strcmp(text, "\"") || !strcmp(text, "'")) {
         scopy(forms[nforms++], text[0] == '"' ? "\342\200\234" :
