@@ -1,5 +1,6 @@
 var TOR_HOST = "127.0.0.1";
-var TOR_PORT = 9050;
+/* the dotfiles' torrc keeps port 9150 for IceCat (net/README) */
+var TOR_PORT = 9150;
 var IP_URL = "https://check.torproject.org/api/ip";
 var LANG_VALUE = "en-US,en;q=0.5";
 var CSP_VALUE = "script-src 'none'; object-src 'none'";
@@ -70,6 +71,10 @@ var ip_busy = {};
 var http_once = {};
 var http_wait = {};
 var http_tries = {};
+/* the real OS (runtime.getPlatformInfo); profiles never change it */
+var real_os = "linux";
+/* the page lies are registered; until then pages get no JavaScript */
+var script_ok = 0;
 
 /* Tor builds a new circuit after ten minutes; look again after that */
 var IP_AGE = 600000;
@@ -158,7 +163,9 @@ function auto_ip(host)
 {
     var c;
 
-    if (!state.auto_ip || !state.tor || host == "" || ip_busy[host]) {
+    if (!state.auto_ip || !state.tor || host == "" || ip_busy[host] ||
+        no_exit(host))
+    {
         return;
     }
     c = ip_cache[host];
@@ -450,6 +457,7 @@ function page_cfg()
     cfg.gen = state.gen;
     cfg.site_gen = site_gen;
     cfg.fx = fx_major;
+    cfg.os = real_os;
     oses = ["win", "mac", "linux"];
     for (i = 0; i < oses.length; i++) {
         q = profile(oses[i]);
@@ -478,19 +486,19 @@ function exempt_patterns()
     return out;
 }
 
+/*
+ * The new registration is made before the old one goes, so no page
+ * ever loads without the lies in between; inject.js runs only once
+ * per frame when both are there for a moment.
+ */
 function register_script()
 {
     var old;
     var opts;
     var ex;
+    var p;
 
     old = reg;
-    reg = null;
-    if (old) {
-        old.then(function (r) {
-            r.unregister();
-        }).catch(function () {});
-    }
     opts = {
         matches: ["<all_urls>"],
         js: [
@@ -506,7 +514,28 @@ function register_script()
     if (ex.length > 0) {
         opts.excludeMatches = ex;
     }
-    reg = browser.contentScripts.register(opts);
+    p = browser.contentScripts.register(opts);
+    reg = p;
+    p.then(function () {
+        if (reg == p) {
+            script_ok = 1;
+        }
+        drop_script(old);
+    }, function () {
+        if (reg == p) {
+            script_ok = 0;
+        }
+    });
+}
+
+function drop_script(old)
+{
+    if (!old) {
+        return;
+    }
+    old.then(function (r) {
+        r.unregister();
+    }).catch(noop);
 }
 
 function set_pref(obj, value)
@@ -644,14 +673,40 @@ function save_state()
     register_script();
 }
 
-function all_cookies()
+function store_cookies(id)
 {
     return browser.cookies.getAll({
-        firstPartyDomain: null, partitionKey: {}
+        storeId: id, firstPartyDomain: null, partitionKey: {}
     }).catch(function () {
-        return browser.cookies.getAll({ firstPartyDomain: null });
+        return browser.cookies.getAll({ storeId: id, firstPartyDomain: null });
     }).catch(function () {
-        return browser.cookies.getAll({});
+        return browser.cookies.getAll({ storeId: id });
+    }).catch(empty);
+}
+
+/* Every cookie store: the normal one, private windows, containers */
+function all_cookies()
+{
+    return browser.cookies.getAllCookieStores().then(function (stores) {
+        var a;
+        var i;
+
+        a = [];
+        for (i = 0; i < stores.length; i++) {
+            a.push(store_cookies(stores[i].id));
+        }
+        return Promise.all(a);
+    }).then(function (lists) {
+        var out;
+        var i;
+
+        out = [];
+        for (i = 0; i < lists.length; i++) {
+            out = out.concat(lists[i]);
+        }
+        return out;
+    }).catch(function () {
+        return store_cookies(undefined);
     });
 }
 
@@ -660,15 +715,54 @@ function cookie_host(c)
     return c.domain.replace(/^\./, "");
 }
 
-function cookie_kept(c)
+/*
+ * Is a host bound up with a kept site: the site itself, a subdomain of
+ * it, or a parent domain whose cookies it is sent (".example.org" for
+ * a kept www.example.org)?
+ */
+function keep_related(host)
 {
-    if (list_has(state.keep, cookie_host(c))) {
-        return 1;
+    var a;
+    var i;
+
+    if (host == "") {
+        return 0;
     }
-    if (c.firstPartyDomain && list_has(state.keep, c.firstPartyDomain)) {
-        return 1;
+    a = lines_of(state.keep);
+    for (i = 0; i < a.length; i++) {
+        if (host_match(host, a[i]) || host_match(a[i], host)) {
+            return 1;
+        }
     }
     return 0;
+}
+
+/* The site whose jar a cookie is in, when the jars are split */
+function cookie_jar(c)
+{
+    if (c.firstPartyDomain) {
+        return c.firstPartyDomain;
+    }
+    if (c.partitionKey && c.partitionKey.topLevelSite) {
+        return hostname(c.partitionKey.topLevelSite);
+    }
+    return "";
+}
+
+/*
+ * A cookie in another site's jar is kept only when that site is kept:
+ * a kept site's cookies set while it was embedded in some other site
+ * are tracking, not your login there.
+ */
+function cookie_kept(c)
+{
+    var jar;
+
+    jar = cookie_jar(c);
+    if (jar != "") {
+        return keep_related(jar);
+    }
+    return keep_related(cookie_host(c));
 }
 
 function remove_cookie(c)
@@ -710,6 +804,7 @@ function remove_storage(hosts)
 function wipe_now()
 {
     ip_cache = {};
+    http_once = {};
     secret = make_secret();
     site_gen = {};
     reset_faces();
@@ -741,13 +836,16 @@ function wipe_unkept()
         for (i = 0; i < cookies.length; i++) {
             if (!cookie_kept(cookies[i])) {
                 remove_cookie(cookies[i]);
-                hosts[cookie_host(cookies[i])] = 1;
+                /* storage is removed by host and its subdomains */
+                if (!keep_related(cookie_host(cookies[i]))) {
+                    hosts[cookie_host(cookies[i])] = 1;
+                }
             }
         }
         seen = lines_of(state.seen);
         kept = [];
         for (i = 0; i < seen.length; i++) {
-            if (list_has(state.keep, seen[i])) {
+            if (keep_related(seen[i])) {
                 kept.push(seen[i]);
             } else {
                 hosts[seen[i]] = 1;
@@ -761,6 +859,7 @@ function wipe_unkept()
         state.seen = kept.join("\n");
         browser.storage.local.set({ seen: state.seen });
         ip_cache = {};
+        http_once = {};
         forget_faces();
         wipe_extras();
         return wipe_history();
@@ -971,12 +1070,21 @@ function circuit_id(site)
     return hash(circuit_user(site, -1)).toString(16);
 }
 
+/* Onions have no exit, and local addresses never go through Tor */
+function no_exit(host)
+{
+    return is_private(host) || host.endsWith(".onion") ? 1 : 0;
+}
+
 function lookup_ip(host)
 {
     var n;
 
     if (!state.tor) {
         return Promise.resolve({ ip: "", note: "Tor is off" });
+    }
+    if (no_exit(host)) {
+        return Promise.resolve({ ip: "", note: "no exit for this site" });
     }
     if (state.fp != "profile" && state.iso != "site") {
         return Promise.resolve({ ip: "", note: "differs per tab" });
@@ -1009,13 +1117,13 @@ function site_info(host)
     var f;
     var ip;
 
-    f = face_of(site_key(host));
+    f = face_of(site_key(host), real_os);
     ip = ip_cache[host];
     return {
         host: host,
         fp: state.fp,
         tor: state.tor,
-        face: state.fp == "profile" ? face_text(f) : "uniform",
+        face: state.fp == "profile" ? face_text(f, state.rfp) : "uniform",
         os: f.os,
         circuit: circuit_id(host),
         ip: ip ? ip.ip : "",
@@ -1230,7 +1338,26 @@ function read_storage(host)
     });
 }
 
+/*
+ * Should on_request ever throw, IceCat would fall back to the prefs'
+ * proxy; this one answers Tor even then, on a circuit of its own.
+ */
 function on_request(d)
+{
+    try {
+        return route(d);
+    } catch (e) {
+        if (state.loaded && !state.tor) {
+            return { type: "direct" };
+        }
+        return {
+            type: "socks", host: TOR_HOST, port: TOR_PORT,
+            username: "error", password: "x", proxyDNS: true
+        };
+    }
+}
+
+function route(d)
 {
     var site;
     var n;
@@ -1280,7 +1407,10 @@ function upgrade(d)
     var h;
     var n;
 
-    if (!state.https || d.url.indexOf("http://") != 0) {
+    if (!state.https) {
+        return null;
+    }
+    if (d.url.indexOf("http://") != 0 && d.url.indexOf("ws://") != 0) {
         return null;
     }
     u = new URL(d.url);
@@ -1292,13 +1422,26 @@ function upgrade(d)
         n = (http_tries[d.tabId + " " + h] || 0) + 1;
         http_tries[d.tabId + " " + h] = n;
         if (n > 3) {
-            /* The site keeps sending us back to plain HTTP */
+            /*
+             * The site keeps sending us back to plain HTTP. The tab is
+             * sent to the page rather than redirected, which would need
+             * the page to be open to every site (web_accessible).
+             */
             delete http_tries[d.tabId + " " + h];
-            return { redirectUrl: nohttps_url(d.url, "loop") };
+            if (d.tabId >= 0) {
+                browser.tabs.update(d.tabId, {
+                    url: nohttps_url(d.url, "loop")
+                }).catch(noop);
+            }
+            return { cancel: true };
         }
         http_wait[d.tabId] = d.url;
     }
-    u.protocol = "https:";
+    if (u.protocol == "ws:") {
+        u.protocol = "wss:";
+    } else {
+        u.protocol = "https:";
+    }
     if (u.port == "80") {
         u.port = "";
     }
@@ -1320,6 +1463,7 @@ function on_error(d)
     }
     orig = http_wait[d.tabId];
     delete http_wait[d.tabId];
+    delete http_tries[d.tabId + " " + hostname(orig)];
     if (d.error == "NS_BINDING_ABORTED" ||
         d.url.indexOf("https://") != 0 ||
         hostname(d.url) != hostname(orig))
@@ -1343,6 +1487,10 @@ function on_before(d)
     var r;
 
     t = d.type;
+    if (t == "sub_frame" && d.url.indexOf("http") == 0) {
+        /* embedded sites keep data too; wipe_unkept must know them */
+        note_seen(hostname(d.url));
+    }
     r = upgrade(d);
     if (r) {
         return r;
@@ -1382,7 +1530,7 @@ function on_send(d)
 
     h = d.requestHeaders;
     if (state.fp == "profile") {
-        p = profile(face_of(site_key(first_party(d))).os);
+        p = profile(real_os);
     } else {
         p = profile(state.ua);
     }
@@ -1425,18 +1573,31 @@ function on_headers(d)
         out.push(h[i]);
     }
     frame = (d.type == "main_frame" || d.type == "sub_frame") ? 1 : 0;
-    run = state.loaded && (state.js || list_has(state.sites,
-        hostname(d.url)));
+    run = state.loaded && script_ok && (state.js ||
+        list_has(state.sites, hostname(d.url)));
     if (frame && !run) {
         out.push({ name: "Content-Security-Policy", value: CSP_VALUE });
     }
     return { responseHeaders: out };
 }
 
-function on_message(msg)
+/* Only switch's own pages may give orders, never a page's frame */
+function from_us(sender)
+{
+    var base;
+
+    base = browser.runtime.getURL("");
+    return sender && sender.id == browser.runtime.id && !sender.frameId &&
+        String(sender.url || "").indexOf(base) == 0 ? 1 : 0;
+}
+
+function on_message(msg, sender)
 {
     var old_tor;
 
+    if (!from_us(sender) || !msg || typeof msg.cmd != "string") {
+        return Promise.reject(new Error("not from switch"));
+    }
     if (msg.cmd == "sites") {
         return site_rows();
     }
@@ -1465,7 +1626,8 @@ function on_message(msg)
         return clear_site_history(msg.host);
     }
     old_tor = state.tor;
-    if (msg.cmd == "set" && msg.key in DEF && msg.key != "gen" &&
+    if (msg.cmd == "set" && DEF.hasOwnProperty(msg.key) &&
+        msg.key != "gen" &&
         msg.key != "seen" && msg.key != "faces")
     {
         if (typeof DEF[msg.key] == "string") {
@@ -1526,6 +1688,7 @@ function reply()
     r = snapshot();
     r.proxy_ok = proxy_ok;
     r.rivals = rivals;
+    r.script_ok = script_ok;
     return r;
 }
 
@@ -1609,10 +1772,14 @@ function on_loaded(r)
         want_wipe = 0;
         wipe_unkept();
     }
-    browser.runtime.getBrowserInfo().then(function (info) {
-        fx_major = parseInt(info.version, 10);
+    Promise.all([
+        browser.runtime.getBrowserInfo(),
+        browser.runtime.getPlatformInfo()
+    ]).then(function (r) {
+        fx_major = parseInt(r[0].version, 10);
+        real_os = r[1].os;
         register_script();
-    }).catch(function () {});
+    }).catch(noop);
 }
 
 init_state();

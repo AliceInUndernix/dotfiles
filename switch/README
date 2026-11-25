@@ -1,8 +1,13 @@
-switch: handoff notes
-=====================
+switch: IceCat, set up for privacy
+==================================
 
-These notes carry the goal and the state of the work into another
-project. Read them before changing anything.
+Written with an AI (vibecoded), for one person's computer; read what
+it does before you use it. Improvements are welcome.
+
+The dotfiles install it as the part "switch" (../install.sh switch, and
+in "all"); switch/install.sh does the work and can be run on its own.
+These notes say what it is for and how it is built. Read them before
+changing anything.
 
 
 1. The goal
@@ -54,7 +59,7 @@ Cookie banners are NOT handled by switch: that is left to the add-on
 3. Files
 --------
 
-icecat-switch/       the extension (manifest v2, version 0.12)
+extension/           the extension (manifest v2, version 0.13)
   manifest.json      permissions include proxy, webRequest(Blocking),
                      management, browsingData, cookies, contentScripts
   background.js      everything: settings, Tor routing (proxy.onRequest),
@@ -70,13 +75,16 @@ icecat-switch/       the extension (manifest v2, version 0.12)
                      b or Esc back
   style.css          shared dark style
   icon.svg
-install.sh           configures an installed IceCat profile:
-                     ./install.sh [-n] [-u] [-x] [-f] [-d] [profile]
+install.sh           configures an installed IceCat profile (and makes
+                     one when IceCat was never started):
+                     ./install.sh [-n] [-u] [-x] [-f] [-d] [-w] [profile]
                      -n dry run, -u uninstall, -x skip add-ons,
-                     -f replace add-ons, -d fetch without Tor
+                     -f replace add-ons, -d fetch without Tor,
+                     -w only print the profile directory
                      env: TOR_SOCKS (127.0.0.1:9050), ICECAT_ROOT
-icecat.prefs         130 prefs written to user.js; one per line,
-                     "name value"; install.sh -u removes exactly these
+icecat.prefs         139 prefs written to user.js; one per line,
+                     "name value"; install.sh -u removes exactly these,
+                     from user.js and prefs.js
 addons.txt           GNUzilla catalogue numbers of the add-ons to fetch
                      (uBlock Origin, Dark Reader, I don't care about
                      cookies)
@@ -96,13 +104,37 @@ tidy.sh              removes the empty storage/default/<origin>
   lines); all other sites use the session secret, renewed at quit.
   New identity renews everything, kept hosts included.
 - runtime.onStartup does not fire on the first start after an update,
-  so the wipe of unkept sites runs whenever background.js loads.
+  so the wipe of unkept sites runs whenever background.js loads (also
+  when switch is turned off and on again in about:addons).
 - Another extension's proxy.onRequest can override ours; that is why
   management is used to find and name such rivals.
+- Tor is 127.0.0.1:9150, the port the dotfiles' torrc keeps for
+  IceCat (../net/README); its default IsolateSOCKSAuth gives each SOCKS
+  username its own circuit.
+- icecat.prefs sets that same Tor proxy as IceCat's own, so whenever
+  switch is not running (disabled, not started yet, a private window
+  it may not enter) IceCat still goes through Tor; WebRTC is off there
+  too. While switch runs, its own setting wins, so "Tor off" in switch
+  is direct.
 - install.sh sets network.proxy.failover_direct and allow_bypass to
   false, turns off HTTP/3 and DNS-over-HTTPS (trr.mode 5), so nothing
   escapes Tor; and keeps IceCat's own HTTPS-only mode off, because
   switch does it.
+- A profile never makes up the OS: workers, fonts, scrollbars and the
+  TCP stack would tell the real one. With resistFingerprinting on, the
+  screen and cores are its own too, as CSS and workers report them; a
+  profile is then its circuit plus its own canvas and audio noise.
+- Frames from other sites take the profile of the site in the address
+  bar (location.ancestorOrigins, else the referrer), as the circuit
+  and the headers do.
+- Kept sites: a cookie in a split jar (first-party isolation or a
+  partition) is kept only when that jar's site is kept; otherwise a
+  cookie is kept when its domain is a kept host, under one, or a parent
+  of one (".example.org" for a kept www.example.org). Storage is wiped
+  by host and its subdomains, so hosts bound up with a kept site are
+  left out of it.
+- Only switch's own pages may send it orders; messages from content
+  scripts or anything else are refused.
 - install.sh refuses to run while that profile is in use (it reads the
   profile's "lock" link and checks the PID in it).
 - GNUzilla's pages link fixed xpi files on addons.mozilla.org, from
@@ -113,18 +145,41 @@ tidy.sh              removes the empty storage/default/<origin>
 5. State
 --------
 
-Version 0.12 is written and passed: syntax checks, the 80-column and
-ASCII checks, a unit test of the HTTPS upgrade logic, and a preview of
-the popup with test data.
+Version 0.13: the review of 0.12, fixed.
+
+- Tor port 9150 (IceCat's), not 9050 (proxychains4's).
+- The prefs hold Tor and keep WebRTC off when switch is not running.
+- A profile's OS is the real one; screen and cores follow RFP when it
+  is on; a lied screen is never smaller than the window.
+- Frames from other sites used their own host as the profile seed, so
+  one tracker frame looked the same on every site, and its JavaScript
+  disagreed with its own headers.
+- Keep: cookies of ".example.org" were wiped for a kept
+  www.example.org (logged out of kept sites), and the storage wipe of
+  the parent domain took the kept site's storage with it; a kept site's
+  cookies from inside unkept sites survived.
+- Cookies are wiped in every store (private windows, containers), and
+  embedded sites' storage is wiped as well.
+- ws:// is upgraded to wss:// like http://; the "keeps sending you back
+  to HTTP" page opens again (a redirect to it needed it to be open to
+  every site); "this time" ends at a wipe.
+- No exit IP lookups for onions and local addresses.
+- Content scripts are swapped without a gap; until they are first
+  registered, pages get no JavaScript (the popup says so).
+- If the proxy listener ever fails, the answer is still Tor.
+- install.sh: makes the profile when there is none; -u also cleans
+  prefs.js; a pref is matched by its exact name; manifest.json is
+  read at most 1 MB from a downloaded xpi.
+- tidy.sh checks the profile's lock instead of pgrep, and removes the
+  HSTS list (SiteSecurityServiceState).
 
 Not yet done or not yet checked:
 
-- 0.12 is not installed: IceCat was running. Close IceCat and run
-  ./install.sh.
-- The "no HTTPS" page has not been seen with a real site lacking
-  HTTPS; that needs a real IceCat.
-- A loose switch.xpi (an old build) may still lie in the old project
-  root; it can be deleted.
+- Nothing has been run in a real IceCat yet: the "no HTTPS" page,
+  ancestorOrigins in frames, and the claimed profile at first start.
+- "Run in Private Windows" has to be allowed by hand in about:addons.
+- OffscreenCanvas and canvases in workers are not noised (RFP's own
+  canvas randomisation covers them when it is on).
 
 
 6. Ideas not yet taken up

@@ -95,11 +95,13 @@ subdomains.</div>
 <div class="row">
 <label for="fp">Fingerprint</label>
 <div class="desc">Profiles: every site gets its own believable
-profile, with its own system, screen, processor count and faint
-canvas and audio noise, tied to its own Tor circuit. One IP, one
-profile; a site sees nothing that links it to another site. New
-circuits or a new identity give every site a new profile. Uniform: the
-same answers for everyone, with a blank canvas and no Web Audio.</div>
+profile, with faint canvas and audio noise of its own and, with
+"Resist fingerprinting" off, its own screen and processor count, tied
+to its own Tor circuit. One IP, one profile; a site sees nothing that
+links it to another site. The system is always the real one: workers,
+fonts and scrollbars would give a made-up one away. New circuits or a
+new identity give every site a new profile. Uniform: the same answers
+for everyone, with a blank canvas and no Web Audio.</div>
 <select id="fp">
 <option value="profile">A profile for each site and circuit</option>
 <option value="uniform">The same for everyone</option>
@@ -114,7 +116,8 @@ size, coarse timers. Keep this on; the lies below build on it.</div>
 <div class="row">
 <label for="ua">Browser identity</label>
 <div class="desc">Used only with uniform fingerprints. Default keeps
-IceCat's own. The others lie in the headers and in navigator.</div>
+IceCat's own. The others lie in the headers and in navigator, but
+not in workers, which a site can ask to catch the lie.</div>
 <select id="ua">
 <option value="default">Default (IceCat)</option>
 <option value="win">Firefox on Windows</option>
@@ -150,8 +153,9 @@ will not work.</div>
 <div class="row">
 <input type="checkbox" id="screen" />
 <label for="screen">Claim a 1920x1080 screen</label>
-<div class="desc">Used only with uniform fingerprints; profiles always
-claim a screen of their own.</div>
+<div class="desc">Used only with uniform fingerprints; profiles claim
+a screen of their own when "Resist fingerprinting" is off. Never
+smaller than the window.</div>
 </div>
 <div class="row">
 <label for="geo">Location</label>

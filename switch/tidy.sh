@@ -1,8 +1,11 @@
 #!/bin/sh
 # Remove what IceCat leaves on disk after "switch" has wiped a site:
 # empty per-site storage directories, whose names alone show which
-# sites were visited. Directories that still hold data (kept sites)
-# are left alone. Run as your ordinary user, with IceCat closed.
+# sites were visited, and the HSTS list (SiteSecurityServiceState),
+# which names every HTTPS site that asked for HSTS (switch is
+# HTTPS-only anyway, so it is not needed). Directories that still hold
+# data (kept sites) are left alone. Run as your ordinary user, with
+# IceCat closed.
 #
 # Usage: ./tidy.sh [-n] [-r] [profile_directory]
 #   -n  dry run: list what would be removed, change nothing
@@ -70,9 +73,13 @@ if [ "$run" = 1 ]; then
     icecat || true
     sleep 2
 fi
-if pgrep -x icecat > /dev/null; then
-    die "IceCat is running; close it first"
-fi
+# IceCat holds a "lock" link to "address:+pid" while it uses a profile
+lock=$(readlink "$prof/lock" 2> /dev/null) || lock=""
+pid=${lock##*+}
+case "$pid" in
+""|*[!0-9]*) ;;
+*) ! kill -0 "$pid" 2> /dev/null || die "IceCat is running; close it first" ;;
+esac
 
 n=0
 for d in "$prof"/storage/default/http* "$prof"/storage/to-be-removed/*
@@ -89,6 +96,14 @@ do
         rm -r "$d"
     fi
     n=$((n + 1))
+done
+for f in "$prof"/SiteSecurityServiceState.*; do
+    [ -f "$f" ] || continue
+    if [ "$dry" = 1 ]; then
+        echo "would remove ${f#"$prof"/}"
+    else
+        rm -f "$f"
+    fi
 done
 if [ "$dry" = 1 ]; then
     echo "Dry run: $n directories would be removed."

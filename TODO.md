@@ -6,7 +6,8 @@
   install.sh (runs as you; asks for root via su -c only where needed).
 - **Later, the owner configures them or asks:** mpv, Sioyek,
   Flameshot, wiremix, btop, feh.
-- **Not started:** IceCat and Chromium settings.
+- **IceCat:** set up by the part `switch` (`switch/README`, where its
+  own open points are). **Not started:** Chromium settings.
 
 ## Decided, left for later
 

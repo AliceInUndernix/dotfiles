@@ -41,6 +41,10 @@ function warn(s)
         w = s.rivals + " can send your traffic around Tor. Remove it " +
             "in about:addons.";
     }
+    if (!s.script_ok) {
+        w = "The page lies are not set up yet; until they are, no page " +
+            "runs JavaScript.";
+    }
     el("warn").textContent = w;
     el("warn").style.display = w == "" ? "none" : "block";
 }

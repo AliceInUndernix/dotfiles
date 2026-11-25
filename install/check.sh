@@ -176,10 +176,35 @@ ck_part() {
 			fi
 		fi ;;
 	net) ck_net ;;
+	switch) ck_switch ;;
 	ksp) ck_ksp ;;
 	icecat) ck_browser www-client/icecat icecat ;;
 	chromium) ck_browser www-client/ungoogled-chromium chromium ;;
 	esac
+}
+
+# ck_switch: switch is in the user's IceCat profile, and not older
+# than the repo's
+ck_switch() {
+	if ! command -v icecat >/dev/null 2>&1; then
+		ck_info "IceCat is not installed: su -c '$DOTFILES/install.sh icecat'"
+		return
+	fi
+	if ! prof=$(as_user "sh '$DOTFILES/switch/install.sh' -w" 2>/dev/null); then
+		ck_bad "IceCat has no profile: ./install.sh switch"
+		return
+	fi
+	x=$prof/extensions/switch@example.org.xpi
+	v=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$DOTFILES/switch/extension/manifest.json")
+	if [ ! -f "$x" ]; then
+		ck_bad "switch is not in $prof: ./install.sh switch"
+	elif [ -n "$(find "$DOTFILES/switch/extension" "$DOTFILES/switch/icecat.prefs" \
+		-type f -newer "$x" 2>/dev/null)" ]
+	then
+		ck_bad "switch in IceCat is older than the repo's: ./install.sh switch"
+	else
+		ck_ok "switch $v and the settings are in $prof"
+	fi
 }
 
 do_check() {

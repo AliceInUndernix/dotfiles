@@ -360,6 +360,19 @@ plover_leftovers() {
 
 # WebArchiver: archives whole websites (see webarchiver/README). Built
 # and installed like the suckless tools; it runs wget for every download.
+# switch: IceCat's settings, the add-ons in switch/addons.txt and our
+# extension "switch" (switch/README), put into the user's IceCat
+# profile by switch/install.sh; when IceCat was never started, it makes
+# the profile. IceCat itself is the part icecat (root), which runs this
+# when it is done. The add-ons come through Tor (127.0.0.1:9050); when
+# Tor can't be reached they are left out, and it says so.
+install_switch() {
+	if ! command -v icecat >/dev/null 2>&1; then
+		warn "IceCat is not installed: switch is set up when it is (su -c '$DOTFILES/install.sh icecat')"
+		return 0
+	fi
+	as_user "sh '$DOTFILES/switch/install.sh'"
+}
 install_webarchiver() {
 	build_suckless webarchiver
 	command -v wget >/dev/null 2>&1 ||

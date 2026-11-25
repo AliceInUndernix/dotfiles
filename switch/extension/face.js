@@ -3,7 +3,11 @@
  * circuit and the page profile of a site always come from one key.
  */
 
-var FACE_OS = ["win", "win", "mac", "linux"];
+/*
+ * The OS is never made up: workers, fonts, scrollbars and the TCP
+ * stack tell the real one, so a made-up OS is a lie anyone can catch.
+ * A profile is the real OS with its own screen, cores and noise.
+ */
 var FACE_OS_NAME = { win: "Windows", mac: "Mac", linux: "Linux" };
 var FACE_SCREEN = [
     "1920x1080", "1920x1080", "1366x768", "1536x864", "1440x900",
@@ -65,13 +69,14 @@ function face_pick(seed, list, salt)
     return list[hash(seed + "|" + salt) % list.length];
 }
 
-function face_of(seed)
+function face_of(seed, os)
 {
-    var os;
     var size;
     var bar;
 
-    os = face_pick(seed, FACE_OS, "os");
+    if (!FACE_OS_NAME[os]) {
+        os = "linux";
+    }
     size = face_pick(seed, FACE_SCREEN, "screen").split("x");
     bar = 40;
     if (os == "mac") {
@@ -89,8 +94,13 @@ function face_of(seed)
     };
 }
 
-function face_text(f)
+/* With resistFingerprinting on, screen and cores are its own */
+function face_text(f, rfp)
 {
+    if (rfp) {
+        return FACE_OS_NAME[f.os] + ", screen and cores as RFP says, " +
+            "own noise";
+    }
     return FACE_OS_NAME[f.os] + ", " + f.width + "x" + f.height + ", " +
         f.cores + " cores";
 }

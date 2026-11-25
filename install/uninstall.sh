@@ -216,6 +216,15 @@ uninstall_browser() {
 		emerge $EMERGE_OPTS --depclean "$1" )
 }
 uninstall_icecat()   { uninstall_browser www-client/icecat icecat; }
+# switch: out of the IceCat profile, settings and all (switch/install.sh
+# -u); the profile and the add-ons stay
+uninstall_switch() {
+	if ! as_user "sh '$DOTFILES/switch/install.sh' -w" >/dev/null 2>&1; then
+		say "ok      switch: IceCat has no profile"
+		return 0
+	fi
+	as_user "sh '$DOTFILES/switch/install.sh' -u"
+}
 uninstall_chromium() { uninstall_browser www-client/ungoogled-chromium chromium; }
 
 # --deps: on Gentoo, out of the world set (nothing is removed yet)

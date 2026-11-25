@@ -5,8 +5,8 @@
 #
 # IceCat and ungoogled-chromium build from source for hours, so "all"
 # and no arguments leave them out. Gentoo only. Neither is in the main
-# tree, and both are only in testing (~amd64). Only the program is
-# installed: no settings or profile of ours.
+# tree, and both are only in testing (~amd64). Chromium gets no settings
+# of ours; IceCat gets the part switch (switch/README) right after.
 
 APPS="icecat chromium"
 
@@ -21,7 +21,11 @@ browser() (
 	keyword "$2"
 	emerge $EMERGE_OPTS --noreplace "$2"
 )
-install_icecat()   { browser parona-overlay www-client/icecat; }
+# IceCat, then our settings for it (the part switch)
+install_icecat() {
+	browser parona-overlay www-client/icecat
+	! command -v icecat >/dev/null 2>&1 || install_switch
+}
 install_chromium() { browser pf4public www-client/ungoogled-chromium; }
 
 # ck_browser <atom> <part>: optional, so missing is no fault

@@ -5,13 +5,37 @@ var site = top_host();
 var seed = face_seed(face_secret(cfg.faces, site, cfg.secret), cfg.gen,
     cfg.site_gen[site] || 0, site);
 
+/*
+ * The site in the address bar, as background.js sees it for the
+ * circuit and the headers. A frame from another site cannot read
+ * top.location; then the frame's ancestors are asked, and failing
+ * that the address that embedded it. A frame must never use its own
+ * host: the same tracker frame would then look alike on every site.
+ */
 function top_host()
 {
+    var a;
+    var r;
+
     try {
         return window.top.location.hostname;
     } catch (e) {
-        return window.location.hostname;
     }
+    try {
+        a = window.location.ancestorOrigins;
+        if (a && a.length > 0) {
+            return new URL(a[a.length - 1]).hostname;
+        }
+    } catch (e) {
+    }
+    try {
+        r = document.referrer;
+        if (r != "") {
+            return new URL(r).hostname;
+        }
+    } catch (e) {
+    }
+    return window.location.hostname;
 }
 
 function rnd(salt)
@@ -102,15 +126,24 @@ function lie_language()
     });
 }
 
+/* A screen smaller than the window is a lie anyone can catch */
 function lie_screen(w, h, bar)
 {
     var s;
 
     s = proto("Screen");
-    def_value(s, "width", w);
-    def_value(s, "height", h);
-    def_value(s, "availWidth", w);
-    def_value(s, "availHeight", h - bar);
+    def_get(s, "width", function () {
+        return Math.max(w, window.innerWidth);
+    });
+    def_get(s, "height", function () {
+        return Math.max(h, window.innerHeight + bar);
+    });
+    def_get(s, "availWidth", function () {
+        return Math.max(w, window.innerWidth);
+    });
+    def_get(s, "availHeight", function () {
+        return Math.max(h, window.innerHeight + bar) - bar;
+    });
     def_value(s, "availLeft", 0);
     def_value(s, "availTop", 0);
     def_value(s, "colorDepth", 24);
@@ -392,21 +425,28 @@ function hide_referrer()
     });
 }
 
+/*
+ * With resistFingerprinting on, screen and cores stay as it reports
+ * them: it reports them the same way to CSS and to workers, where no
+ * lie of ours can reach, so a lie here would contradict them.
+ */
 function lie_face()
 {
     var f;
 
-    f = face_of(seed);
+    f = face_of(seed, cfg.os);
     guard(function () {
         lie_identity(cfg[f.os + "_ua"], cfg[f.os + "_platform"],
             cfg[f.os + "_oscpu"], cfg[f.os + "_appversion"]);
     });
-    guard(function () {
-        lie_screen(f.width, f.height, f.bar);
-    });
-    guard(function () {
-        def_value(proto("Navigator"), "hardwareConcurrency", f.cores);
-    });
+    if (!cfg.rfp) {
+        guard(function () {
+            lie_screen(f.width, f.height, f.bar);
+        });
+        guard(function () {
+            def_value(proto("Navigator"), "hardwareConcurrency", f.cores);
+        });
+    }
     if (cfg.canvas) {
         guard(function () {
             canvas_hooks(1);
@@ -445,20 +485,32 @@ function lie_uniform()
     }
 }
 
-if (cfg.fp == "profile") {
-    lie_face();
-} else {
-    lie_uniform();
+function lie_all()
+{
+    if (cfg.fp == "profile") {
+        lie_face();
+    } else {
+        lie_uniform();
+    }
+    if (cfg.lang) {
+        guard(lie_language);
+    }
+    if (cfg.hw) {
+        guard(hide_hardware);
+    }
+    if (cfg.geo != "allow") {
+        guard(lie_geo);
+    }
+    if (cfg.ref) {
+        guard(hide_referrer);
+    }
 }
-if (cfg.lang) {
-    guard(lie_language);
-}
-if (cfg.hw) {
-    guard(hide_hardware);
-}
-if (cfg.geo != "allow") {
-    guard(lie_geo);
-}
-if (cfg.ref) {
-    guard(hide_referrer);
+
+/*
+ * For a moment, while background.js swaps registrations, two copies
+ * of this script can run in one frame; only the first one lies.
+ */
+if (typeof switch_ran == "undefined") {
+    var switch_ran = 1;
+    lie_all();
 }

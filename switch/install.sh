@@ -3,22 +3,26 @@
 # into an IceCat profile. Run as your ordinary user (not root), with
 # IceCat closed.
 #
-# Usage: ./install.sh [-n] [-u] [-x] [-f] [-d] [profile_directory]
+# Usage: ./install.sh [-n] [-u] [-x] [-f] [-d] [-w] [profile_directory]
 #   -n  dry run: show what would be done, change nothing
-#   -u  uninstall: remove "switch" and the settings in icecat.prefs
-#       (the add-ons from addons.txt stay; remove them in about:addons)
+#   -u  uninstall: remove "switch" and the settings in icecat.prefs,
+#       from user.js and prefs.js (the add-ons from addons.txt stay;
+#       remove them in about:addons)
 #   -x  skip the add-ons in addons.txt
 #   -f  replace add-ons that are already installed
 #   -d  fetch add-ons directly instead of through Tor
-# Without a profile directory, the default IceCat profile is used.
+#   -w  only say which profile directory would be used
+# Without a profile directory, the default IceCat profile is used; when
+# IceCat has never been started, one is made, which IceCat then takes
+# as its own at its first start.
 # Set ICECAT_ROOT to use another IceCat directory, TOR_SOCKS to use
-# another Tor address (default 127.0.0.1:9050).
+# another Tor address for the downloads (default 127.0.0.1:9050).
 
 set -e
 
 ext_id="switch@example.org"
 here=$(cd "$(dirname "$0")" && pwd)
-src="$here/icecat-switch"
+src="$here/extension"
 prefs_file="$here/icecat.prefs"
 addons_file="$here/addons.txt"
 chrome_file="$here/userChrome.css"
@@ -26,11 +30,15 @@ root="${ICECAT_ROOT:-$HOME/.mozilla/icecat}"
 tor="${TOR_SOCKS:-127.0.0.1:9050}"
 catalog="https://gnuzilla.gnu.org/extension.php?id="
 max_size=52428800
+# a manifest.json is a few KB; never unpack more than this of one
+max_manifest=1048576
 dry=0
 remove=0
 addons=1
 force=0
 direct=0
+where=0
+prof=""
 tmp=""
 
 die()
@@ -54,6 +62,31 @@ run()
     else
         "$@"
     fi
+}
+
+# No profiles.ini: IceCat was never started. Make a profile marked as
+# the default; at its first start IceCat claims it for itself, since no
+# other installation has.
+make_profile()
+{
+    if [ "$dry" = 1 ]; then
+        echo "would create the profile $root/switch.default"
+        return
+    fi
+    mkdir -p "$root/switch.default"
+    chmod 700 "$root" "$root/switch.default"
+    {
+        echo "[General]"
+        echo "StartWithLastProfile=1"
+        echo "Version=2"
+        echo
+        echo "[Profile0]"
+        echo "Name=default"
+        echo "IsRelative=1"
+        echo "Path=switch.default"
+        echo "Default=1"
+    } > "$root/profiles.ini"
+    echo "Created the profile $root/switch.default"
 }
 
 default_profile()
@@ -84,38 +117,55 @@ default_profile()
     esac
 }
 
-unset_pref()
+# strip_prefs <file>: take out every line that sets a pref named in
+# icecat.prefs (exactly that name), and nothing else
+strip_prefs()
 {
-    file="$prof/user.js"
+    file="$1"
+    [ -f "$file" ] || return 0
     if [ "$dry" = 1 ]; then
-        echo "would remove from $file: $1"
+        echo "would take the settings of icecat.prefs out of $file"
         return
     fi
-    if [ -f "$file" ]; then
-        grep -vF "\"$1\"" "$file" > "$file.tmp" || true
-        mv "$file.tmp" "$file"
-    fi
+    awk -v list="$prefs_file" '
+        BEGIN {
+            while ((getline line < list) > 0) {
+                if (line ~ /^[ \t]*#/) {
+                    continue
+                }
+                split(line, f, " ")
+                if (f[1] != "") {
+                    want[f[1]] = 1
+                }
+            }
+        }
+        /^[ \t]*user_pref\("/ {
+            s = $0
+            sub(/^[ \t]*user_pref\("/, "", s)
+            sub(/".*/, "", s)
+            if (s in want) {
+                next
+            }
+        }
+        { print }
+    ' "$file" > "$file.tmp"
+    mv "$file.tmp" "$file"
 }
 
-set_pref()
-{
-    line="user_pref(\"$1\", $2);"
-    if [ "$dry" = 1 ]; then
-        echo "would set: $line"
-        return
-    fi
-    unset_pref "$1"
-    echo "$line" >> "$prof/user.js"
-}
-
-all_prefs()
+# Every setting of icecat.prefs into user.js, after the old ones
+set_prefs()
 {
     [ -f "$prefs_file" ] || die "no $prefs_file"
+    strip_prefs "$prof/user.js"
     grep -v '^[[:space:]]*#' "$prefs_file" |
     while read -r name value; do
         [ -n "$name" ] || continue
         [ -n "$value" ] || die "no value for $name in $prefs_file"
-        "$1" "$name" "$value"
+        if [ "$dry" = 1 ]; then
+            echo "would set: user_pref(\"$name\", $value);"
+        else
+            echo "user_pref(\"$name\", $value);" >> "$prof/user.js"
+        fi
     done
 }
 
@@ -149,7 +199,8 @@ fetch()
 # The add-on's id, from the manifest inside the xpi
 addon_id()
 {
-    unzip -p "$1" manifest.json 2> /dev/null | tr -d '\n\r' |
+    unzip -p "$1" manifest.json 2> /dev/null | head -c "$max_manifest" |
+    tr -d '\n\r' |
     sed -n 's/.*"gecko"[^}]*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
 }
 
@@ -165,7 +216,12 @@ install_addon()
         return
     fi
     if ! fetch "$catalog$num" "$tmp/page"; then
-        echo "  $name: cannot reach GNUzilla"
+        if [ "$direct" = 1 ]; then
+            echo "  $name: cannot reach GNUzilla"
+        else
+            echo "  $name: cannot reach GNUzilla through Tor at $tor" \
+                "(Tor not running? -d fetches directly)"
+        fi
         return
     fi
     url=$(grep -o 'href="https://addons\.mozilla\.org/[^"]*\.xpi"' \
@@ -242,6 +298,7 @@ while [ $# -gt 0 ]; do
     -x) addons=0 ;;
     -f) force=1 ;;
     -d) direct=1 ;;
+    -w) where=1 ;;
     -*) die "unknown option $1" ;;
     *) prof="$1" ;;
     esac
@@ -250,8 +307,23 @@ done
 
 [ "$(id -u)" != 0 ] || die "run this as your ordinary user, not root"
 [ -f "$src/manifest.json" ] || die "no extension in $src"
-[ -n "$prof" ] || prof=$(default_profile)
-[ -d "$prof" ] || die "no profile directory $prof"
+if [ -z "$prof" ]; then
+    if [ ! -f "$root/profiles.ini" ] && [ "$where" = 0 ] &&
+        [ "$remove" = 0 ]
+    then
+        make_profile
+    fi
+    if [ "$dry" = 1 ] && [ ! -f "$root/profiles.ini" ]; then
+        prof="$root/switch.default"
+    else
+        prof=$(default_profile)
+    fi
+fi
+if [ "$where" = 1 ]; then
+    echo "$prof"
+    exit 0
+fi
+[ -d "$prof" ] || [ "$dry" = 1 ] || die "no profile directory $prof"
 
 # IceCat holds a "lock" link to "address:+pid" while it uses a profile
 in_use()
@@ -276,15 +348,17 @@ xpi="$prof/extensions/$ext_id.xpi"
 
 if [ "$remove" = 1 ]; then
     run rm -f "$xpi"
-    all_prefs unset_pref
+    # prefs.js too: IceCat keeps there what user.js once set
+    strip_prefs "$prof/user.js"
+    strip_prefs "$prof/prefs.js"
     remove_chrome
-    echo "Removed switch, its look and its settings from user.js."
+    echo "Removed switch, its look and its settings."
     exit 0
 fi
 
 run mkdir -p "$prof/extensions"
 pack
-all_prefs set_pref
+set_prefs
 install_chrome
 if [ "$addons" = 1 ]; then
     all_addons
@@ -301,5 +375,6 @@ echo "Now, in IceCat:"
 echo "  1. Start IceCat. For each new add-on it asks whether to"
 echo "     enable it; say yes."
 echo "  2. In about:addons, for switch, set 'Run in Private"
-echo "     Windows' to Allow."
+echo "     Windows' to Allow (without it switch cannot hold the"
+echo "     proxy setting, and private windows always use Tor)."
 echo "  3. Alt+Shift+S opens the switch popup."

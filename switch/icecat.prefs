@@ -37,6 +37,15 @@ browser.formfill.enable false
 browser.download.manager.addToRecentDocs false
 
 # --- Tor and the network ---------------------------------------------
+# Tor even when switch is not running (disabled, not yet started, or
+# not allowed in private windows): switch's own setting wins while it
+# runs, so "Tor off" in switch still means direct. Port 9150 is the
+# one the dotfiles' torrc keeps for IceCat (net/README).
+network.proxy.type 1
+network.proxy.socks "127.0.0.1"
+network.proxy.socks_port 9150
+network.proxy.socks_version 5
+network.proxy.no_proxies_on ""
 # Never fall back to a direct connection when Tor fails
 network.proxy.failover_direct false
 network.proxy.allow_bypass false
@@ -53,10 +62,17 @@ browser.places.speculativeConnect.enabled false
 browser.urlbar.speculativeConnect.enabled false
 network.captive-portal-service.enabled false
 network.connectivity-service.enabled false
+# WebRTC off unless switch turns it on (its "WebRTC" switch); UDP
+# never goes through Tor
+media.peerconnection.enabled false
+media.peerconnection.ice.proxy_only true
 media.peerconnection.ice.default_address_only true
 media.peerconnection.ice.no_host true
 network.IDN_show_punycode true
 network.http.referer.XOriginTrimmingPolicy 2
+
+# No per-site zoom kept on disk (content-prefs.sqlite lists the sites)
+browser.zoom.siteSpecific false
 
 # --- Telemetry and phoning home --------------------------------------
 toolkit.telemetry.enabled false
@@ -119,6 +135,11 @@ extensions.formautofill.creditCards.enabled false
 browser.download.useDownloadDir false
 browser.download.start_downloads_in_tmp_dir true
 pdfjs.enableScripting false
+
+# --- Language --------------------------------------------------------
+# Pages and JavaScript's Intl in American English, as switch's headers
+# and navigator.languages say, without asking
+privacy.spoof_english 2
 
 # --- Start, new tab, quiet ------------------------------------------
 browser.startup.page 0
