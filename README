@@ -1,4 +1,4 @@
-kspkan 0.3.1 - a small mod manager for Kerbal Space Program
+kspkan 0.3.2 - a small mod manager for Kerbal Space Program
 
 Read this first.  Everything here was written with an AI (vibecoded).
 It was made for one person's computer and works there; it is not
@@ -23,7 +23,8 @@ COMMANDS
     kspkan search [QUERY]           list modules (see SEARCH)
     kspkan show ID                  describe a module
     kspkan list                     installed modules
-    kspkan install ID[=VER]...      install, with what they need
+    kspkan install ID[=VER]...      install, with what they need (asks
+                                    when several mods could fill one)
     kspkan remove ID...             remove, with what needs them
     kspkan upgrade [ID...]          upgrade installed modules
     kspkan autoremove               remove dependencies nothing needs

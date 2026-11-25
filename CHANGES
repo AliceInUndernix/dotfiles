@@ -1,3 +1,10 @@
+0.3.2  2026-11-25
+    - a dependency that several mods provide (ClassicStockResources-
+      PlayMode, Kerbalism-Config, RSSTextures) no longer stops an
+      install on a terminal: kspkan lists the choices and asks which,
+      once.  A mod in the modlist or on the command line still wins
+      without asking; with -y or no terminal it stops and names them.
+
 0.3.1  2026-11-25
     - modlist show, install, pin and sync (and o in the full screen
       mode) take a file when the name is not a saved modlist:

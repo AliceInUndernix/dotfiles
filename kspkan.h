@@ -1,7 +1,7 @@
 #ifndef KSPKAN_H
 #define KSPKAN_H
 
-#define KSPKAN_VERSION "0.3.1"
+#define KSPKAN_VERSION "0.3.2"
 
 /* ---- util.c ---- */
 
@@ -207,6 +207,7 @@ struct ctx {
     int withrec;
     int mono;
     int withsug;
+    struct strs picks;
     struct index ix;
     struct registry reg;
 };

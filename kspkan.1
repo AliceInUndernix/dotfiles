@@ -1,4 +1,4 @@
-.TH KSPKAN 1 2026-11-25 "kspkan 0.3.1"
+.TH KSPKAN 1 2026-11-25 "kspkan 0.3.2"
 .SH NAME
 kspkan \- small mod manager for Kerbal Space Program
 .SH SYNOPSIS
@@ -42,7 +42,9 @@ the modules that need it.  A dependency nothing needs is pointed out
 .TP
 .BI install " id[=version] ..."
 Install modules and what they need.  Recommended and suggested modules
-are offered for choosing.
+are offered for choosing.  When a dependency can come from several
+modules (as Kerbalism-Config), the one named on the command line or in
+the modlist is taken; otherwise kspkan asks which on the terminal.
 .TP
 .BI remove " id ..."
 Remove modules, the modules that need them, and dependencies nothing

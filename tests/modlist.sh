@@ -236,6 +236,38 @@ sed 's/^\(ProvC\t.*\t\)$/\1Virt/' "$S/index" > "$S/index.new"
 mv "$S/index.new" "$S/index"
 t "two that fit: refused, naming both" sh -c "\"$KK\" -g '$G' -s '$S' \
     -k 1.12.5 -y install NeedsVirt 2>&1 | grep -q 'ProvA, ProvC'"
+python3 -I - "$KK" "$G" "$S" > "$W/asked" 2>&1 <<'PY'
+import os, pty, select, sys
+kk, g, s = sys.argv[1:4]
+pid, fd = pty.fork()
+if pid == 0:
+    os.execv(kk, [kk, "-g", g, "-s", s, "-k", "1.12.5", "install",
+                  "NeedsVirt"])
+def rd():
+    out = b""
+    while True:
+        r, _, _ = select.select([fd], [], [], 2)
+        if not r:
+            break
+        try:
+            d = os.read(fd, 65536)
+        except OSError:
+            break
+        if not d:
+            break
+        out += d
+    return out
+o = rd()
+os.write(fd, b"2\n")
+o += rd()
+os.write(fd, b"y\n")
+o += rd()
+os.waitpid(pid, 0)
+sys.stdout.write(o.decode("ascii", "replace"))
+PY
+t "on a terminal it asks which" grep -q 'which one? \[1-2' "$W/asked"
+t "and installs the one picked" listed '^ProvC 1.0 (dependency)'
+kk remove NeedsVirt >/dev/null 2>&1
 kk install NeedsVirt ProvC >/dev/null 2>&1
 t "the one named with it wins" sh -c "\"$KK\" -g '$G' -s '$S' \
     -k 1.12.5 list | grep -q '^ProvC 1.0' && ! \"$KK\" -g '$G' -s '$S' \

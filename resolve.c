@@ -1,5 +1,7 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/stat.h>
 #include "kspkan.h"
 
@@ -228,12 +230,18 @@ static int id_chosen(struct solver *s, const char *id)
     return 0;
 }
 
-/* is id one of the modules asked for (as id or id=version)? */
+/* is id one of the modules asked for (as id or id=version), or one
+   picked on the terminal for a name several modules provide? */
 static int asked_for(struct solver *s, const char *id)
 {
     long n;
     int i;
 
+    for (i = 0; i < s->c->picks.n; i++) {
+        if (strcmp(s->c->picks.v[i], id) == 0) {
+            return 1;
+        }
+    }
     n = (long)strlen(id);
     for (i = 0; i < s->nwant; i++) {
         if (strncmp(s->want[i], id, (unsigned long)n) == 0 &&
@@ -285,6 +293,54 @@ static int usable(struct solver *s, const struct req *alt, const char *id,
         n++;
     }
     return n;
+}
+
+/* several modules can answer alt: ask which on the terminal (only
+   when one is there and -y was not given).  The index of the one
+   picked, or -1. */
+static int ask_provider(struct solver *s, const struct req *alt,
+    char **ids, int n)
+{
+    struct summary *sm;
+    char line[32];
+    char *p, *no;
+    int k, v;
+
+    if (s->c->assumeyes || !isatty(0) || !isatty(2)) {
+        return -1;
+    }
+    /* asked already and answered none: not again while backtracking */
+    for (k = 0; k < s->c->picks.n; k++) {
+        if (s->c->picks.v[k][0] == '!' &&
+            strcmp(s->c->picks.v[k] + 1, alt->name) == 0)
+        {
+            return -1;
+        }
+    }
+    fprintf(stderr, "%s%s%s%s can come from any of these:\n", alt->name,
+        alt->from != NULL ? ", needed by " : "",
+        alt->from != NULL ? alt->from : "", alt->from != NULL ? "," : "");
+    for (k = 0; k < n; k++) {
+        sm = summary_find(&s->c->ix, ids[k]);
+        fprintf(stderr, "  %2d  %-40s  %.50s\n", k + 1, ids[k],
+            sm != NULL && sm->abstract != NULL ? sm->abstract : "");
+    }
+    fprintf(stderr, "which one? [1-%d, Enter for none] ", n);
+    fflush(stderr);
+    p = fgets(line, sizeof(line), stdin);
+    v = 0;
+    for (k = 0; p != NULL && is_digit(line[k]) && k < 6; k++) {
+        v = v * 10 + (line[k] - '0');
+    }
+    if (v < 1 || v > n) {
+        no = (char *)xalloc((long)strlen(alt->name) + 2);
+        strcpy(no, "!");
+        strcat(no, alt->name);
+        strs_add(&s->c->picks, no);
+        return -1;
+    }
+    strs_add(&s->c->picks, xstrdup(ids[v - 1]));
+    return v - 1;
 }
 
 /* candidates answering alt, newest first.  Returns the count.  A
@@ -353,6 +409,10 @@ static int candidates(struct solver *s, const struct req *alt,
         nuse = m;
     }
     if (nuse > 1) {
+        k = ask_provider(s, alt, ids, nuse);
+        if (k >= 0) {
+            return usable(s, alt, ids[k], out, 0);
+        }
         *ambig = 1;
         s->choices[0] = 0;
         for (k = 0; k < nuse; k++) {
@@ -443,7 +503,8 @@ static int solve(struct solver *s, struct goal *g)
         nc = candidates(s, &alts[a], cand, &ambig);
         if (ambig) {
             set_err(s, alts[a].name, " is provided by several modules (",
-                s->choices, "); install the one you want with it");
+                s->choices, "); name the one you want with it, or run "
+                "this on a terminal to be asked");
             continue;
         }
         for (i = 0; i < nc; i++) {
