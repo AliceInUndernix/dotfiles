@@ -28,6 +28,14 @@ covers IceCat's own background traffic. Nothing loads when Tor is not
 running; nothing ever goes around it.</div>
 </div>
 <div class="row">
+<label for="no_tor">Sites that go without Tor</label>
+<div class="desc">One host name per line; a host also covers its
+subdomains. With Tor on, these go through whatever the system does,
+so through the VPN in its current mode. A whole page goes one way, by
+the site in the address bar. Popup key v.</div>
+<textarea id="no_tor" rows="3" cols="40"></textarea>
+</div>
+<div class="row">
 <input type="checkbox" id="https" />
 <label for="https">HTTPS only</label>
 <div class="desc">Turns plain http:// addresses into https://, so that
@@ -62,7 +70,8 @@ ordinary ones.</div>
 <label for="auto_ip">Look up each site's exit IP by itself</label>
 <div class="desc">When a page has loaded, asks check.torproject.org,
 through that site's own circuit, which exit it uses. Repeated after
-ten minutes, when Tor changes circuits.</div>
+ten minutes, when Tor changes circuits. Off by default: it is a
+request you do not need; popup key l asks once.</div>
 </div>
 <div class="row">
 <input type="checkbox" id="webrtc" />
@@ -210,7 +219,9 @@ fetched in full more often.</div>
 <div class="row">
 <input type="checkbox" id="fonts" />
 <label for="fonts">Block web fonts</label>
-<div class="desc">Some icons will show as squares.</div>
+<div class="desc">Some icons will show as squares. IceCat's settings
+(icecat.prefs) also give pages only IceCat's own fonts, so no page
+can find out which fonts you have.</div>
 </div>
 <div class="row">
 <input type="checkbox" id="cookies" />

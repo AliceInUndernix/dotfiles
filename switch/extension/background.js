@@ -27,16 +27,20 @@ var REDIRECTS = [
     "slack-redir.net /link url"
 ];
 
+/*
+ * The defaults send as little as can be: pages are read, not run (no
+ * JavaScript, no web fonts), through Tor, and no lookups of our own.
+ */
 var DEF = {
-    js: 1, tor: 0, gen: 0, sites: "", iso: "both", wipe_switch: 1,
+    js: 0, tor: 1, gen: 0, sites: "", iso: "both", wipe_switch: 1,
     fp: "profile", webrtc: 1, lan: 1, rfp: 1, ua: "default", lang: 1,
     screen: 0, hw: 1, canvas: 1, audio: 1, geo: "deny",
     geo_lat: "51.5074", geo_lon: "-0.1278", exempt: "", ref: 1,
-    strip: 1, skip: 1, beacon: 1, etag: 1, fonts: 0, cookies: 1,
-    fpi: 1, audit: 1, predict: 1, forget: 0, keep: "", wipe: 1,
+    strip: 1, skip: 1, beacon: 1, etag: 1, fonts: 1, cookies: 1,
+    fpi: 1, audit: 1, predict: 1, forget: 1, keep: "", wipe: 1,
     hist: "unkept", hist_days: "7", cache_min: "60", dl: 1, forms: 1,
-    closed: 1, seen: "", faces: "", auto_ip: 1,
-    https: 1, http_ok: ""
+    closed: 1, seen: "", faces: "", auto_ip: 0,
+    https: 1, http_ok: "", no_tor: ""
 };
 
 var STORAGE_CODE = "(function () {" +
@@ -163,7 +167,7 @@ function auto_ip(host)
 {
     var c;
 
-    if (!state.auto_ip || !state.tor || host == "" || ip_busy[host] ||
+    if (!state.auto_ip || !tor_for(host) || host == "" || ip_busy[host] ||
         no_exit(host))
     {
         return;
@@ -1076,12 +1080,24 @@ function no_exit(host)
     return is_private(host) || host.endsWith(".onion") ? 1 : 0;
 }
 
+/*
+ * Tor is switched like JavaScript: on or off for all, and sites in
+ * no_tor go without it, through whatever the system does (the VPN).
+ */
+function tor_for(site)
+{
+    return state.tor && !list_has(state.no_tor, site) ? 1 : 0;
+}
+
 function lookup_ip(host)
 {
     var n;
 
     if (!state.tor) {
         return Promise.resolve({ ip: "", note: "Tor is off" });
+    }
+    if (!tor_for(host)) {
+        return Promise.resolve({ ip: "", note: "Tor is off here" });
     }
     if (no_exit(host)) {
         return Promise.resolve({ ip: "", note: "no exit for this site" });
@@ -1122,10 +1138,10 @@ function site_info(host)
     return {
         host: host,
         fp: state.fp,
-        tor: state.tor,
+        tor: tor_for(host),
         face: state.fp == "profile" ? face_text(f, state.rfp) : "uniform",
         os: f.os,
-        circuit: circuit_id(host),
+        circuit: tor_for(host) ? circuit_id(host) : "none, the VPN",
         ip: ip ? ip.ip : "",
         ip_time: ip ? ip.time : 0,
         kept: list_has(state.keep, host),
@@ -1374,6 +1390,10 @@ function route(d)
         if (n && ip_wait[n] !== undefined) {
             site = ip_wait[n];
         }
+    }
+    /* a whole page goes one way: by the site in the address bar */
+    if (state.loaded && !tor_for(site)) {
+        return { type: "direct" };
     }
     return {
         type: "socks",
@@ -1639,6 +1659,19 @@ function on_message(msg, sender)
     if (msg.cmd == "site") {
         edit_list("sites", msg.host, msg.allow);
     }
+    if (msg.cmd == "tor_site" && msg.host &&
+        list_has(state.no_tor, msg.host) != (msg.value ? 0 : 1))
+    {
+        edit_list("no_tor", msg.host, msg.value ? 0 : 1);
+        /* as for the global switch: the site's old data would link
+           its Tor visits to its VPN ones */
+        if (state.wipe_switch) {
+            forget_site(msg.host);
+            site_gen[msg.host] = (site_gen[msg.host] || 0) + 1;
+            register_script();
+        }
+        delete ip_cache[msg.host];
+    }
     if (msg.cmd == "keep") {
         edit_list("keep", msg.host, msg.value);
     }
@@ -1671,6 +1704,7 @@ function on_message(msg, sender)
         wipe_now();
     }
     if (msg.cmd == "set" || msg.cmd == "site" || msg.cmd == "keep" ||
+        msg.cmd == "tor_site" ||
         msg.cmd == "newid" || msg.cmd == "http")
     {
         save_state();

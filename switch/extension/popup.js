@@ -57,6 +57,10 @@ function show(s)
     el("tor").checked = s.tor ? true : false;
     el("js").checked = s.js ? true : false;
     el("site").checked = in_list(s.sites);
+    el("torsite").checked = !in_list(s.no_tor);
+    el("torsite_line").style.display = host == "" || !s.tor ?
+        "none" : "block";
+    el("torsite_label").textContent = "Tor on " + host;
     el("http").checked = in_list(s.http_ok);
     el("site_line").style.display = host == "" || s.js ? "none" : "block";
     el("http_line").style.display = host == "" || !s.https ?
@@ -67,6 +71,9 @@ function show(s)
     el("host_name").textContent = host;
     if (!s.tor) {
         say("tor_text", "Off: sites see your real address.", "off");
+    } else if (host != "" && in_list(s.no_tor)) {
+        say("tor_text", "On, but not here: " + host +
+            " goes through the VPN.", "off");
     } else if (s.fp == "profile") {
         say("tor_text", "On: each site has its own IP and profile.", "on");
     } else {
@@ -95,6 +102,8 @@ function show_info(r)
     }
     if (!cur || !cur.tor) {
         say("ip_text", "Exit: none, Tor is off.");
+    } else if (!r.tor) {
+        say("ip_text", "Exit: none, this site goes through the VPN.");
     } else if (r.ip == "") {
         say("ip_text", "Exit: not looked up yet.");
     } else {
@@ -181,6 +190,16 @@ function do_http(on)
     });
 }
 
+function do_tor_site(on)
+{
+    if (host == "") {
+        return;
+    }
+    send("tor_site", "", on).then(function () {
+        browser.tabs.reload();
+    });
+}
+
 function on_key(e)
 {
     if (e.ctrlKey || e.altKey || e.metaKey) {
@@ -191,6 +210,9 @@ function on_key(e)
     }
     if (e.key == "j") {
         send("set", "js", !cur.js);
+    }
+    if (e.key == "v" && host != "" && cur.tor) {
+        do_tor_site(in_list(cur.no_tor));
     }
     if (e.key == "s" && host != "" && !cur.js) {
         send("site", "", !in_list(cur.sites));
@@ -243,6 +265,9 @@ el("tor").addEventListener("change", function () {
 });
 el("js").addEventListener("change", function () {
     send("set", "js", this.checked);
+});
+el("torsite").addEventListener("change", function () {
+    do_tor_site(this.checked);
 });
 el("site").addEventListener("change", function () {
     send("site", "", this.checked);

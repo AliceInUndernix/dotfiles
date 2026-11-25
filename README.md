@@ -331,7 +331,10 @@ yet, `su -c '~user/dotfiles/install.sh icecat'` builds it and runs the
 part right after. Close IceCat first. Then, once, in IceCat: enable the
 new add-ons it asks about, and in `about:addons` let switch run in
 private windows. Alt+Shift+s opens its popup; every key is in
-`switch/README`.
+`switch/README`. By default pages are read, not run: JavaScript off,
+Tor on, no web fonts and none of your own fonts shown to pages; both
+JavaScript (key s) and Tor (key v, then through the VPN) can be
+switched per site.
 
 The extension and its pages are JavaScript and its manifest is JSON,
 which these rules otherwise avoid: an IceCat extension can be made of

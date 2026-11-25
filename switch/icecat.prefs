@@ -56,11 +56,18 @@ network.trr.mode 5
 network.dns.disablePrefetch true
 network.dns.disablePrefetchFromHTTPS true
 network.prefetch-next false
+# nor connections a page only hints it might want
+network.preconnect false
+network.early-hints.enabled false
+network.early-hints.preconnect.enabled false
+# no /favicon.ico fetched behind your back
+browser.chrome.site_icons false
 network.predictor.enabled false
 network.http.speculative-parallel-limit 0
 browser.places.speculativeConnect.enabled false
 browser.urlbar.speculativeConnect.enabled false
 network.captive-portal-service.enabled false
+captivedetect.canonicalURL ""
 network.connectivity-service.enabled false
 # WebRTC off unless switch turns it on (its "WebRTC" switch); UDP
 # never goes through Tor
@@ -70,6 +77,19 @@ media.peerconnection.ice.default_address_only true
 media.peerconnection.ice.no_host true
 network.IDN_show_punycode true
 network.http.referer.XOriginTrimmingPolicy 2
+# Referer only to the same site, even while switch is not running
+network.http.referer.XOriginPolicy 2
+browser.send_pings false
+beacon.enabled false
+# no "Sec-GPC" or "DNT" headers: one bit more to tell you apart
+privacy.globalprivacycontrol.enabled false
+privacy.donottrackheader.enabled false
+# Certificates are checked against CRLite, a list kept locally; OCSP
+# would tell the certificate authority each site you open
+security.OCSP.enabled 0
+security.pki.crlite_mode 2
+# A word typed in the address bar is not looked up as a host name
+browser.urlbar.dnsResolveSingleWordsAfterSearch 0
 
 # No per-site zoom kept on disk (content-prefs.sqlite lists the sites)
 browser.zoom.siteSpecific false
@@ -89,6 +109,9 @@ browser.tabs.crashReporting.sendReport false
 browser.crashReports.unsubmittedCheck.autoSubmit2 false
 browser.ping-centre.telemetry false
 app.update.auto false
+browser.region.update.enabled false
+browser.region.network.url ""
+dom.private-attribution.submission.enabled false
 browser.search.update false
 browser.safebrowsing.malware.enabled false
 browser.safebrowsing.phishing.enabled false
@@ -135,6 +158,20 @@ extensions.formautofill.creditCards.enabled false
 browser.download.useDownloadDir false
 browser.download.start_downloads_in_tmp_dir true
 pdfjs.enableScripting false
+
+# --- Fonts: pages see none of yours --------------------------------
+# Pages get only the default fonts: no web fonts, and no installed font
+# picked by name, which CSS alone can use to find out which you have
+browser.display.use_document_fonts 0
+gfx.downloadable_fonts.enabled false
+# and only the fonts every system has, whatever a page asks for
+layout.css.font-visibility.resistFingerprinting 1
+layout.css.font-visibility.standard 1
+layout.css.font-visibility.trackingprotection 1
+layout.css.font-visibility.private 1
+# font formats with their own little programs, rarely needed
+gfx.font_rendering.graphite.enabled false
+gfx.font_rendering.opentype_svg.enabled false
 
 # --- Language --------------------------------------------------------
 # Pages and JavaScript's Intl in American English, as switch's headers

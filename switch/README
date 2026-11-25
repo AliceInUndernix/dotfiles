@@ -20,9 +20,11 @@ that configure an IceCat that is already installed. It must:
   #bcbcbc text, #5f87af links, #af87af visited);
 - be usable from the keyboard alone: every action has a key;
 - switch JavaScript off and on, globally and per site;
-- switch Tor on and off; with Tor on, every site gets its own Tor
-  circuit (SOCKS username, IsolateSOCKSAuth) and its own fingerprint
-  profile, tied together: one IP, one profile per site;
+- switch Tor on and off, globally and per site; a site without Tor
+  goes through whatever the system does (the VPN, in its current
+  mode); with Tor on, every site gets its own Tor circuit (SOCKS
+  username, IsolateSOCKSAuth) and its own fingerprint profile, tied
+  together: one IP, one profile per site;
 - answer every fingerprint probe with silence or a lie;
 - wipe at quit every site that is not kept, with its profile; kept
   sites keep their data and their profile across restarts;
@@ -59,7 +61,7 @@ Cookie banners are NOT handled by switch: that is left to the add-on
 3. Files
 --------
 
-extension/           the extension (manifest v2, version 0.13)
+extension/           the extension (manifest v2, version 0.14)
   manifest.json      permissions include proxy, webRequest(Blocking),
                      management, browsingData, cookies, contentScripts
   background.js      everything: settings, Tor routing (proxy.onRequest),
@@ -82,7 +84,7 @@ install.sh           configures an installed IceCat profile (and makes
                      -f replace add-ons, -d fetch without Tor,
                      -w only print the profile directory
                      env: TOR_SOCKS (127.0.0.1:9050), ICECAT_ROOT
-icecat.prefs         139 prefs written to user.js; one per line,
+icecat.prefs         163 prefs written to user.js; one per line,
                      "name value"; install.sh -u removes exactly these,
                      from user.js and prefs.js
 addons.txt           GNUzilla catalogue numbers of the add-ons to fetch
@@ -144,6 +146,22 @@ tidy.sh              removes the empty storage/default/<origin>
 
 5. State
 --------
+
+Version 0.14:
+
+- Tor per site, like JavaScript: the popup's "Tor on <site>" (key v)
+  and the list "Sites that go without Tor" in Settings. A whole page
+  goes one way, by the site in the address bar; switching a site wipes
+  its data when "Wipe data and circuits when Tor is switched" is on.
+- The defaults read pages rather than run them: JavaScript off, Tor
+  on, web fonts blocked, a site forgotten when its last tab closes, no
+  automatic exit IP lookups (key l still asks).
+- icecat.prefs: pages get only IceCat's default fonts (no web fonts, no
+  installed font asked for by name, only the fonts every system has),
+  no preconnects, early hints or favicon fetches, Referer only within a
+  site, no GPC or DNT header, no OCSP (CRLite checks certificates
+  locally), no region lookup.
+
 
 Version 0.13: the review of 0.12, fixed.
 

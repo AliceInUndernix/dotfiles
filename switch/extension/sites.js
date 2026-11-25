@@ -219,6 +219,7 @@ function details()
     document.getElementById("d_host").textContent = host;
     document.getElementById("d_text").textContent =
         "Kept: " + (r.kept ? "yes" : "no") +
+        ". Tor: " + (r.tor ? "yes" : "no, the VPN") +
         ". JavaScript: " + (r.js ? "allowed" : "blocked") +
         ". Exempt from lies: " + (r.exempt ? "yes" : "no") +
         ". Profile: " + r.face +
