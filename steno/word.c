@@ -31,6 +31,8 @@
 
 #define C_CYAN "\033[38;2;95;175;215m"
 #define C_MAGENTA "\033[38;2;215;135;215m"
+/* a listed outline the same as yours: on Habamax's green */
+#define C_MATCH "\033[48;2;135;175;135m\033[38;2;28;28;28m"
 
 #define LIST_MAX 24
 #define LINE 256
@@ -58,6 +60,9 @@ static int have_off[LIST_MAX]; /* from a dictionary turned off */
 static int nhave;
 static int list, sel[3];
 static int asking_drop;
+static long mine[STROKE_MAX];  /* your outline, parsed for matching */
+static int nmine;              /* its strokes; 0: none or not one yet */
+static int nmatch[3];          /* listed outlines that are the same */
 static int capture_fd = -1, focused = 1;
 static volatile int resized, stop_now;
 static struct termios old_tty;
@@ -456,6 +461,59 @@ static void put_sel(int y, int x, int w, int on, const char *c,
     scr_col(C_PLAIN);
 }
 
+/* the outline in the box parsed, and how many of each list it is */
+static int same_as_mine(const char *o)
+{
+    long st[STROKE_MAX];
+    int n, i;
+
+    if (nmine <= 0)
+        return 0;
+    n = outline_parse(o, st, STROKE_MAX);
+    if (n != nmine)
+        return 0;
+    for (i = 0; i < n; i++)
+        if (st[i] != mine[i])
+            return 0;
+    return 1;
+}
+
+static void find_matches(void)
+{
+    int i;
+
+    nmine = outline[0] ? outline_parse(outline, mine, STROKE_MAX) : 0;
+    nmatch[0] = nmatch[1] = nmatch[2] = 0;
+    if (!looked || nmine <= 0)
+        return;
+    for (i = 0; i < g.nc; i++)
+        nmatch[l_made] += same_as_mine(g.c[i].outline);
+    for (i = 0; i < nlap; i++)
+        nmatch[l_lapwing] += same_as_mine(lap[i]);
+    for (i = 0; i < nhave; i++)
+        nmatch[l_dict] += same_as_mine(have[i]);
+}
+
+/* a row of a list: chosen, or the same as your outline (green, the
+ * whole width), or plain */
+static void put_row(int y, int x, int w, int on, const char *c,
+    const char *o, const char *s)
+{
+    int n;
+
+    if (!same_as_mine(o)) {
+        put_sel(y, x, w, on, c, s);
+        return;
+    }
+    scr_move(y, x);
+    scr_col(C_MATCH);
+    if (on)
+        scr_col("\033[1m");    /* chosen too: bold */
+    n = scr_text(s, w);
+    scr_fill(' ', w - n);
+    scr_col(C_PLAIN);
+}
+
 static const char *home_file(void)
 {
     static char f[64];
@@ -581,16 +639,16 @@ static void draw_lists(int y, int w, int h)
         sprintf(s, "%-18.100s %.100s", g.c[i].outline,
             g.c[i].same ? "yours already" : g.c[i].free ? g.c[i].note :
             g.c[i].now);
-        put_sel(r, 1, a - 2, list == l_made && i == sel[l_made],
-            cand_colour(&g.c[i]), s);
+        put_row(r, 1, a - 2, list == l_made && i == sel[l_made],
+            cand_colour(&g.c[i]), g.c[i].outline, s);
     }
     if (!g.nc)
         put(y + 1, 2, a - 4, C_DIM, "nothing: no sound for it");
     /* lapwing */
     top = sel[l_lapwing] >= n ? sel[l_lapwing] - n + 1 : 0;
     for (i = top, r = y + 1; i < nlap && r < y + h - 1; i++, r++)
-        put_sel(r, a + 1, b - 2, list == l_lapwing && i == sel[l_lapwing],
-            C_TEXT, lap[i]);
+        put_row(r, a + 1, b - 2, list == l_lapwing && i == sel[l_lapwing],
+            C_TEXT, lap[i], lap[i]);
     if (!nlap)
         put(y + 1, a + 2, b - 4, C_DIM, "not in Lapwing");
     /* yours */
@@ -598,9 +656,9 @@ static void draw_lists(int y, int w, int h)
     for (i = top, r = y + 1; i < nhave && r < y + h - 1; i++, r++) {
         sprintf(s, "%-18.100s %.100s%s", have[i], have_dict[i],
             have_off[i] ? " (off)" : "");
-        put_sel(r, a + b + 1, c - 2, list == l_dict && i == sel[l_dict],
+        put_row(r, a + b + 1, c - 2, list == l_dict && i == sel[l_dict],
             have_off[i] ? C_DIM : strncmp(have_dict[i], "old-", 4) ?
-            C_GREEN : C_TEXT, s);
+            C_GREEN : C_TEXT, have[i], s);
     }
     if (!nhave)
         put(y + 1, a + b + 2, c - 4, C_DIM, "no outline yet");
@@ -642,7 +700,8 @@ static void draw_outline(int y, int w)
         "outline: stroke it" : "outline: type it") : "outline", ko, 5);
     x = 2;
     x += put(y + 1, x, 2, mode == m_outline ? C_TITLE : C_DIM, "> ");
-    x += put(y + 1, x, w - 4 - x, C_CYAN, outline);
+    x += put(y + 1, x, w - 4 - x, nmatch[0] + nmatch[1] + nmatch[2] ?
+        C_GREEN : C_CYAN, outline);
     if (mode == m_outline)
         put(y + 1, x, 1, C_BLUE, "_");
     x = 2;
@@ -675,6 +734,15 @@ static void draw_outline(int y, int w)
     } else {
         x += put(y + 2, x, w / 2, C_GREEN, "free");
     }
+    if (nmatch[0] + nmatch[1] + nmatch[2]) {
+        sprintf(s, "   the same as %s%s%s%s%s",
+            nmatch[l_made] ? "the rules'" : "",
+            nmatch[l_made] && (nmatch[l_lapwing] || nmatch[l_dict]) ?
+            ", " : "", nmatch[l_lapwing] ? "Lapwing's" : "",
+            nmatch[l_lapwing] && nmatch[l_dict] ? ", " : "",
+            nmatch[l_dict] ? "your dictionaries'" : "");
+        x += put(y + 2, x, w - 2 - x, C_GREEN, s);
+    }
     sprintf(s, "   Enter saves it to %.200s", home_file());
     put(y + 2, x, w - 2 - x, C_LABEL, s);
 }
@@ -696,6 +764,7 @@ static void draw(void)
     }
     if (lh < 3)
         lh = 3;
+    find_matches();
     draw_word(0, cols);
     draw_sound(4, cols, sh);
     draw_lists(4 + sh, cols, lh);

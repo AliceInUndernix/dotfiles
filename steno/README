@@ -370,6 +370,11 @@ and Enter saves it again where the word belongs. steno -l WORD lists
 them too, under "is written in dictionaries that are off", and -l
 OUTLINE marks such a dictionary "(file, off)".
 
+When the outline you stroke or type is one a list has (the rules',
+Lapwing's or your dictionaries', the ones turned off too), it turns
+green, so does that row (on a green bar, the whole width), and the
+line under it says which lists have it.
+
 While the outline box has the focus, your strokes come here instead
 of being typed: the engine sends them through the FIFO "outline"
 while steno -W holds it open (the window has to have X's focus: st
