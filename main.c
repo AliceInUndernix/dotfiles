@@ -29,7 +29,7 @@ static void usage(void)
         "  modlist install NAME  install what it has (newest that fits)\n"
         "  modlist pin NAME      install the very versions it names\n"
         "  modlist sync NAME     install it, remove chosen ones not in it\n"
-        "  modlist delete NAME   (NAME with a / is a file anywhere)\n",
+        "  modlist delete NAME   (a NAME not saved is a file: x.ckan)\n",
         stderr);
     fputs("  modlist import FILE [NAME]  read a .ckan modpack, registry.json"
         "\n"

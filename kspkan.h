@@ -1,7 +1,7 @@
 #ifndef KSPKAN_H
 #define KSPKAN_H
 
-#define KSPKAN_VERSION "0.3.0"
+#define KSPKAN_VERSION "0.3.1"
 
 /* ---- util.c ---- */
 
@@ -321,6 +321,8 @@ int modlist_store(struct ctx *c, const char *name, struct modlist *ml,
     const char *note);
 void modlist_free(struct modlist *ml);
 int modlist_names(struct ctx *c, struct strs *out);
+int modlist_open(struct ctx *c, const char *arg, struct modlist *ml,
+    char **saved, const char **kind);
 int cmd_modlist(struct ctx *c, char **args, int n);
 
 /* ---- ckan.c: reading the mod lists CKAN writes (never writing) ---- */

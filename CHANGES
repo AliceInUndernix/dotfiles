@@ -1,3 +1,11 @@
+0.3.1  2026-11-25
+    - modlist show, install, pin and sync (and o in the full screen
+      mode) take a file when the name is not a saved modlist:
+      "kspkan modlist install spelf.ckan" in the directory of the file
+      works.  A file CKAN wrote is kept as a modlist named after it
+      first; a plain list is used as it is.
+    - tests/modlist.sh checks it
+
 0.3.0  2026-11-25
     - modlist import FILE [NAME], and O in the full screen mode: read a
       list CKAN wrote into a kspkan modlist.  It reads .ckan modpacks

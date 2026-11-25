@@ -1029,7 +1029,7 @@ static void draw_bottom(struct ctx *c, struct view *v, struct buf *b,
         ln_start(&l, cols, BG_BAR);
         ln_color(&l, CL_TITLE);
         ln_text(&l, mode[0] == 'w' ? " save the modules you chose as " :
-            " mark for installing what is in modlist ", -1);
+            " mark for installing what is in the modlist or file ", -1);
         ln_color(&l, CL_TEXT);
         ln_text(&l, v->input, -1);
         ln_text(&l, "_", -1);
@@ -1259,7 +1259,7 @@ static void help_screen(int rows, int cols)
         "Enter  a", "carry out the marks (asks before it acts)",
         "e", "installed: make it your choice, or a dependency",
         "w", "save the modules you chose as a modlist",
-        "o", "open a modlist: marks what is in it for installing",
+        "o", "open a modlist or file: marks what it has for installing",
         "O", "import a CKAN modpack or mod list, then open it",
         "U", "upgrade everything installed",
         "u", "fetch a new module list",
@@ -1463,11 +1463,21 @@ static void open_modlist(struct ctx *c, struct view *v, const char *name)
 {
     struct modlist ml;
     struct summary *s;
-    int i, marked, have, unknown;
+    const char *kind;
+    char *saved;
+    int i, marked, have, unknown, rc;
 
-    if (modlist_read(c, name, &ml) < 0) {
-        sprintf(v->msg, "no modlist %.60s", name);
+    rc = modlist_open(c, name, &ml, &saved, &kind);
+    if (rc == -2) {
+        sprintf(v->msg, "no mods found in %.60s", name);
         return;
+    }
+    if (rc < 0) {
+        sprintf(v->msg, "no modlist or file %.60s", name);
+        return;
+    }
+    if (saved != NULL) {
+        name = saved;
     }
     marked = have = unknown = 0;
     for (i = 0; i < ml.n; i++) {
@@ -1485,6 +1495,7 @@ static void open_modlist(struct ctx *c, struct view *v, const char *name)
     sprintf(v->msg, "%.60s: %d marked for installing, %d already in, "
         "%d not in the module list; Enter installs", name, marked, have,
         unknown);
+    free(saved);
     if (marked > 0) {
         v->show = SH_MARKED;
         refilter(c, v);
@@ -1580,7 +1591,7 @@ static void prompt_key(struct ctx *c, struct view *v, char *mode, int key)
     int n, max;
 
     t = mode[0] == '/' ? v->find : v->input;
-    max = mode[0] == '/' ? 120 : mode[0] == 'O' ? 250 : 60;
+    max = mode[0] == '/' ? 120 : mode[0] == 'w' ? 60 : 250;
     n = (int)strlen(t);
     if (key == KEY_ENTER || key == 10) {
         if (mode[0] == 'w' && n > 0) {

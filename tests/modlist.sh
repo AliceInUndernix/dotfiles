@@ -204,6 +204,27 @@ t "the imported modpack installs" sh -c \
     \"$KK\" -g '$G' -s '$S' -k 1.12.5 list | grep -q '^Base 1.0$' &&
     \"$KK\" -g '$G' -s '$S' -k 1.12.5 list | grep -q '^Other 1.0$'"
 
+echo "== a file given straight to install and show"
+kk remove App Base Other >/dev/null 2>&1
+rm -f "$S/modlists/pack"
+(cd "$W" && "$KK" -g "$G" -s "$S" -k 1.12.5 -y modlist install pack.ckan \
+    > "$W/out1" 2>&1)
+t "modlist install FILE.ckan in the current directory imports it" \
+    test -f "$S/modlists/pack"
+t "and says so" grep -q \
+    'imported 3 mods from the CKAN modpack into the modlist pack' "$W/out1"
+t "and installs it" listed '^App 1.0$'
+t "modlist show by path works" sh -c "\"$KK\" -g '$G' -s '$S' \
+    -k 1.12.5 modlist show '$W/list.txt' | grep -q 'App'"
+printf 'Other\n' > "$W/plain"
+kk modlist install "$W/plain" >/dev/null 2>&1
+t "a plain list by path is used, not kept" sh -c "test ! -e \
+    '$S/modlists/plain'"
+t "and installed" listed '^Other 1.0$'
+t "an unknown name says so" sh -c "\"$KK\" -g '$G' -s '$S' -k 1.12.5 \
+    modlist install nosuch.ckan 2>&1 | grep -q 'no modlist or file'"
+kk remove App Base Other >/dev/null 2>&1
+
 echo "== a dependency several mods provide"
 kk install NeedsVirt >/dev/null 2>&1
 t "the one provider that fits the game is taken" listed '^ProvA 1.0 (dep'

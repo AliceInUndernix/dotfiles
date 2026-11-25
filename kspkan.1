@@ -1,4 +1,4 @@
-.TH KSPKAN 1 2026-11-25 "kspkan 0.3.0"
+.TH KSPKAN 1 2026-11-25 "kspkan 0.3.1"
 .SH NAME
 kspkan \- small mod manager for Kerbal Space Program
 .SH SYNOPSIS
@@ -89,7 +89,10 @@ it.
 .BI "modlist delete" " name"
 Delete a modlist.  A
 .I name
-with a / in it is a file anywhere, for example one somebody gave you.
+that is not a saved modlist is taken as a file, in the current directory
+or anywhere, for example one somebody gave you.  A file CKAN wrote (see
+.BR "modlist import" )
+is first kept as a modlist named after it.
 .TP
 .BI "modlist import" " file [name]"
 Read a list that CKAN wrote and keep it as a modlist called

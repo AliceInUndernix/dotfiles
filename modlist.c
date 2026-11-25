@@ -14,6 +14,7 @@
 #define ML_MAX (1L << 20)
 
 static void names_set(struct ctx *c, const char *name, int add);
+static int ml_use(struct ctx *c, const char *sub, const char *arg);
 
 char *modlist_path(struct ctx *c, const char *name)
 {
@@ -394,6 +395,55 @@ static int ml_install(struct ctx *c, struct modlist *ml, int pin, int sync)
     return rv;
 }
 
+/* a modlist by its saved name, else a file: a kspkan modlist or plain
+   "id version" lines are used as they are; a file CKAN wrote is first
+   kept as a modlist named after it (*saved, malloc'd).  -1: no such
+   list or file; -2: no mods in it */
+int modlist_open(struct ctx *c, const char *arg, struct modlist *ml,
+    char **saved, const char **kind)
+{
+    struct ckanimp r;
+    char *p, *name, note[100];
+    int ok, rc;
+
+    *saved = NULL;
+    *kind = "modlist";
+    ml->v = NULL;
+    ml->n = 0;
+    ml->cap = 0;
+    p = strchr(arg, '/') == NULL ? modlist_path(c, arg) : NULL;
+    ok = p != NULL && access(p, R_OK) == 0;
+    free(p);
+    if (ok) {
+        return modlist_read(c, arg, ml);
+    }
+    if (access(arg, R_OK) != 0) {
+        return -1;
+    }
+    rc = ckan_import(arg, &r);
+    *kind = r.kind;
+    if (rc < 0 && strcmp(r.kind, "file") == 0) {
+        return -1;
+    }
+    if (rc < 0 || r.ml.n == 0) {
+        modlist_free(&r.ml);
+        return -2;
+    }
+    *ml = r.ml;
+    if (strcmp(r.kind, "mod list") == 0) {
+        return 0;
+    }
+    name = ckan_list_name(arg);
+    sprintf(note, "imported from the %.70s", r.kind);
+    rc = modlist_store(c, name, ml, note);
+    if (rc < 0) {
+        free(name);
+        return 0;
+    }
+    *saved = name;
+    return 0;
+}
+
 /* kspkan modlist import FILE [NAME]: a list CKAN wrote, kept as a
    kspkan modlist (NAME, else made from the file name) */
 static int ml_import(struct ctx *c, const char *file, const char *name)
@@ -489,7 +539,6 @@ static int ml_import(struct ctx *c, const char *file, const char *name)
    pin NAME | sync NAME | delete NAME | import FILE [NAME]] */
 int cmd_modlist(struct ctx *c, char **args, int n)
 {
-    struct modlist ml;
     const char *sub;
     char *p;
     int rc, count;
@@ -506,6 +555,11 @@ int cmd_modlist(struct ctx *c, char **args, int n)
     }
     if (strcmp(sub, "import") == 0) {
         return ml_import(c, args[1], n > 2 ? args[2] : NULL);
+    }
+    if (strcmp(sub, "save") != 0 && strcmp(sub, "delete") != 0 &&
+        strcmp(sub, "rm") != 0)
+    {
+        return ml_use(c, sub, args[1]);
     }
     p = modlist_path(c, args[1]);
     if (p == NULL) {
@@ -536,24 +590,48 @@ int cmd_modlist(struct ctx *c, char **args, int n)
         free(p);
         return 0;
     }
-    rc = modlist_read(c, args[1], &ml);
-    if (rc < 0) {
-        fprintf(stderr, "kspkan: cannot read %s\n", p);
-        free(p);
+    free(p);
+    return 2;
+}
+
+/* show, install, pin, sync: a saved modlist or a file */
+static int ml_use(struct ctx *c, const char *sub, const char *arg)
+{
+    struct modlist ml;
+    char *saved;
+    const char *kind;
+    int rc;
+
+    if (strcmp(sub, "show") != 0 && strcmp(sub, "install") != 0 &&
+        strcmp(sub, "pin") != 0 && strcmp(sub, "sync") != 0)
+    {
+        fprintf(stderr, "kspkan: no modlist command %s\n", sub);
+        return 2;
+    }
+    rc = modlist_open(c, arg, &ml, &saved, &kind);
+    if (rc == -2) {
+        fprintf(stderr, "kspkan: no mods found in %s (read as a %s)\n",
+            arg, kind);
         return 1;
     }
-    free(p);
+    if (rc < 0) {
+        fprintf(stderr, "kspkan: no modlist or file %s (kspkan modlist "
+            "lists the saved ones)\n", arg);
+        return 1;
+    }
+    if (saved != NULL) {
+        printf("imported %d mods from the %s into the modlist %s\n", ml.n,
+            kind, saved);
+        free(saved);
+    }
     if (strcmp(sub, "show") == 0) {
         rc = ml_show(c, &ml);
     } else if (strcmp(sub, "install") == 0) {
         rc = ml_install(c, &ml, 0, 0);
     } else if (strcmp(sub, "pin") == 0) {
         rc = ml_install(c, &ml, 1, 0);
-    } else if (strcmp(sub, "sync") == 0) {
-        rc = ml_install(c, &ml, 0, 1);
     } else {
-        fprintf(stderr, "kspkan: no modlist command %s\n", sub);
-        rc = 2;
+        rc = ml_install(c, &ml, 0, 1);
     }
     modlist_free(&ml);
     return rc;
