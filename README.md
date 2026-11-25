@@ -20,7 +20,7 @@ any program that reads Gemini PR (Plover too) works with it.
 
 | Path | What it is |
 |---|---|
-| `canary/` | the layout (version 110): `keymap.c`, `config.h`, `rules.mk`, `keymap.json`, `mcuconf.h`, and the libraries it needs |
+| `canary/` | the layout (version 111): `keymap.c`, `config.h`, `rules.mk`, `keymap.json`, `mcuconf.h`, and the libraries it needs |
 | `build.sh` | sets up QMK, builds the firmware and flashes it |
 | `layout.html` | every layer as key squares, updated with every layout change |
 | `qmk.patch` | a small patch to ZSA's QMK that the libraries need |

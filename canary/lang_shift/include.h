@@ -352,6 +352,8 @@ void lang_shift_tap_key(Key key);
 
 bool lang_shift_process_record(Key key, keyrecord_t* record);
 void lang_shift_user_timer(void);
+void lang_shift_reset(void);
+void lang_shift_idle_check(bool keyboard_idle);
 
 // Инклюжу код напрямую, потому что нельзя сделать линковку, ведь код внутри использует кейкоды отсюда, и обязательно нужно это делать через safe_range
 #include "src.c"

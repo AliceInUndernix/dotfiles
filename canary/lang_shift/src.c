@@ -164,6 +164,11 @@ void shift_modifier_unregister(void) {
   if (shift_modifier_count == 0 && shift_should_be == 0 && shift_pressed_count == 0) {
     unregister_code(KC_LSHIFT);
     shift_current = 0;
+  } else if (shift_modifier_count == 0) {
+    // Shift stays down for a shifted key or SFT_N. Say so, or
+    // shift_current could read 0 while Shift is down, and then no
+    // shift_activate(0) would ever let it go (stuck Shift).
+    shift_current = 1;
   }
 }
 
@@ -180,7 +185,9 @@ Key shift_process(Key key, bool down) {
 	if (new_shift != NONE_SHIFT) {
 		if (down) {
 			shift_pressed_count++;
-		} else {
+		} else if (shift_pressed_count > 0) {
+			// Never below 0: a uint8_t would wrap to 255, and then
+			// nothing ever let go of Shift again (stuck Shift).
 			shift_pressed_count--;
 		}
 	}
@@ -725,6 +732,48 @@ bool lang_shift_process_record(Key key, keyrecord_t* record) {
   }
 
   return true;
+}
+
+// Stuck Shift guard (version 111). When no key of the keyboard is down
+// at all, nothing may hold Shift or any other modifier, except a
+// one-time Shift (after ". ") that waits for the next key. If one is
+// still down (a release that went missing, a count that went wrong),
+// let go of everything and start the counts again from 0.
+// keyboard_idle: true when no key is physically down.
+void lang_shift_reset(void) {
+  shift_pressed_count = 0;
+  shift_modifier_count = 0;
+  shift_should_be = 0;
+  shift_current = 0;
+  shift_once_disable_stage = 0;
+  shift_once_can_disable = true;
+  layer_off(lang_get_shift_layer_number());
+  clear_weak_mods();
+  clear_mods();
+  send_keyboard_report();
+}
+
+void lang_shift_idle_check(bool keyboard_idle) {
+  static uint16_t idle_since = 0;
+  static bool was_idle = false;
+
+  if (!keyboard_idle) {
+    was_idle = false;
+    return;
+  }
+  if (!was_idle) {
+    was_idle = true;
+    idle_since = timer_read();
+    return;
+  }
+  shift_once_can_disable = true;
+  if (shift_once_is_enabled())
+    return;
+  if (timer_elapsed(idle_since) < 300)
+    return;
+  if (get_mods() || shift_pressed_count || shift_modifier_count ||
+      shift_current || shift_should_be)
+    lang_shift_reset();
 }
 
 void lang_shift_user_timer(void) {

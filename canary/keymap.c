@@ -2,7 +2,7 @@
  * ==========================================================================
  *  ZSA Moonlander (rev B), keymap "canary"
  *  Canary letter layout, built on optozorax's keymap libraries.
- *  Version 110 (the latest; earlier drafts were numbered 75..97, and 98
+ *  Version 111 (the latest; earlier drafts were numbered 75..97, and 98
  *  was dropped).
  * ==========================================================================
  *
@@ -1196,11 +1196,25 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     return true;
 }
 
-// Timer work for the libraries (chord timeouts, Shift release), the mouse
-// acceleration, and the stuck-sound check.
+// True when no key of the keyboard is physically down (version 111).
+static bool keyboard_idle(void) {
+    for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
+        if (matrix_get_row(row)) return false;
+    }
+    return true;
+}
+
+// Timer work for the libraries (chord timeouts, Shift release), the
+// stuck-Shift guard, the mouse acceleration, and the stuck-sound check.
+// The guard: 0.3 s after the last key is let go, no modifier may still
+// be held (only the one-time Shift after ". "). Before version 111 a
+// Shift could stay down after you let go of every key, so the computer
+// typed capitals until you pressed Caps Lock (Shift + Caps Lock gives
+// small letters).
 void user_timer(void) {
     combo_user_timer();
     lang_shift_user_timer();
+    lang_shift_idle_check(keyboard_idle());
     accel_tick();
     audio_unstick();
 }
