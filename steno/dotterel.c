@@ -84,11 +84,13 @@ const int dotterel_mod_bits[] = { 1, 4, 2, 8, 5, 3, 6, 7, 9, 12 };
  * first key of a stroke stays. These dictionaries are taken from the
  * list when they are in it, or else read from the dictionaries
  * directory (.dict); dotterel-movement is the one above. Your new
- * punctuation comes before the old (dotterel-old-punctuation), so a
- * key you give a stroke wins and the rest still work. */
+ * punctuation and commands come before the old ones
+ * (dotterel-old-punctuation, dotterel-old-commands), so a key you give
+ * a stroke wins and the rest still work. */
 const char *const dotterel_mod_keys[] = {
     "dotterel-punctuation", "dotterel-old-punctuation",
-    "dotterel-commands", "dotterel-fingerspelling", "dotterel-numbers",
+    "dotterel-commands", "dotterel-old-commands",
+    "dotterel-fingerspelling", "dotterel-numbers",
     "dotterel-movement", 0
 };
 
