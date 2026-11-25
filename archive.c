@@ -29,7 +29,7 @@ void archive_close(struct archive *a)
 int zip_open(struct archive *a, const unsigned char *data, long len)
 {
     long pos, cd, cdsize, p, lim;
-    int i, count, nlen, xlen, clen, flags;
+    int i, j, count, nlen, xlen, clen, flags;
     struct aent *e;
 
     a->data = data;
@@ -87,6 +87,13 @@ int zip_open(struct archive *a, const unsigned char *data, long len)
             return -1;
         }
         e->name = xstrndup((const char *)data + p + 46, nlen);
+        /* zips made on Windows may use \ between names, as CKAN
+           allows; the extracted paths are still checked for .. */
+        for (j = 0; j < nlen; j++) {
+            if (e->name[j] == '\\') {
+                e->name[j] = '/';
+            }
+        }
         e->isdir = (nlen > 0 && e->name[nlen - 1] == '/');
         p += 46 + nlen + xlen + clen;
         a->n = i + 1;

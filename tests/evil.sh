@@ -20,6 +20,10 @@ z.writestr("Evil/sub/../../escape2.txt", "escaped")
 z.writestr("Evil/..\\escape3.txt", "escaped")
 z.writestr("Evil//double.txt", "x")
 z.close()
+z = zipfile.ZipFile(www + "/win.zip", "w", zipfile.ZIP_DEFLATED)
+z.writestr("Win\\Plugins\\a.cfg", "made on Windows")
+z.writestr("Win\\..\\..\\escape4.txt", "escaped")
+z.close()
 z = zipfile.ZipFile(www + "/link.zip", "w", zipfile.ZIP_DEFLATED)
 z.writestr("Evil/ok.txt", "fine")
 z.close()
@@ -47,9 +51,11 @@ EOT
     printf '%s\t1.0\t%s\ttest\t\t\t\t\t0\t\n' "$id" "$id" >> "$S/summary"
 }
 : > "$S/index"; : > "$S/summary"; : > "$S/provides"; : > "$S/counts"
+# the index is kept sorted by identifier
+addmod Bomb bomb.zip
 addmod Evil evil.zip
 addmod Link link.zip
-addmod Bomb bomb.zip
+addmod Win win.zip
 
 (cd "$W/www" && exec python3 -I -m http.server "$PORT" --bind 127.0.0.1 \
     >/dev/null 2>&1) &
@@ -69,6 +75,14 @@ n=$(find "$W" -name 'escape*' -o -name 'double.txt' | wc -l | tr -d ' ')
 [ ! -e "$G/escape.txt" ] && ok "nothing next to GameData" ||
     bad "nothing next to GameData"
 kk remove Evil >/dev/null 2>&1
+
+echo "== a zip made on Windows, with \\ between names"
+kk install Win >/dev/null 2>&1
+[ -f "$G/GameData/Win/Plugins/a.cfg" ] && ok "installed with / paths" ||
+    bad "installed with / paths"
+n=$(find "$W" -name 'escape4*' | wc -l | tr -d ' ')
+[ "$n" = 0 ] && ok "no \\..\\ escape" || bad "\\..\\ escaped: $n"
+kk remove Win >/dev/null 2>&1
 
 echo "== a symlink where a folder should be"
 ln -s "$W/outside" "$G/GameData/Link"
