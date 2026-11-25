@@ -1,7 +1,7 @@
 #ifndef KSPKAN_H
 #define KSPKAN_H
 
-#define KSPKAN_VERSION "0.2.0"
+#define KSPKAN_VERSION "0.3.0"
 
 /* ---- util.c ---- */
 
@@ -314,11 +314,27 @@ struct modlist {
 };
 
 char *modlist_path(struct ctx *c, const char *name);
+void modlist_add(struct modlist *ml, const char *id, const char *ver);
 int modlist_read(struct ctx *c, const char *name, struct modlist *ml);
 int modlist_write(struct ctx *c, const char *name, int *count);
+int modlist_store(struct ctx *c, const char *name, struct modlist *ml,
+    const char *note);
 void modlist_free(struct modlist *ml);
 int modlist_names(struct ctx *c, struct strs *out);
 int cmd_modlist(struct ctx *c, char **args, int n);
+
+/* ---- ckan.c: reading the mod lists CKAN writes (never writing) ---- */
+
+struct ckanimp {
+    struct modlist ml;
+    const char *kind;
+    int skipped;
+    int deps;
+    int suggests;
+};
+
+int ckan_import(const char *file, struct ckanimp *r);
+char *ckan_list_name(const char *file);
 
 
 /* ---- query.c: advanced search ---- */

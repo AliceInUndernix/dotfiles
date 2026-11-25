@@ -34,7 +34,7 @@ char *modlist_path(struct ctx *c, const char *name)
     return p;
 }
 
-static void ml_add(struct modlist *ml, const char *id, const char *ver)
+void modlist_add(struct modlist *ml, const char *id, const char *ver)
 {
     struct mlent *nv;
     int i, ncap;
@@ -113,7 +113,7 @@ int modlist_read(struct ctx *c, const char *name, struct modlist *ml)
                 }
                 *sp = 0;
             }
-            ml_add(ml, line, ver);
+            modlist_add(ml, line, ver);
         }
         if (nl == NULL) {
             break;
@@ -124,14 +124,14 @@ int modlist_read(struct ctx *c, const char *name, struct modlist *ml)
     return 0;
 }
 
-/* the modules you chose, into the named modlist */
-int modlist_write(struct ctx *c, const char *name, int *count)
+/* write a modlist under a name; note, if not NULL, is a comment line */
+int modlist_store(struct ctx *c, const char *name, struct modlist *ml,
+    const char *note)
 {
     struct buf b;
     char *p, *dir;
     int i, rc;
 
-    *count = 0;
     p = modlist_path(c, name);
     if (p == NULL) {
         return -1;
@@ -142,20 +142,23 @@ int modlist_write(struct ctx *c, const char *name, int *count)
     buf_add(&b, "", 0);
     buf_adds(&b, "# kspkan modlist: the modules chosen, one \"id version\""
         " a line\n");
+    if (note != NULL) {
+        buf_adds(&b, "# ");
+        buf_adds(&b, note);
+        buf_adds(&b, "\n");
+    }
     if (c->kspver != NULL) {
         buf_adds(&b, "# game ");
         buf_adds(&b, c->kspver);
         buf_adds(&b, "\n");
     }
-    for (i = 0; i < c->reg.n; i++) {
-        if (c->reg.v[i].autoinst) {
-            continue;
+    for (i = 0; i < ml->n; i++) {
+        buf_adds(&b, ml->v[i].id);
+        if (ml->v[i].version[0] != 0) {
+            buf_adds(&b, " ");
+            buf_adds(&b, ml->v[i].version);
         }
-        buf_adds(&b, c->reg.v[i].id);
-        buf_adds(&b, " ");
-        buf_adds(&b, c->reg.v[i].version);
         buf_adds(&b, "\n");
-        (*count)++;
     }
     if (strchr(name, '/') == NULL) {
         dir = shared_path(c, "modlists");
@@ -168,6 +171,26 @@ int modlist_write(struct ctx *c, const char *name, int *count)
     if (rc == 0) {
         names_set(c, name, 1);
     }
+    return rc;
+}
+
+/* the modules you chose, into the named modlist */
+int modlist_write(struct ctx *c, const char *name, int *count)
+{
+    struct modlist ml;
+    int i, rc;
+
+    ml.v = NULL;
+    ml.n = 0;
+    ml.cap = 0;
+    for (i = 0; i < c->reg.n; i++) {
+        if (!c->reg.v[i].autoinst) {
+            modlist_add(&ml, c->reg.v[i].id, c->reg.v[i].version);
+        }
+    }
+    *count = ml.n;
+    rc = modlist_store(c, name, &ml, NULL);
+    modlist_free(&ml);
     return rc;
 }
 
@@ -371,8 +394,99 @@ static int ml_install(struct ctx *c, struct modlist *ml, int pin, int sync)
     return rv;
 }
 
+/* kspkan modlist import FILE [NAME]: a list CKAN wrote, kept as a
+   kspkan modlist (NAME, else made from the file name) */
+static int ml_import(struct ctx *c, const char *file, const char *name)
+{
+    struct ckanimp r;
+    struct buf note;
+    const char *base;
+    char *made, *p;
+    int i, unknown, rc;
+
+    made = NULL;
+    if (name == NULL) {
+        made = ckan_list_name(file);
+        name = made;
+    }
+    p = modlist_path(c, name);
+    if (p == NULL) {
+        fprintf(stderr, "kspkan: bad modlist name: %s (letters, digits, "
+            "_ - . only; or a path with a /)\n", name);
+        free(made);
+        return 2;
+    }
+    rc = ckan_import(file, &r);
+    if (rc < 0 || r.ml.n == 0) {
+        if (rc < 0 && r.ml.n == 0 && strcmp(r.kind, "file") == 0) {
+            fprintf(stderr, "kspkan: cannot read %s\n", file);
+        } else {
+            fprintf(stderr, "kspkan: no mods found in %s (read as a %s)\n",
+                file, r.kind);
+        }
+        modlist_free(&r.ml);
+        free(made);
+        free(p);
+        return 1;
+    }
+    base = strrchr(file, '/');
+    base = base != NULL ? base + 1 : file;
+    note.p = NULL;
+    note.n = 0;
+    note.cap = 0;
+    buf_add(&note, "", 0);
+    buf_adds(&note, "imported from the ");
+    buf_adds(&note, r.kind);
+    buf_adds(&note, " ");
+    for (i = 0; base[i] && i < 60; i++) {
+        buf_add(&note, (unsigned char)base[i] > 32 &&
+            (unsigned char)base[i] < 127 ? base + i : "_", 1);
+    }
+    rc = modlist_store(c, name, &r.ml, note.p);
+    buf_free(&note);
+    if (rc < 0) {
+        fprintf(stderr, "kspkan: cannot write %s\n", p);
+        modlist_free(&r.ml);
+        free(made);
+        free(p);
+        return 1;
+    }
+    unknown = 0;
+    for (i = 0; i < r.ml.n; i++) {
+        if (c->ix.ns > 0 && summary_find(&c->ix, r.ml.v[i].id) == NULL) {
+            if (unknown == 0) {
+                printf("not in the module list (yet):");
+            }
+            printf(" %s", r.ml.v[i].id);
+            unknown++;
+        }
+    }
+    if (unknown > 0) {
+        printf("\n");
+    }
+    printf("imported %d mods from the %s into the modlist %s\n", r.ml.n,
+        r.kind, name);
+    if (r.deps > 0) {
+        printf("left out %d mods CKAN installed as dependencies; they are "
+            "worked out again\n", r.deps);
+    }
+    if (r.suggests > 0) {
+        printf("left out %d suggested mods\n", r.suggests);
+    }
+    if (r.skipped > 0) {
+        printf("passed over %d lines or entries that name no mod\n",
+            r.skipped);
+    }
+    printf("next: kspkan modlist show %s, then kspkan modlist install %s "
+        "(or pin)\n", name, name);
+    modlist_free(&r.ml);
+    free(made);
+    free(p);
+    return 0;
+}
+
 /* kspkan modlist [list | save NAME | show NAME | install NAME |
-   pin NAME | sync NAME | delete NAME] */
+   pin NAME | sync NAME | delete NAME | import FILE [NAME]] */
 int cmd_modlist(struct ctx *c, char **args, int n)
 {
     struct modlist ml;
@@ -386,8 +500,12 @@ int cmd_modlist(struct ctx *c, char **args, int n)
     }
     if (n < 2) {
         fprintf(stderr, "usage: kspkan modlist [list | save NAME | show "
-            "NAME | install NAME | pin NAME | sync NAME | delete NAME]\n");
+            "NAME | install NAME | pin NAME | sync NAME | delete NAME |\n"
+            "       import FILE [NAME]]\n");
         return 2;
+    }
+    if (strcmp(sub, "import") == 0) {
+        return ml_import(c, args[1], n > 2 ? args[2] : NULL);
     }
     p = modlist_path(c, args[1]);
     if (p == NULL) {

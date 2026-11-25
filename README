@@ -1,4 +1,4 @@
-kspkan 0.2.0 - a small mod manager for Kerbal Space Program
+kspkan 0.3.0 - a small mod manager for Kerbal Space Program
 
 Read this first.  Everything here was written with an AI (vibecoded).
 It was made for one person's computer and works there; it is not
@@ -77,8 +77,24 @@ between, or to hand your set to somebody.
     kspkan modlist pin NAME         the same, at the versions it names
     kspkan modlist sync NAME        install it; remove chosen mods not in it
     kspkan modlist delete NAME
+    kspkan modlist import FILE [NAME]  a list CKAN wrote (see below)
 
 A NAME with a / in it is a file anywhere (./mine.txt).
+
+import reads a list that CKAN wrote and keeps it as a kspkan modlist
+(NAME, or the file name without its extension).  kspkan only reads
+CKAN's formats; it never writes them.  It understands:
+
+    a .ckan modpack (File > Export modpack): its depends and
+        recommends (any_of takes the first choice; suggests is left out)
+    CKAN/registry.json from a game folder CKAN looked after: the mods
+        installed there, without the ones CKAN put in as dependencies
+    a saved mod list: plain text, Markdown, BBCode, CSV or TSV
+    the output of "ckan list"
+
+Then  kspkan modlist show NAME  says what the game lacks, and install or
+pin puts it in.  In the full screen mode, O asks for the file (~/ works),
+imports it and marks what the game lacks for installing.
 
 
 FULL SCREEN MODE
@@ -95,6 +111,7 @@ most:
     e           make an installed mod your choice, or a dependency
     w  o        save the mods you chose as a modlist; open one (marks
                 what the game lacks of it)
+    O           import a CKAN modpack or mod list, then open it
     /  s  c     search, order, show mods that do not fit the game
 
 The right pane shows everything about the mod: the long description,

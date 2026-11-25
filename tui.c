@@ -160,7 +160,7 @@ struct view {
     int pscroll;
     int pshown;
     char find[128];
-    char input[64];
+    char input[256];
     char msg[200];
 };
 
@@ -994,6 +994,23 @@ static void draw_bottom(struct ctx *c, struct view *v, struct buf *b,
         ln_put(&l, b, 1);
         return;
     }
+    if (mode[0] == 'O') {
+        ln_start(&l, cols, 0);
+        ln_color(&l, CL_DIM);
+        ln_text(&l, " a .ckan modpack, CKAN/registry.json, or a mod list "
+            "CKAN saved (txt, md, csv, tsv); ~/ is your home", -1);
+        ln_put(&l, b, 0);
+        ln_start(&l, cols, BG_BAR);
+        ln_color(&l, CL_TITLE);
+        ln_text(&l, " import the CKAN file ", -1);
+        ln_color(&l, CL_TEXT);
+        ln_text(&l, v->input, -1);
+        ln_text(&l, "_", -1);
+        ln_color(&l, CL_DIM);
+        ln_text(&l, "    Enter: go, Esc: back", -1);
+        ln_put(&l, b, 1);
+        return;
+    }
     if (mode[0] == 'w' || mode[0] == 'o') {
         names.v = NULL;
         names.n = 0;
@@ -1037,7 +1054,7 @@ static void draw_bottom(struct ctx *c, struct view *v, struct buf *b,
     key_hint(&l, "i", "show");
     key_hint(&l, "s", "order");
     key_hint(&l, "p", "pane");
-    key_hint(&l, "w/o", "modlist");
+    key_hint(&l, "w/o/O", "modlist");
     key_hint(&l, "?", "help");
     key_hint(&l, "q", "quit");
     ln_put(&l, b, 1);
@@ -1243,6 +1260,7 @@ static void help_screen(int rows, int cols)
         "e", "installed: make it your choice, or a dependency",
         "w", "save the modules you chose as a modlist",
         "o", "open a modlist: marks what is in it for installing",
+        "O", "import a CKAN modpack or mod list, then open it",
         "U", "upgrade everything installed",
         "u", "fetch a new module list",
         "Tab", "switch to the next game instance",
@@ -1490,6 +1508,48 @@ static void save_modlist(struct ctx *c, struct view *v, const char *name)
     }
 }
 
+/* O: a file CKAN wrote becomes a modlist, which is then opened */
+static void import_modlist(struct ctx *c, struct view *v, const char *file)
+{
+    struct ckanimp r;
+    const char *home;
+    char *path, *name;
+    char note[80], tmp[200];
+    int rc, n;
+
+    home = getenv("HOME");
+    if (file[0] == '~' && file[1] == '/' && home != NULL) {
+        path = (char *)xalloc((long)(strlen(home) + strlen(file)));
+        strcpy(path, home);
+        strcat(path, file + 1);
+    } else {
+        path = xstrdup(file);
+    }
+    rc = ckan_import(path, &r);
+    if (rc < 0 || r.ml.n == 0) {
+        sprintf(v->msg, rc < 0 && strcmp(r.kind, "file") == 0 ?
+            "cannot read %.60s" : "no mods found in %.60s", file);
+        modlist_free(&r.ml);
+        free(path);
+        return;
+    }
+    name = ckan_list_name(path);
+    sprintf(note, "imported from the %.60s", r.kind);
+    rc = modlist_store(c, name, &r.ml, note);
+    n = r.ml.n;
+    modlist_free(&r.ml);
+    free(path);
+    if (rc < 0) {
+        sprintf(v->msg, "could not save the modlist %.60s", name);
+        free(name);
+        return;
+    }
+    open_modlist(c, v, name);
+    strcpy(tmp, v->msg);
+    sprintf(v->msg, "%d imported; %.180s", n, tmp);
+    free(name);
+}
+
 /* e: a module you chose becomes a dependency, and the other way */
 static void toggle_chosen(struct ctx *c, struct view *v)
 {
@@ -1520,13 +1580,15 @@ static void prompt_key(struct ctx *c, struct view *v, char *mode, int key)
     int n, max;
 
     t = mode[0] == '/' ? v->find : v->input;
-    max = mode[0] == '/' ? 120 : 60;
+    max = mode[0] == '/' ? 120 : mode[0] == 'O' ? 250 : 60;
     n = (int)strlen(t);
     if (key == KEY_ENTER || key == 10) {
         if (mode[0] == 'w' && n > 0) {
             save_modlist(c, v, t);
         } else if (mode[0] == 'o' && n > 0) {
             open_modlist(c, v, t);
+        } else if (mode[0] == 'O' && n > 0) {
+            import_modlist(c, v, t);
         }
         mode[0] = 0;
     } else if (key == KEY_ESC) {
@@ -1659,6 +1721,9 @@ int cmd_tui(struct ctx *c)
             }
         } else if (key == 'o') {
             strcpy(mode, "o");
+            v.input[0] = 0;
+        } else if (key == 'O') {
+            strcpy(mode, "O");
             v.input[0] = 0;
         } else if (key == KEY_ESC && v.find[0] != 0) {
             v.find[0] = 0;

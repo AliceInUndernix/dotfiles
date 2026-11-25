@@ -1,4 +1,4 @@
-.TH KSPKAN 1 2026-11-24 "kspkan 0.2.0"
+.TH KSPKAN 1 2026-11-25 "kspkan 0.3.0"
 .SH NAME
 kspkan \- small mod manager for Kerbal Space Program
 .SH SYNOPSIS
@@ -88,6 +88,17 @@ Delete a modlist.  A
 .I name
 with a / in it is a file anywhere, for example one somebody gave you.
 .TP
+.BI "modlist import" " file [name]"
+Read a list that CKAN wrote and keep it as a modlist called
+.IR name ,
+or after the file name without its extension.  It reads a .ckan
+modpack (its depends and recommends; the first choice of any_of;
+suggests is left out), CKAN/registry.json from a game folder (the mods
+CKAN did not install as dependencies), a mod list CKAN saved as plain
+text, Markdown, BBCode, CSV or TSV, and the output of
+.BR "ckan list" .
+CKAN's formats are only read, never written.
+.TP
 .B clean
 Delete downloaded archives.
 .TP
@@ -123,6 +134,10 @@ makes an installed module your choice or a dependency.
 saves the modules you chose as a modlist;
 .B o
 opens one and marks what the game lacks of it, ready for Enter.
+.B O
+imports a file CKAN wrote (see
+.BR "modlist import" )
+and opens it the same way.
 .B ?
 shows every key.
 .SH OPTIONS

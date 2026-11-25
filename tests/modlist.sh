@@ -120,6 +120,83 @@ t "and from the names" sh -c \
 t "a bad name is refused" sh -c \
     "! \"$KK\" -g '$G' -s '$S' -k 1.12.5 modlist save '.x' 2>/dev/null"
 
+echo "== importing CKAN lists"
+cat > "$W/pack.ckan" <<'EOT'
+{"spec_version":"v1.18","identifier":"mypack","name":"My pack",
+"kind":"metapackage","abstract":"x","version":"2026.11.25",
+"depends":[{"name":"App","version":"1.0"},
+{"any_of":[{"name":"Base","version":"1.0"},{"name":"Other"}]}],
+"recommends":[{"name":"Other","min_version":"0.5"}],
+"suggests":[{"name":"Lib"}]}
+EOT
+kk modlist import "$W/pack.ckan" >/dev/null 2>&1
+t "a .ckan modpack becomes the modlist pack" test -f "$S/modlists/pack"
+t "with depends, any_of's first and recommends" sh -c \
+    "grep -q '^App 1.0$' '$S/modlists/pack' &&
+    grep -q '^Base 1.0$' '$S/modlists/pack' &&
+    grep -q '^Other$' '$S/modlists/pack'"
+t "but not suggests" sh -c "! grep -q '^Lib' '$S/modlists/pack'"
+t "and it is listed" sh -c \
+    "\"$KK\" -g '$G' -s '$S' -k 1.12.5 modlist | grep -q '^pack .*3 modules'"
+cat > "$W/registry.json" <<'EOT'
+{"registry_version":3,"installed_modules":{
+"App":{"source_module":{"identifier":"App","version":"1.0"},
+"installed_files":{"GameData/App/App.txt":{}},"auto_installed":false},
+"Lib":{"source_module":{"identifier":"Lib","version":"1.0"},
+"auto_installed":true}}}
+EOT
+kk modlist import "$W/registry.json" reg >/dev/null 2>&1
+t "registry.json: the chosen mods, not the dependencies" sh -c \
+    "grep -q '^App 1.0$' '$S/modlists/reg' && ! grep -q '^Lib' \
+    '$S/modlists/reg'"
+printf 'App mod (App 1.0)\r\nThe (Base) mod (Base 2.0)\r\n' \
+    > "$W/list.txt"
+kk modlist import "$W/list.txt" >/dev/null 2>&1
+t "plain text \"Name (id version)\"" sh -c \
+    "grep -q '^App 1.0$' '$S/modlists/list' &&
+    grep -q '^Base 2.0$' '$S/modlists/list'"
+printf -- '- **App mod** `App 1.0`\n- **Base mod** `Base 2.0`\n' \
+    > "$W/md.md"
+kk modlist import "$W/md.md" >/dev/null 2>&1
+t "Markdown" sh -c "grep -q '^Base 2.0$' '$S/modlists/md'"
+printf '[LIST]\n[*][B]App mod[/B] (App 1.0)\n[/LIST]\n' > "$W/bb.txt"
+kk modlist import "$W/bb.txt" >/dev/null 2>&1
+t "BBCode" sh -c "grep -q '^App 1.0$' '$S/modlists/bb' &&
+    [ \$(grep -vc '^#' '$S/modlists/bb') = 1 ]"
+printf 'identifier,version,name,abstract\nApp,1.0,"App, the mod",x\n' \
+    > "$W/c.csv"
+printf '"Other","1.0","Other mod",x\n' >> "$W/c.csv"
+kk modlist import "$W/c.csv" >/dev/null 2>&1
+t "CSV" sh -c "grep -q '^App 1.0$' '$S/modlists/c' &&
+    grep -q '^Other 1.0$' '$S/modlists/c'"
+printf 'identifier\tversion\tname\nBase\t2.0\tBase mod\n' > "$W/t.tsv"
+kk modlist import "$W/t.tsv" >/dev/null 2>&1
+t "TSV" sh -c "grep -q '^Base 2.0$' '$S/modlists/t'"
+printf 'Installed Modules in /x:\n\n- App 1.0\n^ Base 1.0\n' > "$W/out"
+printf 'Legend: -: Up to date. ^: Upgradable.\n' >> "$W/out"
+kk modlist import "$W/out" cli >/dev/null 2>&1
+t "ckan list output" sh -c "grep -q '^App 1.0$' '$S/modlists/cli' &&
+    grep -q '^Base 1.0$' '$S/modlists/cli' &&
+    [ \$(grep -vc '^#' '$S/modlists/cli') = 2 ]"
+printf '{"depends":[{"name":"../../x"},{"name":"Ok-1"}]}' > "$W/evil.ckan"
+kk modlist import "$W/evil.ckan" >/dev/null 2>&1
+t "a bad identifier is passed over" sh -c \
+    "! grep -q 'x' '$S/modlists/evil' && grep -q '^Ok-1$' '$S/modlists/evil'"
+printf 'nothing here at all\n' > "$W/none.txt"
+t "a file with no mods is refused" sh -c \
+    "! \"$KK\" -g '$G' -s '$S' -k 1.12.5 modlist import '$W/none.txt' \
+    2>/dev/null && test ! -e '$S/modlists/none'"
+printf '{"depends":[' > "$W/broken.ckan"
+t "broken JSON is refused" sh -c \
+    "! \"$KK\" -g '$G' -s '$S' -k 1.12.5 modlist import '$W/broken.ckan' \
+    2>/dev/null"
+kk remove App Base Other >/dev/null 2>&1
+kk modlist pin pack >/dev/null 2>&1
+t "the imported modpack installs" sh -c \
+    "\"$KK\" -g '$G' -s '$S' -k 1.12.5 list | grep -q '^App 1.0$' &&
+    \"$KK\" -g '$G' -s '$S' -k 1.12.5 list | grep -q '^Base 1.0$' &&
+    \"$KK\" -g '$G' -s '$S' -k 1.12.5 list | grep -q '^Other 1.0$'"
+
 echo "== unneeded dependencies"
 kk remove App >/dev/null 2>&1
 t "removing App took Lib too" sh -c "! \"$KK\" -g '$G' -s '$S' -k 1.12.5 \

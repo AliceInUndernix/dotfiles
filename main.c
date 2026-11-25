@@ -30,6 +30,10 @@ static void usage(void)
         "  modlist sync NAME     install it, remove chosen ones not in it\n"
         "  modlist delete NAME   (NAME with a / is a file anywhere)\n",
         stderr);
+    fputs("  modlist import FILE [NAME]  read a .ckan modpack, registry.json"
+        "\n"
+        "                        or a mod list CKAN saved\n",
+        stderr);
     fputs("  add NAME [GAMEDIR]    remember a game folder as an instance\n"
         "  instances | use NAME | forget NAME\n\n", stderr);
     fputs("  -g DIR  game directory (default: current directory)\n"
