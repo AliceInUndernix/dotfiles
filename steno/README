@@ -50,10 +50,9 @@ parsed for them. A dict line names them without an extension:
     dotterel-movement   movement mode (dotterel-movement.modal)
     dotterel-modifiers  KHR, SH, THRA, KPW and the rest
                         (dotterel-modifiers.py); the keys come from
-                        dotterel-punctuation, -old-punctuation,
-                        -commands, -old-commands, -fingerspelling,
-                        -numbers and -movement, as in the list (or
-                        their .dict files)
+                        dotterel-punctuation, -commands,
+                        -fingerspelling, -numbers and -movement, as
+                        in the list (or their .dict files)
     dotterel-raw        raw mode, RA*U (dotterel-raw.json)
 
 The dictionaries are Dotterel's, in steno's own plain format:
