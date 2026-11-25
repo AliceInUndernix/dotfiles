@@ -546,6 +546,32 @@ static int hash_matches(const char *path, struct jnode *hashes)
 }
 
 /* where the archive of a module version is kept */
+/* where kspkan 0.4 and older kept the download of e */
+static char *old_cache_file(struct ctx *c, struct entry *e)
+{
+    char *dir, *name, *full;
+    int i;
+
+    dir = shared_path(c, "cache");
+    name = (char *)xalloc((long)(strlen(e->id) + strlen(e->version)) + 16);
+    strcpy(name, e->id);
+    strcat(name, "-");
+    strcat(name, e->version);
+    for (i = 0; name[i]; i++) {
+        if (!((name[i] >= 'a' && name[i] <= 'z') ||
+            (name[i] >= 'A' && name[i] <= 'Z') || is_digit(name[i]) ||
+            name[i] == '.' || name[i] == '-'))
+        {
+            name[i] = '_';
+        }
+    }
+    strcat(name, ".zip");
+    full = join_path(dir, name);
+    free(dir);
+    free(name);
+    return full;
+}
+
 /* the cache keeps a download once, under its checksum, however many
    modules share it (Scatterer, Scatterer-config and Scatterer-sunflare
    are one zip); without a checksum, under id-version */
@@ -629,6 +655,18 @@ int module_download(struct ctx *c, struct entry *e, char **path,
         *path = full;
         return 0;
     }
+    /* kept by an older kspkan under id-version: take it over */
+    part = old_cache_file(c, e);
+    rc = stat(part, &st);
+    if (rc == 0 && hash_matches(part, hashes)) {
+        rc = rename(part, full);
+        if (rc == 0) {
+            free(part);
+            *path = full;
+            return 0;
+        }
+    }
+    free(part);
     part = (char *)xalloc((long)strlen(full) + 8);
     strcpy(part, full);
     strcat(part, ".part");

@@ -9,7 +9,8 @@
       dependency several provide; conflicts now name both mods
     - the cache keeps each download once, under its checksum (mods
       that share a zip no longer download it again); clean removes
-      every archive there, old names too
+      every archive there, old names too; a download kept under its
+      old name is taken over, not fetched again
     - tests/modlist.sh checks them
 
 0.4.0  2026-11-25
