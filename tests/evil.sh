@@ -24,6 +24,9 @@ z = zipfile.ZipFile(www + "/win.zip", "w", zipfile.ZIP_DEFLATED)
 z.writestr("Win\\Plugins\\a.cfg", "made on Windows")
 z.writestr("Win\\..\\..\\escape4.txt", "escaped")
 z.close()
+z = zipfile.ZipFile(www + "/case.zip", "w", zipfile.ZIP_DEFLATED)
+z.writestr("GameData/case/x.cfg", "other case")
+z.close()
 z = zipfile.ZipFile(www + "/link.zip", "w", zipfile.ZIP_DEFLATED)
 z.writestr("Evil/ok.txt", "fine")
 z.close()
@@ -53,6 +56,7 @@ EOT
 : > "$S/index"; : > "$S/summary"; : > "$S/provides"; : > "$S/counts"
 # the index is kept sorted by identifier
 addmod Bomb bomb.zip
+addmod Case case.zip
 addmod Evil evil.zip
 addmod Link link.zip
 addmod Win win.zip
@@ -83,6 +87,12 @@ kk install Win >/dev/null 2>&1
 n=$(find "$W" -name 'escape4*' | wc -l | tr -d ' ')
 [ "$n" = 0 ] && ok "no \\..\\ escape" || bad "\\..\\ escaped: $n"
 kk remove Win >/dev/null 2>&1
+
+echo "== find ignores case, as in CKAN"
+kk install Case >/dev/null 2>&1
+[ -f "$G/GameData/case/x.cfg" ] && ok "installed under the zip's name" ||
+    bad "installed under the zip's name"
+kk remove Case >/dev/null 2>&1
 
 echo "== a symlink where a folder should be"
 ln -s "$W/outside" "$G/GameData/Link"

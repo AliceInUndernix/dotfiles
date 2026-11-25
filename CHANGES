@@ -1,4 +1,6 @@
 0.5.0  2026-11-25
+    - find in an install stanza ignores letter case, as in CKAN
+      (kOS-SCANSat ships GameData/kOS-SCANsat)
     - zips made on Windows, with \ between names, install (as in
       CKAN); a name that climbs out with .. is still left out
     - a download that fails at its own address is fetched from CKAN's

@@ -81,10 +81,17 @@ static const char *base_of(const char *p)
     return s != NULL ? s + 1 : p;
 }
 
-/* does path equal find, or end with "/" and find? */
+/* ASCII letters only, whatever the locale */
+static int fold(int c)
+{
+    return c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c;
+}
+
+/* does path equal find, or end with "/" and find?  Case is ignored, as
+   in CKAN: kOS-SCANSat ships its directory as kOS-SCANsat */
 static int ends_with_path(const char *path, const char *find)
 {
-    long pl, fl;
+    long pl, fl, i;
 
     pl = (long)strlen(path);
     fl = (long)strlen(find);
@@ -94,8 +101,10 @@ static int ends_with_path(const char *path, const char *find)
     if (fl == 0 || fl > pl) {
         return 0;
     }
-    if (strncmp(path + pl - fl, find, (unsigned long)fl) != 0) {
-        return 0;
+    for (i = 0; i < fl; i++) {
+        if (fold(path[pl - fl + i]) != fold(find[i])) {
+            return 0;
+        }
     }
     return fl == pl || path[pl - fl - 1] == '/';
 }
