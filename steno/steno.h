@@ -135,6 +135,11 @@ int tool_add_loop(void);
 int word_guesses(const char *w, char *out, int size, int max);
 void outline_says(const char *outline, char *out, int size);
 void outline_off_says(const char *outline, char *out, int size);
+
+/* --- steno -W's sounds (sound.c) ---------------------------------- */
+
+int sound_start(const char *word, int us, int keep);
+const char *sound_said(int status, int us);
 int word_main(const char *cfg);              /* word.c, steno -W */
 int gen_main(const char *word);             /* gen.c, steno -G */
 int capture_stroke(long st);

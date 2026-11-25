@@ -10,7 +10,7 @@ CFLAGS = -std=c89 -pedantic -Wno-long-long -Wno-overlength-strings \
 LDFLAGS = -static -s
 
 SRC = main.c dict.c dotterel.c translate.c format.c ortho.c x11.c \
-	tools.c view.c screen.c tui.c gen.c word.c
+	tools.c view.c screen.c tui.c gen.c word.c sound.c
 OBJ = $(SRC:.c=.o) words.o
 
 all: steno

@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
@@ -64,7 +65,8 @@ static long mine[STROKE_MAX];  /* your outline, parsed for matching */
 static int nmine;              /* its strokes; 0: none or not one yet */
 static int nmatch[3];          /* listed outlines that are the same */
 static int capture_fd = -1, focused = 1;
-static volatile int resized, stop_now;
+static volatile int resized, stop_now, child_done;
+static int sound_pid = -1, sound_us;   /* ^F ^O: fetching or playing */
 static struct termios old_tty;
 static int tty;
 static const char *homes[] = { "base", "proper-nouns", "affixes",
@@ -561,10 +563,11 @@ static void draw_word(int y, int w)
 
 static void draw_sound(int y, int w, int h)
 {
+    static const char *const ks[] = { "^F hear UK", "^O hear US" };
     char s[LINE];
     int x, r, i;
 
-    box(y, 0, w, h, "sound", 0, 0);
+    box(y, 0, w, h, "sound", ks, 2);
     if (!looked)
         return;
     r = y + 1;
@@ -999,6 +1002,45 @@ static void word_key(int c)
     }
 }
 
+/* ^F UK, ^O US: the word's sound, from Cambridge through Tor */
+static void sound_key(int us)
+{
+    char w[64];
+
+    if (sound_pid > 0) {
+        say_msg("a sound is still coming: wait for it", 1);
+        return;
+    }
+    scopy(w, word, sizeof(w));
+    if (!w[0]) {
+        say_msg("no word to say", 1);
+        return;
+    }
+    sound_us = us;
+    sound_pid = sound_start(w, us, capture_fd);
+    if (sound_pid < 0)
+        say_msg("could not start it", 1);
+    else
+        say_msg(us ? "US: getting it (through Tor, once)" :
+            "UK: getting it (through Tor, once)", 0);
+}
+
+/* the sound's child ended: say how */
+static void sound_done(void)
+{
+    int st, r;
+
+    child_done = 0;
+    if (sound_pid <= 0)
+        return;
+    r = waitpid(sound_pid, &st, WNOHANG);
+    if (r != sound_pid)
+        return;
+    sound_pid = -1;
+    st = WIFEXITED(st) ? WEXITSTATUS(st) : 3;
+    say_msg(sound_said(st, sound_us), st != 0);
+}
+
 /* the keys read at once; 1: quit */
 static int keys(const unsigned char *k, int n)
 {
@@ -1038,6 +1080,10 @@ static int keys(const unsigned char *k, int n)
         }
         if (c == 3)
             return 1;              /* ^C */
+        if (c == 6 || c == 15) {   /* ^F, ^O */
+            sound_key(c == 15);
+            continue;
+        }
         if (mode == m_word) {
             word_key(c);
             if (stop_now)
@@ -1116,6 +1162,12 @@ static int read_strokes(void)
     return 0;
 }
 
+static void on_child(int sig)
+{
+    (void)sig;
+    child_done = 1;
+}
+
 static void on_resize(int sig)
 {
     (void)sig;
@@ -1153,7 +1205,7 @@ int word_main(const char *cfg)
     }
     tcgetattr(0, &old_tty);
     raw = old_tty;
-    raw.c_lflag &= ~(ICANON | ECHO | ISIG);
+    raw.c_lflag &= ~(ICANON | ECHO | ISIG | IEXTEN);
     raw.c_iflag &= ~(IXON | ICRNL);
     raw.c_cc[VMIN] = 1;
     raw.c_cc[VTIME] = 0;
@@ -1162,6 +1214,8 @@ int word_main(const char *cfg)
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = on_resize;
     sigaction(SIGWINCH, &sa, 0);
+    sa.sa_handler = on_child;
+    sigaction(SIGCHLD, &sa, 0);
     sa.sa_handler = on_stop;
     sigaction(SIGTERM, &sa, 0);
     sigaction(SIGHUP, &sa, 0);
@@ -1193,7 +1247,9 @@ int word_main(const char *cfg)
             pf[n].events = POLLIN;
             n++;
         }
-        r = poll(pf, n, -1);
+        /* while a sound comes, wake now and then: its SIGCHLD may
+         * come just before poll */
+        r = poll(pf, n, sound_pid > 0 ? 500 : -1);
         if (r < 0 && errno != EINTR)
             break;
         if (r > 0 && pf[0].revents) {
@@ -1205,6 +1261,8 @@ int word_main(const char *cfg)
         if (!quit && n > 1 && capture_fd >= 0 && pf[1].revents & POLLIN)
             quit = read_strokes();
         resized = 0;
+        if (child_done)
+            sound_done();
         if (!quit)
             draw();
     }
