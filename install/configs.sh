@@ -289,7 +289,7 @@ update_dotterel() {
 		say "reset   $d to the new Dotterel (its history was started again)"
 		[ ! -s "$kept" ] ||
 			warn "your words added before are in $kept (git -C $d apply --3way $kept)"
-		git -C "$d" clean -fdq -- dictionaries data
+		git -C "$d" clean -fdq -e dotterel-generated.dict -- dictionaries data
 		return 0
 	fi
 	if [ -n "$(git -C "$d" status --porcelain --untracked-files=no)" ]; then
@@ -302,7 +302,7 @@ update_dotterel() {
 		git -C "$d" reset --quiet --hard "$up"
 		warn "your words in $d clashed with the new Dotterel; the new one is in, yours are in $kept"
 	fi
-	git -C "$d" clean -fdq -- dictionaries data
+	git -C "$d" clean -fdq -e dotterel-generated.dict -- dictionaries data
 }
 
 install_steno() {

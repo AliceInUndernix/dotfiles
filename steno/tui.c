@@ -219,7 +219,8 @@ static void draw_dicts(int y, int w, int h)
             scr_fill(' ', w - 2);
             continue;
         }
-        name = dict_name(i, &user);
+        dict_name(i, &user);
+        name = dict_shown(i);  /* a path only outside the directory */
         on = dict_enabled(i);
         if (i == sel)
             scr_col(C_SELECT);
@@ -372,12 +373,12 @@ static void added_outline(void)
 
 static void answer(int c)
 {
-    int r, n, user;
+    int r, n;
     char m[LOG_LEN];
 
     if (asking == 'd') {
         if (c == 'y' || c == 'Y') {
-            sprintf(m, "removed %.200s", dict_name(sel, &user));
+            sprintf(m, "removed %.200s", dict_shown(sel));
             dict_remove(sel);
             if (sel >= dict_count() && sel > 0)
                 sel--;
@@ -435,7 +436,7 @@ static void answer(int c)
 int tui_key(void)
 {
     unsigned char b[32];
-    int n, i, c, r, user;
+    int n, i, c, r;
     char m[LOG_LEN];
 
     n = read(0, b, sizeof(b));
@@ -488,7 +489,7 @@ int tui_key(void)
             }
         } else if (c == ' ' && dict_count()) {
             dict_set_enabled(sel, !dict_enabled(sel));
-            sprintf(m, "%.200s %s%s", dict_name(sel, &user),
+            sprintf(m, "%.200s %s%s", dict_shown(sel),
                 dict_enabled(sel) ? "on" : "off",
                 dict_raw_on() ? " (when raw mode ends)" : "");
             tui_log(m);
@@ -505,7 +506,7 @@ int tui_key(void)
             asking = 'd';
             input[0] = 0;
             sprintf(m, "remove %.200s from the list? %s",
-                dict_name(sel, &user), dict_is_builtin(dict_path(sel)) ?
+                dict_shown(sel), dict_is_builtin(dict_path(sel)) ?
                 "(a again to bring it back)" : "(the file stays)");
             tui_log(m);
         } else if (c == 'r') {

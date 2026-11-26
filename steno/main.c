@@ -383,6 +383,25 @@ const char *dict_dir_file(const char *name)
     return p;
 }
 
+/* a dictionary's name to show: the file's alone when it is in the
+ * dictionaries directory, else as the settings file names it (a path) */
+const char *dict_shown(int i)
+{
+    const char *p;
+    int n, user;
+
+    p = dict_path(i);
+    n = (int)strlen(dict_dir);
+    while (n > 1 && dict_dir[n - 1] == '/')
+        n--;
+    if (n && !strncmp(p, dict_dir, n) && p[n] == '/' && p[n + 1] &&
+        !strchr(p + n + 1, '/'))
+    {
+        return p + n + 1;
+    }
+    return dict_name(i, &user);
+}
+
 const char *dotterel_data(const char *name)
 {
     static char p[1100];
@@ -1158,38 +1177,35 @@ static void on_signal(int sig)
     stop_now = 1;
 }
 
-/* steno -g [-x]: generated.dict, made by the rules for every word (gen.c),
- * next to the user dictionary; put last in the list the first time, so
- * your own dictionaries stay and win. -x also takes the old ones
+/* steno -g [-x]: dotterel-generated.dict in the dictionaries directory,
+ * named as the others are, made by the rules for every word (gen.c);
+ * put last in the list the first time, so your own dictionaries stay
+ * and win. A generated.dict of the first version, next to the user
+ * dictionary, gives way to it. -x also takes the old ones
  * (dotterel-old-*) out of the list; their files stay, and "a" in the
  * status screen puts one back. */
 static int tool_generate(int drop_old)
 {
     int *was;
-    char path[1100], name[1100], *slash;
-    const char *n, *b;
+    char path[1100], name[64];
+    const char *b;
     long words, skipped;
-    int i, user, r, have, dropped, count;
+    int i, r, have, dropped, count;
 
-    scopy(path, dict_dir_file("generated.dict"), sizeof(path));
-    scopy(name, "generated.dict", sizeof(name));
-    count = dict_count();
-    for (i = 0; i < count; i++) {
-        n = dict_name(i, &user);
-        if (!user)
+    scopy(name, "dotterel-generated.dict", sizeof(name));
+    scopy(path, dict_dir_file(name), sizeof(path));
+    dropped = 0;
+    for (i = dict_count() - 1; i >= 0; i--) {
+        b = strrchr(dict_path(i), '/');
+        b = b ? b + 1 : dict_path(i);
+        if (strcmp(b, "generated.dict"))
             continue;
-        scopy(path, dict_path(i), sizeof(path));
-        slash = strrchr(path, '/');
-        if (slash)
-            scopy(slash + 1, "generated.dict", 32);
-        scopy(name, n, sizeof(name));
-        slash = strrchr(name, '/');
-        if (slash)
-            scopy(slash + 1, "generated.dict", 32);
-        else
-            scopy(name, path, sizeof(name));
-        break;
+        printf("instead of %s (removed)\n", dict_path(i));
+        unlink(dict_path(i));
+        dict_remove(i);
+        dropped++;
     }
+    count = dict_count();
     /* every dictionary off while it is made: the rules alone */
     was = malloc((count + 1) * sizeof(int));
     if (!was) {
@@ -1220,7 +1236,6 @@ static int tool_generate(int drop_old)
             return 1;
         printf("added to the list, last: dict %s\n", name);
     }
-    dropped = 0;
     for (i = dict_count() - 1; drop_old && i >= 0; i--) {
         b = strrchr(dict_path(i), '/');
         b = b ? b + 1 : dict_path(i);
@@ -1246,8 +1261,8 @@ static void usage(int code)
         "       steno -W                           add words: sound,\n"
         "                                          outlines made for it\n"
         "       steno -G WORD|-                    those, as text\n"
-        "       steno -g [-x]                      generated.dict: the\n"
-        "                                          rules' outline for\n"
+        "       steno -g [-x]                      dotterel-generated.dict:\n"
+        "                                          the rules' outline for\n"
         "                                          every word (-x: old\n"
         "                                          ones out of the list)\n"
         "       steno -C DIR FILE...               Plover's files in\n"

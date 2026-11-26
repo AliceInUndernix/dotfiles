@@ -16,7 +16,7 @@ SYNOPSIS
                                        yours (a dwm scratchpad, Mod+y)
     steno -G WORD|-                    the same as text (- : a word a
                                        line on stdin)
-    steno -g [-x]                      generated.dict: the rules'
+    steno -g [-x]                      dotterel-generated.dict: the rules'
                                        outline for every word (-x: the
                                        old dictionaries out of the list)
     steno -C DIR FILE...               Plover's dictionaries in steno's
@@ -94,6 +94,9 @@ in a small screen, in the look of btop:
     | keyboard on /dev/ttyACM0                                      |
     +---------------------------------------------------------------+
 
+A dictionary in the dictionaries directory shows by its file name
+alone; one anywhere else (the user dictionary) shows its path.
+
 "doing" is typing, output off, raw mode, movement mode (Dotterel's
 .mode dictionary) or nothing (no keyboard). The messages are what
 steno would say on stderr.
@@ -156,7 +159,7 @@ OPTIONS
     -W        the word adder, below
     -G W      what -W shows for word W, as text: syllables, sounds,
               each outline made for it, why, and what it types now
-    -g        make generated.dict, below; -x with it also takes the
+    -g        make dotterel-generated.dict, below; -x with it also takes the
               old dictionaries (dotterel-old-*) out of the list
     -C D F..  make steno's files in directory D from Plover's: .json
               -> .dict, .modal -> .mode, uk_to_us.json -> uk_to_us.txt
@@ -327,8 +330,8 @@ yours only; don't show them where others see the screen.
 
 GENERATED DICTIONARY (steno -g)
 
-steno -g makes generated.dict next to the user dictionary
-(~/.system/share/steno/generated.dict): every word of Dotterel's word
+steno -g makes dotterel-generated.dict in the dictionaries directory,
+beside the others and named as they are: every word of Dotterel's word
 list (data/word-homes.txt) that goes in base or proper-nouns, about
 54,000, with the first outline the rules of steno -W make for it, the
 most common words first (data/frequency.txt), each outline once (a

@@ -163,6 +163,7 @@ void tui_log(const char *m);
 void tui_stroke(long st);
 int keyboard_state(const char **port, const char **why);
 int add_dict_line(const char *val, int user);
+const char *dict_shown(int i);   /* bare in the dictionaries dir */
 int config_save(void);
 void output_toggle(void);
 
