@@ -175,6 +175,13 @@ ck_part() {
 				ck_ok "firmware $ML_BIN is from the current layout"
 			fi
 		fi ;;
+	claude)
+		r=$SYSTEM/claude-desktop/app/.release
+		c=$SYSBIN/claude-desktop
+		if [ -f "$r" ]; then ck_ok "Claude desktop $(cat "$r")"
+		else ck_bad "Claude desktop is missing: ./install.sh claude"; fi
+		if [ -x "$c" ]; then ck_ok "$c"
+		else ck_bad "$c is missing: ./install.sh claude"; fi ;;
 	net) ck_net ;;
 	icecatrc) ck_icecatrc ;;
 	ksp) ck_ksp ;;

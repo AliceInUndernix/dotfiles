@@ -235,7 +235,8 @@ uninstall_deps() {
 		( root_env; emerge $EMERGE_OPTS --deselect $GENTOO_X $GENTOO_TOOLS \
 			$GENTOO_MEDIA $GENTOO_ARCHIVES $GENTOO_NET app-text/sioyek \
 			media-video/pipewire media-video/wireplumber )
-		say "note    to remove what nothing else needs: emerge -qva --depclean"
+		say "note    to remove what nothing else needs:"
+		say "        emerge $EMERGE_OPTS --depclean"
 	else
 		say "note    the packages stay; remove the ones you don't want with"
 		say "        your package manager (install/packages.sh lists them)"
@@ -252,6 +253,14 @@ uninstall_x() {
 		say "note    $f stays: su -c '$DOTFILES/install.sh uninstall x'"
 	fi
 	unlink_part x
+}
+
+# claude: the app and its launcher; your login and settings stay
+uninstall_claude() {
+	remove "$SYSTEM/claude-desktop"
+	remove "$SYSBIN/claude-desktop"
+	[ ! -d "$CONFIG/Claude" ] ||
+		say "note    your login and settings stay in $CONFIG/Claude"
 }
 
 # every other part: its links, and its program if it builds one

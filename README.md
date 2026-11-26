@@ -70,7 +70,7 @@ su -c '~user/dotfiles/install.sh --new-pc'   # root: a new computer, everything
 | Group | Parts |
 |---|---|
 | `shell` | `ksh xdg nvim tmux` |
-| `desktop` | `x dwm st dmenu slock feh flameshot` |
+| `desktop` | `x dwm st dmenu slock feh flameshot claude` |
 | `media` | `mpv sioyek wiremix btop` |
 | `tools` | `webarchiver clean seal ballfix diary` |
 | `keyboard` | `steno moonlander` |

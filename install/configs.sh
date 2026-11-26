@@ -485,6 +485,20 @@ install_moonlander() {
 	fi
 }
 
+# Claude desktop: Anthropic's .deb, its signature and SHA256 checked,
+# unpacked into ~/.system/claude-desktop/app by
+# claude-desktop/get-claude-desktop.sh, run as the user (from root too).
+# A newer version is fetched when there is one; the launcher
+# ~/.system/bin/claude-desktop is written again each time. Your login
+# is in ~/.system/config/Claude and is never touched.
+install_claude() {
+	for t in curl gpg ar tar sha256sum; do
+		command -v "$t" >/dev/null 2>&1 ||
+			die "$t not found; Claude desktop needs it"
+	done
+	as_user "sh '$DOTFILES/claude-desktop/get-claude-desktop.sh'"
+}
+
 # run on its own: the same as ./install.sh [part...]
 case $0 in */configs.sh|configs.sh)
 	exec "$(dirname "$0")/../install.sh" "$@" ;;

@@ -7,7 +7,7 @@ PART_GROUPS="shell desktop media tools keyboard network games browsers"
 group_parts() {
 	case $1 in
 	shell)    echo "ksh xdg nvim tmux" ;;
-	desktop)  echo "x dwm st dmenu slock feh flameshot" ;;
+	desktop)  echo "x dwm st dmenu slock feh flameshot claude" ;;
 	media)    echo "mpv sioyek wiremix btop" ;;
 	tools)    echo "webarchiver clean seal ballfix diary" ;;
 	keyboard) echo "steno moonlander" ;;
@@ -32,6 +32,7 @@ part_info() {
 	slock)       echo "screen locker (root: it must be setuid)" ;;
 	feh)         echo "picture viewer theme" ;;
 	flameshot)   echo "screenshots" ;;
+	claude)      echo "Claude desktop app: installs or updates it" ;;
 	mpv)         echo "video player config" ;;
 	sioyek)      echo "PDF and EPUB reader config" ;;
 	wiremix)     echo "sound mixer config" ;;
