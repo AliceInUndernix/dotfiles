@@ -43,10 +43,14 @@ struct gen {
     char uk_ru[GEN_TEXT], us_ru[GEN_TEXT];
     struct gcand c[GEN_CANDS];
     int nc;
+    int hashed;            /* # on the first strokes: a proper noun */
 };
 
 int gen_word(const char *word, struct gen *g);
 int gen_print(const char *word);
+void gen_set_hash(struct gen *g, int on);
+int gen_is_proper(const char *word);
+int gen_dict(const char *path, long *words, long *skipped);
 void gen_hyphenate(const char *w, char *out, int size);
 int gen_find(const char *file, const char *word, char out[][GEN_TEXT],
     int max);

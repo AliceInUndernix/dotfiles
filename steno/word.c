@@ -335,6 +335,8 @@ static void look_up(void)
     }
     if (!strcmp(kinds, "-"))
         kinds[0] = 0;
+    /* a proper noun's outlines get # (Lapwing 19) */
+    gen_set_hash(&g, !strcmp(home, "proper-nouns"));
     n = gen_find("meanings.txt", word, l, 4);
     nmeaning = 0;
     for (i = 0; i < n && nmeaning < 3; i++) {
@@ -891,6 +893,8 @@ static void cycle_home(void)
             break;
     i = homes[i] && homes[i + 1] ? i + 1 : 0;
     scopy(home, homes[i], sizeof(home));
+    if (looked)
+        gen_set_hash(&g, !strcmp(home, "proper-nouns"));
 }
 
 /* a key in the outline field; 1 when saved (quit) */

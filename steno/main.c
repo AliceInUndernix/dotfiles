@@ -24,6 +24,7 @@
 #include <unistd.h>
 
 #include "steno.h"
+#include "gen.h"
 
 #define CMD_MAX 32
 #define LINE_MAX_LEN 2048
@@ -1157,6 +1158,82 @@ static void on_signal(int sig)
     stop_now = 1;
 }
 
+/* steno -g [-x]: generated.dict, made by the rules for every word (gen.c),
+ * next to the user dictionary; put last in the list the first time, so
+ * your own dictionaries stay and win. -x also takes the old ones
+ * (dotterel-old-*) out of the list; their files stay, and "a" in the
+ * status screen puts one back. */
+static int tool_generate(int drop_old)
+{
+    int *was;
+    char path[1100], name[1100], *slash;
+    const char *n, *b;
+    long words, skipped;
+    int i, user, r, have, dropped, count;
+
+    scopy(path, dict_dir_file("generated.dict"), sizeof(path));
+    scopy(name, "generated.dict", sizeof(name));
+    count = dict_count();
+    for (i = 0; i < count; i++) {
+        n = dict_name(i, &user);
+        if (!user)
+            continue;
+        scopy(path, dict_path(i), sizeof(path));
+        slash = strrchr(path, '/');
+        if (slash)
+            scopy(slash + 1, "generated.dict", 32);
+        scopy(name, n, sizeof(name));
+        slash = strrchr(name, '/');
+        if (slash)
+            scopy(slash + 1, "generated.dict", 32);
+        else
+            scopy(name, path, sizeof(name));
+        break;
+    }
+    /* every dictionary off while it is made: the rules alone */
+    was = malloc((count + 1) * sizeof(int));
+    if (!was) {
+        say("out of memory", 0);
+        return 1;
+    }
+    for (i = 0; i < count; i++) {
+        was[i] = dict_enabled(i);
+        dict_set_enabled(i, 0);
+    }
+    printf("making %s (every word of word-homes.txt; a while)\n", path);
+    fflush(stdout);
+    r = gen_dict(path, &words, &skipped);
+    for (i = 0; i < count; i++)
+        dict_set_enabled(i, was[i]);
+    free(was);
+    if (r < 0)
+        return 1;
+    printf("%ld words written, %ld the rules make nothing for\n", words,
+        skipped);
+    have = 0;
+    for (i = 0; i < count; i++)
+        if (!strcmp(dict_path(i), path))
+            have = 1;
+    if (!have) {
+        r = add_dict_line(name, 0);
+        if (r < 0)
+            return 1;
+        printf("added to the list, last: dict %s\n", name);
+    }
+    dropped = 0;
+    for (i = dict_count() - 1; drop_old && i >= 0; i--) {
+        b = strrchr(dict_path(i), '/');
+        b = b ? b + 1 : dict_path(i);
+        if (strncmp(b, "dotterel-old-", 13))
+            continue;
+        printf("taken out of the list: %s (the file stays)\n", b);
+        dict_remove(i);
+        dropped++;
+    }
+    r = !have || dropped ? config_save() : 0;
+    return r < 0;
+}
+
 static void usage(int code)
 {
     fprintf(code ? stderr : stdout,
@@ -1169,6 +1246,10 @@ static void usage(int code)
         "       steno -W                           add words: sound,\n"
         "                                          outlines made for it\n"
         "       steno -G WORD|-                    those, as text\n"
+        "       steno -g [-x]                      generated.dict: the\n"
+        "                                          rules' outline for\n"
+        "                                          every word (-x: old\n"
+        "                                          ones out of the list)\n"
         "       steno -C DIR FILE...               Plover's files in\n"
         "                                          steno's format\n"
         "       steno -t                           strokes from stdin,\n"
@@ -1219,7 +1300,7 @@ int main(int argc, char **argv)
     const char *cfg, *arg1, *arg2;
     struct pollfd pf[4];
     int i, n, test, r, tool, show_tape, show_sugg, quiet, kb, keys, ask;
-    int sugg_first;
+    int sugg_first, drop_old;
     struct sigaction sa;
 
     cfg = 0;
@@ -1228,6 +1309,7 @@ int main(int argc, char **argv)
     show_tape = 0;
     show_sugg = 0;
     sugg_first = 0;
+    drop_old = 0;
     quiet = 0;
     arg1 = 0;
     arg2 = 0;
@@ -1259,6 +1341,10 @@ int main(int argc, char **argv)
             tool = 'G';
             i++;
             arg1 = argv[i];
+        } else if (!strcmp(argv[i], "-g")) {
+            tool = 'g';
+        } else if (!strcmp(argv[i], "-x")) {
+            drop_old = 1;
         } else if (!strcmp(argv[i], "-l") && i + 1 < argc) {
             tool = 'l';
             i++;
@@ -1301,6 +1387,8 @@ int main(int argc, char **argv)
         return tool_add_loop();
     if (tool == 'G')
         return gen_main(arg1);
+    if (tool == 'g')
+        return tool_generate(drop_old);
     if (tool == 'W')
         return word_main(cfg_path);
     if (test)

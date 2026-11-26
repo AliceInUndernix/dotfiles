@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "steno.h"
 #include "gen.h"
@@ -2340,6 +2341,347 @@ void gen_sounds_text(const struct gsound *s, int n, char *out, int size)
     }
 }
 
+/* Proper nouns: # on the first stroke of every outline made (Lapwing
+ * 19, as all of Dotterel's proper nouns have it), on 1, or off again
+ * 0; what each one types now is looked at again. */
+void gen_set_hash(struct gen *g, int on)
+{
+    static const char why[] = "proper noun: # on the first stroke "
+        "(Lapwing 19)";
+    long st[STROKE_MAX], hash;
+    char t[GEN_TEXT], k[32];
+    struct gcand *c;
+    int i, j, n;
+
+    on = on != 0;
+    if (on == g->hashed || outline_parse("#", &hash, 1) != 1)
+        return;
+    for (i = 0; i < g->nc; i++) {
+        c = &g->c[i];
+        n = outline_parse(c->outline, st, STROKE_MAX);
+        if (n <= 0)
+            continue;
+        if (on)
+            st[0] |= hash;
+        else
+            st[0] &= ~hash;
+        t[0] = 0;
+        for (j = 0; j < n; j++) {
+            stroke_text(st[j], k);
+            if (j)
+                scat(t, "/", sizeof(t));
+            scat(t, k, sizeof(t));
+        }
+        scopy(c->outline, t, sizeof(c->outline));
+        if (on && c->nwhy < GEN_WHY) {
+            scopy(c->why[c->nwhy], why, GEN_TEXT);
+            c->nwhy++;
+        } else if (!on && c->nwhy && !strcmp(c->why[c->nwhy - 1], why)) {
+            c->nwhy--;
+        }
+        cand_now(c, g->word);
+    }
+    g->hashed = on;
+}
+
+/* a proper noun: word-homes.txt says so, or it isn't there and starts
+ * with a capital (as steno -W decides where it goes) */
+int gen_is_proper(const char *word)
+{
+    static char l[1][GEN_TEXT];
+    char *t;
+
+    if (gen_find("word-homes.txt", word, l, 1) == 1) {
+        t = strchr(l[0], '\t');
+        if (t)
+            *t = 0;
+        return !strcmp(l[0], "proper-nouns");
+    }
+    return word[0] >= 'A' && word[0] <= 'Z';
+}
+
+/* --- steno -g: a dictionary made by the rules, every word ------------
+ *
+ * Every word of word-homes.txt that goes in base or proper-nouns, the
+ * most common first (frequency.txt), then the rest in the list's
+ * order, gets the first outline the rules make for it that no word
+ * before it took (else that one with a star on its last stroke). Made
+ * with every dictionary off, so it stands on its own: a dictionary of
+ * the rules alone. Hand-made tables: the words by text, the outlines
+ * taken. */
+
+struct gword {
+    const char *text;      /* in the word list's buffer */
+    int len;
+    int done;
+};
+
+static struct gword *gw;
+static long ngw, *gw_head, *gw_next, gw_size;
+static char *taken_text;
+static long taken_len, taken_cap, *taken_head, *taken_next, *taken_at;
+static long ntaken, taken_size;
+
+static unsigned long text_hash(const char *s, int n)
+{
+    unsigned long h;
+    int i;
+
+    h = 2166136261UL;
+    for (i = 0; i < n; i++) {
+        h ^= (unsigned char)s[i];
+        h *= 16777619UL;
+        h &= 0xffffffffUL;
+    }
+    return h;
+}
+
+static struct gword *word_at(const char *s, int n)
+{
+    long e;
+
+    e = gw_head[text_hash(s, n) & (gw_size - 1)] - 1;
+    for (; e >= 0; e = gw_next[e] - 1)
+        if (gw[e].len == n && !memcmp(gw[e].text, s, n))
+            return &gw[e];
+    return 0;
+}
+
+static int is_taken(const char *o)
+{
+    long e;
+    int n;
+
+    n = strlen(o);
+    e = taken_head[text_hash(o, n) & (taken_size - 1)] - 1;
+    for (; e >= 0; e = taken_next[e] - 1)
+        if (!strcmp(taken_text + taken_at[e], o))
+            return 1;
+    return 0;
+}
+
+/* 0 when out of memory */
+static int take(const char *o)
+{
+    long n, h;
+    char *t;
+
+    n = strlen(o) + 1;
+    if (taken_len + n > taken_cap) {
+        taken_cap = taken_cap * 2 + n + 4096;
+        t = malloc(taken_cap);
+        if (!t)
+            return 0;
+        if (taken_len)
+            memcpy(t, taken_text, taken_len);
+        free(taken_text);
+        taken_text = t;
+    }
+    if (ntaken >= taken_size)
+        return 0;
+    memcpy(taken_text + taken_len, o, n);
+    taken_at[ntaken] = taken_len;
+    taken_len += n;
+    h = (long)(text_hash(o, (int)n - 1) & (taken_size - 1));
+    taken_next[ntaken] = taken_head[h];
+    taken_head[h] = ntaken + 1;
+    ntaken++;
+    return 1;
+}
+
+/* o with a star on its last stroke, in out; 0 when it had one */
+static int starred(const char *o, char *out)
+{
+    long st[STROKE_MAX], star;
+    char k[32];
+    int n, j;
+
+    n = outline_parse(o, st, STROKE_MAX);
+    if (n <= 0 || outline_parse("*", &star, 1) != 1 || st[n - 1] & star)
+        return 0;
+    st[n - 1] |= star;
+    out[0] = 0;
+    for (j = 0; j < n; j++) {
+        stroke_text(st[j], k);
+        if (j)
+            scat(out, "/", GEN_TEXT);
+        scat(out, k, GEN_TEXT);
+    }
+    return 1;
+}
+
+/* one word into the file: 1 written, 0 skipped, -1 write error */
+static int gen_one(FILE *f, const char *text, int len, int proper)
+{
+    static struct gen g;
+    char w[64], star[GEN_TEXT];
+    const char *pick;
+    int i;
+
+    if (len >= (int)sizeof(w))
+        return 0;
+    memcpy(w, text, len);
+    w[len] = 0;
+    if (!gen_word(w, &g) || !g.nc)
+        return 0;
+    if (proper)
+        gen_set_hash(&g, 1);
+    pick = 0;
+    for (i = 0; i < g.nc && !pick; i++)
+        if (!is_taken(g.c[i].outline))
+            pick = g.c[i].outline;
+    for (i = 0; i < g.nc && !pick; i++)
+        if (starred(g.c[i].outline, star) && !is_taken(star))
+            pick = star;
+    if (!pick || !take(pick))
+        return 0;
+    if (fprintf(f, "%s\t%s\n", w, pick) < 0)
+        return -1;
+    return 1;
+}
+
+/* a word of the list that goes in the generated dictionary */
+static int wanted(const char *text, int len, const char *home)
+{
+    int i;
+
+    if (strcmp(home, "base") && strcmp(home, "proper-nouns"))
+        return 0;
+    for (i = 0; i < len; i++)
+        if (text[i] == ' ' || text[i] == '{' || text[i] == '\\' ||
+            text[i] == '\t')
+        {
+            return 0;
+        }
+    return len > 0;
+}
+
+/* write it to path (through path.new); 0 ok, -1 error */
+int gen_dict(const char *path, long *words, long *skipped)
+{
+    char *homes, *freq, *p, *e, *t, *nl, home[32], tmp[1100];
+    long size, i, h, n;
+    struct gword *x;
+    FILE *f;
+    int r, len, pass;
+
+    *words = *skipped = 0;
+    homes = read_file(dotterel_data("word-homes.txt"), &size);
+    freq = read_file(dotterel_data("frequency.txt"), &size);
+    if (!homes || !freq) {
+        say("can't read word-homes.txt and frequency.txt in %s",
+            dotterel_data(""));
+        free(homes);
+        free(freq);
+        return -1;
+    }
+    /* the list's words, with where each goes */
+    n = 0;
+    for (p = homes; *p; p++)
+        if (*p == '\n')
+            n++;
+    gw_size = 1024;
+    while (gw_size < n * 2)
+        gw_size *= 2;
+    gw = malloc((n + 1) * sizeof(*gw));
+    gw_head = malloc(gw_size * sizeof(long));
+    gw_next = malloc((n + 1) * sizeof(long));
+    taken_size = gw_size;
+    taken_head = malloc(taken_size * sizeof(long));
+    taken_next = malloc(taken_size * sizeof(long));
+    taken_at = malloc(taken_size * sizeof(long));
+    if (!gw || !gw_head || !gw_next || !taken_head || !taken_next ||
+        !taken_at)
+    {
+        say("out of memory", 0);
+        return -1;
+    }
+    memset(gw_head, 0, gw_size * sizeof(long));
+    memset(taken_head, 0, taken_size * sizeof(long));
+    ngw = 0;
+    for (p = homes; *p; p = nl ? nl + 1 : p + strlen(p)) {
+        nl = strchr(p, '\n');
+        if (nl)
+            *nl = 0;
+        t = strchr(p, '\t');
+        if (p[0] == '#' || !t)
+            continue;
+        e = strchr(t + 1, '\t');
+        len = (int)((e ? e : t + 1 + strlen(t + 1)) - (t + 1));
+        if (len >= (int)sizeof(home))
+            continue;
+        memcpy(home, t + 1, len);
+        home[len] = 0;
+        if (!wanted(p, (int)(t - p), home) || word_at(p, (int)(t - p)))
+            continue;
+        gw[ngw].text = p;
+        gw[ngw].len = (int)(t - p);
+        gw[ngw].done = strcmp(home, "proper-nouns") ? 2 : 3;
+        h = (long)(text_hash(p, gw[ngw].len) & (gw_size - 1));
+        gw_next[ngw] = gw_head[h];
+        gw_head[h] = ngw + 1;
+        ngw++;
+    }
+    sprintf(tmp, "%.1000s.new", path);
+    f = fopen(tmp, "w");
+    if (!f) {
+        say("can't write %s", tmp);
+        return -1;
+    }
+    /* done: 2 base, 3 proper noun, still to do; 1 done */
+    r = 0;
+    for (pass = 0; pass < 2 && r >= 0; pass++) {
+        if (!pass) {
+            for (p = freq; *p && r >= 0; p = nl ? nl + 1 : p + strlen(p)) {
+                nl = strchr(p, '\n');
+                len = (int)(nl ? nl - p : (long)strlen(p));
+                if (len && p[len - 1] == '\r')
+                    len--;
+                if (p[0] == '#' || !len)
+                    continue;
+                x = word_at(p, len);
+                if (!x || x->done == 1)
+                    continue;
+                r = gen_one(f, x->text, x->len, x->done == 3);
+                x->done = 1;
+                if (r > 0)
+                    (*words)++;
+                else if (!r)
+                    (*skipped)++;
+            }
+        } else {
+            for (i = 0; i < ngw && r >= 0; i++) {
+                if (gw[i].done == 1)
+                    continue;
+                r = gen_one(f, gw[i].text, gw[i].len, gw[i].done == 3);
+                gw[i].done = 1;
+                if (r > 0)
+                    (*words)++;
+                else if (!r)
+                    (*skipped)++;
+            }
+        }
+    }
+    pass = fclose(f);
+    r = pass < 0 || r < 0 ? -1 : 0;
+    if (!r)
+        r = rename(tmp, path);
+    if (r < 0) {
+        say("can't write %s", path);
+        unlink(tmp);
+    }
+    free(gw);
+    free(gw_head);
+    free(gw_next);
+    free(taken_head);
+    free(taken_next);
+    free(taken_at);
+    free(taken_text);
+    free(homes);
+    free(freq);
+    return r < 0 ? -1 : 0;
+}
+
 /* steno -G WORD: all of it as text (and for testing the rules) */
 int gen_print(const char *word)
 {
@@ -2351,6 +2693,8 @@ int gen_print(const char *word)
         printf("%s: can't make anything of it\n", word);
         return 1;
     }
+    if (gen_is_proper(word))
+        gen_set_hash(&g, 1);
     printf("word     %s\n", g.word);
     printf("written  %s\n", g.written);
     printf("spoken   %s\n", g.spoken);

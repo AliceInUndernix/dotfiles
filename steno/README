@@ -16,6 +16,9 @@ SYNOPSIS
                                        yours (a dwm scratchpad, Mod+y)
     steno -G WORD|-                    the same as text (- : a word a
                                        line on stdin)
+    steno -g [-x]                      generated.dict: the rules'
+                                       outline for every word (-x: the
+                                       old dictionaries out of the list)
     steno -C DIR FILE...               Plover's dictionaries in steno's
                                        format, into DIR
     steno -t [-c CONFIG]               strokes from stdin, print what
@@ -153,6 +156,8 @@ OPTIONS
     -W        the word adder, below
     -G W      what -W shows for word W, as text: syllables, sounds,
               each outline made for it, why, and what it types now
+    -g        make generated.dict, below; -x with it also takes the
+              old dictionaries (dotterel-old-*) out of the list
     -C D F..  make steno's files in directory D from Plover's: .json
               -> .dict, .modal -> .mode, uk_to_us.json -> uk_to_us.txt
               (the three built-in ones are skipped)
@@ -320,6 +325,24 @@ doesn't look for them. One viewer of each at a time. Nothing is
 written to disk. Whatever you type passes through them, so they are
 yours only; don't show them where others see the screen.
 
+GENERATED DICTIONARY (steno -g)
+
+steno -g makes generated.dict next to the user dictionary
+(~/.system/share/steno/generated.dict): every word of Dotterel's word
+list (data/word-homes.txt) that goes in base or proper-nouns, about
+54,000, with the first outline the rules of steno -W make for it, the
+most common words first (data/frequency.txt), each outline once (a
+word whose outlines are all taken gets one with a star). It is made
+with every dictionary off, so it is the rules alone; proper nouns get
+# on the first stroke, as in Dotterel. It takes about 10 s.
+
+The first time, it goes last in the list, so all your dictionaries
+stay and win over it; run it again after the rules change to make it
+anew. Your dictionaries are never changed. steno -g -x also takes the
+old dictionaries (dotterel-old-*) out of the list (the files stay; "a"
+on the status screen puts one back). Restart steno to use the new
+list.
+
 ADDING WORDS (steno -W)
 
 Mod+y in dwm (the Word key on the Moonlander's dwm layer) opens it as
@@ -363,7 +386,8 @@ long vowels by sound, short ones by spelling, the chords on the right,
 then the shorter ways (folded clusters, -le, R, L, E and T folding, a
 dropped vowel, a word plus an ending, two words with a star). Each
 says why and whether it is free; one already taken gets an AE or a
-star version too.
+star version too. A proper noun's outlines (its dictionary is
+proper-nouns, ^T changes it) get # on the first stroke.
 
 "your dictionaries" also lists the outlines that only dictionaries
 you turned off have (space in the status screen), dim and marked
