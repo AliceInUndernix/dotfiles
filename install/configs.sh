@@ -377,12 +377,21 @@ plover_leftovers() {
 # the profile. IceCat itself is the part icecat (root), which runs this
 # when it is done. The add-ons come through Tor (127.0.0.1:9050); when
 # Tor can't be reached they are left out, and it says so.
+# ~/.system/bin/icecat (switch/icecat) starts the real IceCat and runs
+# switch/tidy.sh when it quits.
 install_switch() {
-	if ! command -v icecat >/dev/null 2>&1; then
+	link "$DOTFILES/switch/icecat" "$SYSBIN/icecat"
+	if ! have_icecat; then
 		warn "IceCat is not installed: switch is set up when it is (su -c '$DOTFILES/install.sh icecat')"
 		return 0
 	fi
 	as_user "sh '$DOTFILES/switch/install.sh'"
+}
+# have_icecat: is the real IceCat installed (not only our icecat)?
+have_icecat() {
+	c=$(PATH=$(echo "$PATH" | sed "s|$SYSBIN:||g; s|:$SYSBIN\$||") \
+		command -v icecat 2>/dev/null) || return 1
+	[ -n "$c" ]
 }
 install_webarchiver() {
 	build_suckless webarchiver

@@ -24,7 +24,7 @@ browser() (
 # IceCat, then our settings for it (the part switch)
 install_icecat() {
 	browser parona-overlay www-client/icecat
-	! command -v icecat >/dev/null 2>&1 || install_switch
+	! have_icecat || install_switch
 }
 install_chromium() { browser pf4public www-client/ungoogled-chromium; }
 

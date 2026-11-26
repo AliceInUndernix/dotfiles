@@ -784,7 +784,7 @@ function remove_cookie(c)
     if (c.partitionKey) {
         d.partitionKey = c.partitionKey;
     }
-    browser.cookies.remove(d).catch(function () {});
+    return browser.cookies.remove(d).catch(noop);
 }
 
 function remove_storage(hosts)
@@ -792,17 +792,20 @@ function remove_storage(hosts)
     var types;
     var i;
     var o;
+    var a;
 
+    a = [];
     if (hosts.length == 0) {
-        return;
+        return Promise.resolve();
     }
     types = ["localStorage", "indexedDB", "serviceWorkers"];
     for (i = 0; i < types.length; i++) {
         o = {};
         o[types[i]] = true;
-        browser.browsingData.remove({ hostnames: hosts }, o)
-            .catch(function () {});
+        a.push(browser.browsingData.remove({ hostnames: hosts }, o)
+            .catch(noop));
     }
+    return Promise.all(a);
 }
 
 function wipe_now()
@@ -826,6 +829,26 @@ function wipe_now()
     }).catch(noop);
 }
 
+/* Hosts named in the site lists that are not kept */
+function unkept_listed()
+{
+    var out;
+    var a;
+    var k;
+    var i;
+
+    out = [];
+    for (k = 0; k < SITE_LISTS.length; k++) {
+        a = lines_of(state[SITE_LISTS[k]]);
+        for (i = 0; i < a.length; i++) {
+            if (!keep_related(a[i])) {
+                out.push(a[i]);
+            }
+        }
+    }
+    return out;
+}
+
 function wipe_unkept()
 {
     return all_cookies().then(function (cookies) {
@@ -833,13 +856,15 @@ function wipe_unkept()
         var list;
         var kept;
         var seen;
+        var done;
         var i;
         var h;
 
         hosts = {};
+        done = [];
         for (i = 0; i < cookies.length; i++) {
             if (!cookie_kept(cookies[i])) {
-                remove_cookie(cookies[i]);
+                done.push(remove_cookie(cookies[i]));
                 /* storage is removed by host and its subdomains */
                 if (!keep_related(cookie_host(cookies[i]))) {
                     hosts[cookie_host(cookies[i])] = 1;
@@ -859,14 +884,16 @@ function wipe_unkept()
         for (h in hosts) {
             list.push(h);
         }
-        remove_storage(list);
+        done.push(remove_storage(list));
         state.seen = kept.join("\n");
-        browser.storage.local.set({ seen: state.seen });
+        drop_from_lists(unkept_listed(), 0);
+        browser.storage.local.set(snapshot());
         ip_cache = {};
         http_once = {};
         forget_faces();
         wipe_extras();
-        return wipe_history();
+        done.push(wipe_history());
+        return Promise.all(done);
     }).catch(noop);
 }
 
@@ -964,21 +991,99 @@ function clear_site_history(host)
     }).catch(noop);
 }
 
+/* Is a host the site, under it, or a parent domain of it? */
+function related(h, host)
+{
+    return h != "" && (host_match(h, host) || host_match(host, h)) ? 1 : 0;
+}
+
+/*
+ * A site's cookies: its own, its parent domains' (".example.org" for
+ * www.example.org, often set by scripts), and every cookie in its jar.
+ */
+function site_cookie(c, host)
+{
+    return related(cookie_host(c), host) || related(cookie_jar(c), host);
+}
+
+/* The settings that name sites; a forgotten site leaves none of them */
+var SITE_LISTS = ["sites", "http_ok", "no_tor", "exempt"];
+
+function drop_from_lists(hosts, also_keep)
+{
+    var k;
+    var i;
+
+    for (k = 0; k < SITE_LISTS.length; k++) {
+        for (i = 0; i < hosts.length; i++) {
+            edit_list(SITE_LISTS[k], hosts[i], 0);
+        }
+    }
+    for (i = 0; i < hosts.length; i++) {
+        if (also_keep) {
+            edit_list("keep", hosts[i], 0);
+        }
+        delete http_once[hosts[i]];
+        delete site_gen[hosts[i]];
+        delete ip_cache[hosts[i]];
+    }
+}
+
+/*
+ * Forget sites by hand (the Sites page): close their tabs first, or
+ * their pages would write it all back at once; then every setting that
+ * names them, kept or not, and their data.
+ */
+function forget_sites(hosts)
+{
+    return browser.tabs.query({}).then(function (tabs) {
+        var ids;
+        var i;
+        var j;
+        var h;
+
+        ids = [];
+        for (i = 0; i < tabs.length; i++) {
+            h = hostname(tabs[i].url || "");
+            for (j = 0; j < hosts.length; j++) {
+                if (h != "" && host_match(h, hosts[j])) {
+                    ids.push(tabs[i].id);
+                    break;
+                }
+            }
+        }
+        return ids.length > 0 ? browser.tabs.remove(ids) : null;
+    }).catch(noop).then(function () {
+        var a;
+        var i;
+
+        drop_from_lists(hosts, 1);
+        a = [];
+        for (i = 0; i < hosts.length; i++) {
+            a.push(forget_site(hosts[i]));
+        }
+        return Promise.all(a);
+    }).then(function () {
+        browser.browsingData.remove({}, { cache: true }).catch(noop);
+        save_state();
+        sync_faces();
+    });
+}
+
 function forget_site(host)
 {
     return all_cookies().then(function (cookies) {
         var i;
-        var c;
 
+        /* never what another kept site needs (".example.org") */
         for (i = 0; i < cookies.length; i++) {
-            c = cookies[i];
-            if (host_match(cookie_host(c), host) ||
-                c.firstPartyDomain == host)
-            {
-                remove_cookie(c);
+            if (site_cookie(cookies[i], host) && !cookie_kept(cookies[i])) {
+                remove_cookie(cookies[i]);
             }
         }
-        remove_storage([host]);
+        if (!keep_related(host)) {
+            remove_storage([host]);
+        }
         edit_list("seen", host, 0);
         browser.storage.local.set({ seen: state.seen });
         delete ip_cache[host];
@@ -1501,7 +1606,36 @@ function on_done(d)
     }
 }
 
+/*
+ * At start, no request goes out before the wipe of the sites that were
+ * not kept is done (or ten seconds have passed), so no site gets back
+ * what it left last time.
+ */
+var gate_open = 0;
+var gate_fn = null;
+var gate = new Promise(function (ok) {
+    gate_fn = ok;
+});
+
+function open_gate()
+{
+    gate_open = 1;
+    gate_fn();
+}
+
+window.setTimeout(open_gate, 10000);
+
 function on_before(d)
+{
+    if (!gate_open) {
+        return gate.then(function () {
+            return before(d);
+        });
+    }
+    return before(d);
+}
+
+function before(d)
 {
     var t;
     var r;
@@ -1631,7 +1765,8 @@ function on_message(msg, sender)
         return lookup_ip(msg.host);
     }
     if (msg.cmd == "forget") {
-        return forget_site(msg.host);
+        return forget_sites(Array.isArray(msg.hosts) ? msg.hosts.map(String) :
+            [String(msg.host)]);
     }
     if (msg.cmd == "wipe_unkept") {
         return wipe_unkept();
@@ -1804,7 +1939,9 @@ function on_loaded(r)
     register_script();
     if (want_wipe && state.wipe) {
         want_wipe = 0;
-        wipe_unkept();
+        wipe_unkept().then(open_gate, open_gate);
+    } else {
+        open_gate();
     }
     Promise.all([
         browser.runtime.getBrowserInfo(),

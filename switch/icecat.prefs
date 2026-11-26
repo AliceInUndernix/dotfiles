@@ -15,8 +15,12 @@ extensions.htmlaboutaddons.recommendations.enabled false
 browser.discovery.enabled false
 
 # --- Clearing at quit ------------------------------------------------
-# What an extension cannot reach. Cookies, site data and history are
-# left to "switch", which spares the sites you keep.
+# IceCat itself clears, every time it quits, all that has no kept
+# sites to spare: cache, downloads, form data, the session, history
+# (of kept sites too; bookmarks stay) and site settings (permissions,
+# zoom, HSTS). Cookies and site storage are left to "switch", which
+# spares the sites you keep; tidy.sh, run by the icecat command after
+# IceCat quits, removes the files that would still name a site.
 privacy.sanitize.sanitizeOnShutdown true
 privacy.clearOnShutdown.cache true
 privacy.clearOnShutdown.downloads true
@@ -24,12 +28,12 @@ privacy.clearOnShutdown.formdata true
 privacy.clearOnShutdown.sessions true
 privacy.clearOnShutdown.cookies false
 privacy.clearOnShutdown.offlineApps false
-privacy.clearOnShutdown.history false
-privacy.clearOnShutdown.siteSettings false
+privacy.clearOnShutdown.history true
+privacy.clearOnShutdown.siteSettings true
 privacy.clearOnShutdown_v2.cache true
 privacy.clearOnShutdown_v2.cookiesAndStorage false
-privacy.clearOnShutdown_v2.historyFormDataAndDownloads false
-privacy.clearOnShutdown_v2.siteSettings false
+privacy.clearOnShutdown_v2.historyFormDataAndDownloads true
+privacy.clearOnShutdown_v2.siteSettings true
 browser.cache.disk.enable false
 browser.sessionstore.privacy_level 2
 browser.sessionstore.resume_from_crash false

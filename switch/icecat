@@ -1,0 +1,31 @@
+#!/bin/sh
+# icecat: IceCat, then tidy.sh once it has quit, so that no file in the
+# profile still names a site you did not keep (switch/README). The
+# dotfiles link it as ~/.system/bin/icecat, first in PATH, so dwm,
+# dmenu and the shell all start IceCat this way. It runs the real
+# icecat, the next one in PATH; arguments go to it unchanged. When
+# IceCat was already running (a link opened in it), tidy.sh leaves the
+# profile alone.
+
+me=$(readlink -f "$0")
+here=$(dirname "$me")
+real=""
+old_ifs=$IFS
+IFS=:
+for d in $PATH; do
+    [ -n "$d" ] || continue
+    if [ -x "$d/icecat" ] && [ "$(readlink -f "$d/icecat")" != "$me" ]
+    then
+        real="$d/icecat"
+        break
+    fi
+done
+IFS=$old_ifs
+if [ -z "$real" ]; then
+    echo "icecat: IceCat is not installed" >&2
+    exit 127
+fi
+"$real" "$@"
+rc=$?
+sh "$here/tidy.sh" -q 2> /dev/null || true
+exit $rc

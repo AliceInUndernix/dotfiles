@@ -347,7 +347,9 @@ private windows. Alt+Shift+s opens its popup; every key is in
 `switch/README`. By default pages are read, not run: JavaScript off,
 Tor on, no web fonts and none of your own fonts shown to pages; both
 JavaScript (key s) and Tor (key v, then through the VPN) can be
-switched per site.
+switched per site. The `icecat` command (`~/.system/bin/icecat`) runs
+the real IceCat and then `switch/tidy.sh`, so that no file left in the
+profile names a site you did not keep.
 
 The extension and its pages are JavaScript and its manifest is JSON,
 which these rules otherwise avoid: an IceCat extension can be made of

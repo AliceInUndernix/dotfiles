@@ -1,6 +1,8 @@
 var rows = [];
 var shown = [];
 var sel = -1;
+/* the marked sites, by host: f and p act on all of them */
+var marked = {};
 
 function send(msg)
 {
@@ -81,6 +83,10 @@ function make_row(r, i)
 
     tr = document.createElement("tr");
     tr.tabIndex = 0;
+    cell(tr, marked[r.host] ? "[x]" : "[ ]", marked[r.host] ? "on" : "key");
+    tr.firstChild.addEventListener("click", function () {
+        toggle_mark(i);
+    });
     cell(tr, r.host, "");
     cell(tr, r.kept ? "kept" : "", "on");
     cell(tr, r.js ? "on" : "off", r.js ? "on" : "off");
@@ -116,7 +122,8 @@ function render()
     for (i = 0; i < shown.length; i++) {
         body.appendChild(make_row(shown[i], i));
     }
-    document.getElementById("count").textContent = shown.length + " sites";
+    document.getElementById("count").textContent = shown.length +
+        " sites, " + marked_hosts().length + " marked";
     if (sel >= shown.length) {
         sel = shown.length - 1;
     }
@@ -245,25 +252,117 @@ function refocus()
     });
 }
 
-function do_keep()
+function marked_hosts()
+{
+    var out;
+    var h;
+
+    out = [];
+    for (h in marked) {
+        out.push(h);
+    }
+    return out;
+}
+
+function toggle_mark(i)
 {
     var r;
 
-    r = current();
-    if (r) {
-        send({ cmd: "keep", host: r.host, value: !r.kept }).then(refocus);
+    if (i < 0 || i >= shown.length) {
+        return;
     }
+    r = shown[i];
+    if (marked[r.host]) {
+        delete marked[r.host];
+    } else {
+        marked[r.host] = 1;
+    }
+    render();
+    focus_row(i);
+}
+
+function mark_all(on)
+{
+    var i;
+
+    if (!on) {
+        marked = {};
+    }
+    for (i = 0; on && i < shown.length; i++) {
+        marked[shown[i].host] = 1;
+    }
+    render();
+    focus_row(sel);
+}
+
+/* The marked sites, or else the selected one */
+function targets()
+{
+    var a;
+    var r;
+
+    a = marked_hosts();
+    if (a.length > 0) {
+        return a;
+    }
+    r = current();
+    return r ? [r.host] : [];
+}
+
+function is_kept(host)
+{
+    var i;
+
+    for (i = 0; i < rows.length; i++) {
+        if (rows[i].host == host) {
+            return rows[i].kept;
+        }
+    }
+    return 0;
+}
+
+/* Keep them all, or, when all are kept already, keep none of them */
+function do_keep()
+{
+    var a;
+    var all;
+    var i;
+    var chain;
+
+    a = targets();
+    all = 1;
+    for (i = 0; i < a.length; i++) {
+        if (!is_kept(a[i])) {
+            all = 0;
+        }
+    }
+    chain = Promise.resolve();
+    for (i = 0; i < a.length; i++) {
+        chain = chain.then(send.bind(null,
+            { cmd: "keep", host: a[i], value: !all }));
+    }
+    chain.then(refocus);
 }
 
 function do_forget()
 {
-    var r;
+    var a;
+    var what;
 
-    r = current();
-    if (r && window.confirm("Forget all data and history of " + r.host +
-        "?"))
+    a = targets();
+    if (a.length == 0) {
+        return;
+    }
+    what = a.length == 1 ? a[0] : a.length + " sites (" +
+        a.join(", ") + ")";
+    if (window.confirm("Close the tabs of " + what + " and forget " +
+        "everything about them, kept or not: cookies, storage, history, " +
+        "downloads, closed tabs and their place in your lists?"))
     {
-        send({ cmd: "forget", host: r.host }).then(refocus);
+        send({ cmd: "forget", hosts: a }).then(function () {
+            marked = {};
+            return refocus();
+        });
     }
 }
 
@@ -394,6 +493,14 @@ function on_key(e)
     } else if (e.key == "/") {
         f.focus();
         e.preventDefault();
+    } else if (e.key == "x" || e.key == " ") {
+        toggle_mark(sel);
+        focus_row(sel + 1);
+        e.preventDefault();
+    } else if (e.key == "*") {
+        mark_all(1);
+    } else if (e.key == "u") {
+        mark_all(0);
     } else if (e.key == "p") {
         do_keep();
     } else if (e.key == "f") {

@@ -219,6 +219,7 @@ uninstall_icecat()   { uninstall_browser www-client/icecat icecat; }
 # switch: out of the IceCat profile, settings and all (switch/install.sh
 # -u); the profile and the add-ons stay
 uninstall_switch() {
+	unlink_part switch
 	if ! as_user "sh '$DOTFILES/switch/install.sh' -w" >/dev/null 2>&1; then
 		say "ok      switch: IceCat has no profile"
 		return 0

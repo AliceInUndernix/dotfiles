@@ -186,7 +186,8 @@ ck_part() {
 # ck_switch: switch is in the user's IceCat profile, and not older
 # than the repo's
 ck_switch() {
-	if ! command -v icecat >/dev/null 2>&1; then
+	ck_links switch
+	if ! have_icecat; then
 		ck_info "IceCat is not installed: su -c '$DOTFILES/install.sh icecat'"
 		return
 	fi

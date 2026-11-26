@@ -61,7 +61,7 @@ Cookie banners are NOT handled by switch: that is left to the add-on
 3. Files
 --------
 
-extension/           the extension (manifest v2, version 0.14)
+extension/           the extension (manifest v2, version 0.15)
   manifest.json      permissions include proxy, webRequest(Blocking),
                      management, browsingData, cookies, contentScripts
   background.js      everything: settings, Tor routing (proxy.onRequest),
@@ -93,6 +93,8 @@ addons.txt           GNUzilla catalogue numbers of the add-ons to fetch
 userChrome.css       habamax colours for IceCat's own window; replaced
                      only if absent or carrying the "switch: habamax"
                      marker
+icecat               the dotfiles' icecat command (~/.system/bin/icecat):
+                     the real IceCat, then tidy.sh -q once it quits
 tidy.sh              removes the empty storage/default/<origin>
                      directories IceCat leaves behind, whose names leak
                      the sites visited: ./tidy.sh [-n] [-r] [profile]
@@ -146,6 +148,34 @@ tidy.sh              removes the empty storage/default/<origin>
 
 5. State
 --------
+
+Version 0.15:
+
+- Forgetting a site works: before, a site's cookies on its parent
+  domain (".example.org" for www.example.org, often set by scripts,
+  so sites with JavaScript on) stayed, a page still open wrote its
+  data straight back, and a site in a list (JavaScript, HTTP, no Tor,
+  exempt) stayed on the Sites page. Now forget closes the site's tabs
+  first, then removes its data, its history, downloads, closed tabs and
+  every list entry naming it, kept or not; cookies another kept site
+  needs stay.
+- Sites page: x or Space marks a site, * marks all shown, u unmarks
+  all; f (forget) and p (keep) act on the marked sites, or else on the
+  selected one.
+- At quit, unkept sites also leave the lists (JavaScript allowed, HTTP
+  allowed, no Tor, exempt): keep a site to keep its settings.
+- At start, no request goes out until the wipe of unkept sites is done
+  (at most ten seconds).
+- IceCat itself now clears at every quit history (kept sites' too;
+  bookmarks stay) and site settings (permissions, zoom, HSTS), besides
+  cache, downloads, forms and the session.
+- The icecat command runs tidy.sh after IceCat quits; tidy.sh now also
+  removes AlternateServices, the session files, favicons.sqlite, and
+  the thumbnails and cache directories, and checks storage/temporary.
+- What can still be left on disk after a quit: cookies and storage of
+  unkept sites whose tabs were open when IceCat quit, if IceCat closed
+  before switch finished the wipe (an extension cannot hold up the
+  quit). They are wiped at the next start, before any request.
 
 Version 0.14:
 
