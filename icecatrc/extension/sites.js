@@ -96,7 +96,7 @@ function make_row(r, i)
         toggle_mark(i);
     });
     cell(tr, r.host, "");
-    cell(tr, r.kept ? "kept" : "", "on");
+    cell(tr, r.kept ? "kept " + r.parts : "", "on");
     cell(tr, r.js ? "on" : "off", r.js ? "on" : "off");
     cell(tr, String(r.cookies), "");
     cell(tr, String(r.history), "");
@@ -233,7 +233,7 @@ function details()
     box.style.display = "block";
     document.getElementById("d_host").textContent = host;
     document.getElementById("d_text").textContent =
-        "Kept: " + (r.kept ? "yes" : "no") +
+        "Kept: " + (r.kept ? "yes, " + parts_text(r.parts) : "no") +
         ". Tor: " + (r.tor ? "yes" : "no, the VPN") +
         ". Cookies: " + (r.cookies_on ? "allowed" : "blocked") +
         ". JavaScript: " + (r.js ? "allowed" : "blocked") +
@@ -328,6 +328,71 @@ function is_kept(host)
         }
     }
     return 0;
+}
+
+var PART_NAMES = [
+    ["c", "cookies"], ["s", "storage"], ["h", "history"],
+    ["p", "settings"], ["f", "profile"]
+];
+var PART_KEYS = ["cookies", "storage", "history", "settings", "face"];
+
+function parts_text(letters)
+{
+    var out;
+    var i;
+
+    out = [];
+    for (i = 0; i < PART_NAMES.length; i++) {
+        if (letters.indexOf(PART_NAMES[i][0]) >= 0) {
+            out.push(PART_NAMES[i][1]);
+        }
+    }
+    return out.length > 0 ? out.join(", ") : "nothing";
+}
+
+function row_of(host)
+{
+    var i;
+
+    for (i = 0; i < rows.length; i++) {
+        if (rows[i].host == host) {
+            return rows[i];
+        }
+    }
+    return null;
+}
+
+/*
+ * Keys 1 to 5: what kept sites keep. When one of them does not keep
+ * it (or is not kept at all), they all keep it; else none of them.
+ */
+function do_part(n)
+{
+    var a;
+    var all;
+    var r;
+    var i;
+    var chain;
+
+    a = targets();
+    all = 1;
+    for (i = 0; i < a.length; i++) {
+        r = row_of(a[i]);
+        if (!r || !r.kept ||
+            r.parts.indexOf(PART_NAMES[n][0]) < 0)
+        {
+            all = 0;
+        }
+    }
+    chain = Promise.resolve();
+    for (i = 0; i < a.length; i++) {
+        chain = chain.then(send.bind(null, {
+            cmd: "keep_part", host: a[i], part: PART_KEYS[n], value: !all
+        }));
+    }
+    status((all ? "Not keeping " : "Keeping ") + PART_NAMES[n][1] +
+        " for " + a.length + (a.length == 1 ? " site" : " sites"));
+    chain.then(refocus);
 }
 
 /* Keep them all, or, when all are kept already, keep none of them */
@@ -588,7 +653,9 @@ function on_key(e)
         return;
     }
     /* our keys are ours: IceCat must not start a find with them */
-    if ("jk/xpfciahswru* JTK".indexOf(e.key) >= 0 && e.key.length == 1) {
+    if ("jk/xpfciahswru* JTK12345".indexOf(e.key) >= 0 &&
+        e.key.length == 1)
+    {
         e.preventDefault();
     }
     if (e.key == "j") {
@@ -630,6 +697,8 @@ function on_key(e)
         do_wipe();
     } else if (e.key == "r") {
         refocus();
+    } else if (e.key >= "1" && e.key <= "5" && e.key.length == 1) {
+        do_part(e.key.charCodeAt(0) - 49);
     }
 }
 

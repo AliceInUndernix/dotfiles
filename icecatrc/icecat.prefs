@@ -16,10 +16,9 @@ browser.discovery.enabled false
 
 # --- Clearing at quit ------------------------------------------------
 # IceCat itself clears, every time it quits, all that has no kept
-# sites to spare: cache, downloads, form data, the session, history
-# (of kept sites too; bookmarks stay) and site settings (permissions,
-# zoom, HSTS). Cookies and site storage are left to "switch", which
-# spares the sites you keep; tidy.sh, run by the icecat command after
+# sites to spare: cache, downloads, form data, the session and site
+# settings (permissions, zoom, HSTS). Cookies, site storage and
+# history are left to "switch", which spares what kept sites keep; tidy.sh, run by the icecat command after
 # IceCat quits, removes the files that would still name a site.
 privacy.sanitize.sanitizeOnShutdown true
 privacy.clearOnShutdown.cache true
@@ -28,13 +27,13 @@ privacy.clearOnShutdown.formdata true
 privacy.clearOnShutdown.sessions true
 privacy.clearOnShutdown.cookies false
 privacy.clearOnShutdown.offlineApps false
-privacy.clearOnShutdown.history true
+privacy.clearOnShutdown.history false
 privacy.clearOnShutdown.siteSettings true
 privacy.clearOnShutdown_v2.cache true
 privacy.clearOnShutdown_v2.cookiesAndStorage false
-privacy.clearOnShutdown_v2.historyFormDataAndDownloads true
+privacy.clearOnShutdown_v2.historyFormDataAndDownloads false
 # the same in IceCat 136 and newer, which split it in two
-privacy.clearOnShutdown_v2.browsingHistoryAndDownloads true
+privacy.clearOnShutdown_v2.browsingHistoryAndDownloads false
 privacy.clearOnShutdown_v2.formdata true
 privacy.clearOnShutdown_v2.siteSettings true
 browser.cache.disk.enable false

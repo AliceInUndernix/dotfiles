@@ -6,8 +6,9 @@ var KEYS = [
     "fp", "rfp", "ua", "lang", "hw", "canvas", "audio", "screen", "geo",
     "geo_lat", "geo_lon", "exempt", "ref", "strip", "skip", "beacon",
     "etag", "fonts", "cookies", "fpi", "audit", "predict", "forget",
-    "keep", "wipe", "hist", "hist_days", "cache_min", "dl", "forms",
-    "closed"
+    "keep", "nokeep_cookies", "nokeep_storage", "nokeep_history",
+    "nokeep_settings", "nokeep_face", "wipe", "hist", "hist_days",
+    "cache_min", "dl", "forms", "closed"
 ];
 
 function show(s)

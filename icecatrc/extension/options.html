@@ -265,10 +265,29 @@ storage. A few logins through another site may fail.</div>
 <div class="row">
 <label for="keep">Sites to keep</label>
 <div class="desc">One host name per line; a host also covers its
-subdomains. Their cookies, storage and profile survive every wipe
+subdomains. Their cookies, storage, history, settings and profile
+survive every wipe
 except New identity and Wipe data now. Every other site gets a new
 profile at each quit.</div>
 <textarea id="keep" rows="4" cols="40"></textarea>
+</div>
+<div class="row">
+<label>What kept sites do not keep</label>
+<div class="desc">A kept site keeps everything, except what these
+lists name it in (the same host as in Sites to keep). On the Sites
+page, keys 1 to 5 switch these for the marked or selected sites.</div>
+<label for="nokeep_cookies">1. Cookies</label>
+<textarea id="nokeep_cookies" rows="2" cols="40"></textarea><br />
+<label for="nokeep_storage">2. Local storage, IndexedDB, service
+workers</label>
+<textarea id="nokeep_storage" rows="2" cols="40"></textarea><br />
+<label for="nokeep_history">3. History</label>
+<textarea id="nokeep_history" rows="2" cols="40"></textarea><br />
+<label for="nokeep_settings">4. Settings (JavaScript, Tor, cookies
+allowed, plain HTTP, exempt)</label>
+<textarea id="nokeep_settings" rows="2" cols="40"></textarea><br />
+<label for="nokeep_face">5. Profile (the same face next time)</label>
+<textarea id="nokeep_face" rows="2" cols="40"></textarea><br />
 </div>
 <div class="row">
 <input type="checkbox" id="wipe" />

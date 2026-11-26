@@ -62,7 +62,7 @@ Cookie banners are NOT handled by switch: that is left to the add-on
 3. Files
 --------
 
-extension/           the extension (manifest v2, version 0.20)
+extension/           the extension (manifest v2, version 0.21)
   manifest.json      permissions include proxy, webRequest(Blocking),
                      management, browsingData, cookies, contentScripts
   background.js      everything: settings, Tor routing (proxy.onRequest),
@@ -149,6 +149,20 @@ tidy.sh              removes the empty storage/default/<origin>
 
 5. State
 --------
+
+Version 0.21:
+
+- Kept sites choose what they keep: cookies, storage, history,
+  settings (JavaScript, Tor, cookies allowed, plain HTTP, exempt) and
+  profile. All of them by default; the lists nokeep_cookies,
+  nokeep_storage, nokeep_history, nokeep_settings and nokeep_face (in
+  Settings) name the kept sites that leave a part. On the Sites page,
+  keys 1 to 5 switch them for the marked or selected sites, and the
+  kept column shows the letters c s h p f.
+- History is no longer cleared by IceCat at quit (that took kept
+  sites' history too). The wipe at start removes the history of every
+  site that does not keep it; so does forgetting a closed site. With
+  no site kept, all history goes, as before.
 
 Version 0.20 (the cause of sites surviving a quit):
 

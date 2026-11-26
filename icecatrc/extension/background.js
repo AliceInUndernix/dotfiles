@@ -41,8 +41,16 @@ var DEF = {
     hist: "unkept", hist_days: "7", cache_min: "60", dl: 1, forms: 1,
     closed: 1, seen: "", faces: "", auto_ip: 0,
     https: 1, http_ok: "", no_tor: "", cookie_all: 0, cookie_sites: "",
-    conf_v: 0
+    conf_v: 0, nokeep_cookies: "", nokeep_storage: "",
+    nokeep_history: "", nokeep_settings: "", nokeep_face: ""
 };
+
+/*
+ * What a kept site keeps: all of these, except those whose list
+ * ("nokeep_" + part) names it. The lists hold the line of the keep
+ * list, as the keep list holds it.
+ */
+var PARTS = ["cookies", "storage", "history", "settings", "face"];
 
 /*
  * Settings saved by an older version get these once: before 0.20 the
@@ -138,7 +146,7 @@ function sync_faces()
     keep = lines_of(state.keep);
     out = [];
     for (i = 0; i < keep.length; i++) {
-        if (keep[i].indexOf(" ") < 0) {
+        if (keep[i].indexOf(" ") < 0 && kept_part(keep[i], "face")) {
             out.push(keep[i] + " " + (m[keep[i]] || make_secret()));
         }
     }
@@ -158,7 +166,7 @@ function forget_faces()
 
     secret = make_secret();
     for (h in site_gen) {
-        if (!list_has(state.keep, h)) {
+        if (!kept_part(h, "face")) {
             delete site_gen[h];
         }
     }
@@ -751,6 +759,82 @@ function keep_related(host)
     return 0;
 }
 
+/* The line of the keep list that covers host, or "" */
+function keep_entry(host)
+{
+    var a;
+    var i;
+
+    if (host == "") {
+        return "";
+    }
+    a = lines_of(state.keep);
+    for (i = 0; i < a.length; i++) {
+        if (host_match(host, a[i]) || host_match(a[i], host)) {
+            return a[i];
+        }
+    }
+    return "";
+}
+
+/* Whether host is kept, and keeps this part of what it left */
+function kept_part(host, part)
+{
+    var e;
+
+    e = keep_entry(host);
+    return e != "" && !list_has(state["nokeep_" + part], e) ? 1 : 0;
+}
+
+/* The parts host keeps, as letters: c s h p f */
+function kept_letters(host)
+{
+    var out;
+    var i;
+
+    out = "";
+    for (i = 0; i < PARTS.length; i++) {
+        if (kept_part(host, PARTS[i])) {
+            out += PARTS[i] == "settings" ? "p" : PARTS[i].charAt(0);
+        }
+    }
+    return out;
+}
+
+function kept_all(host)
+{
+    return keep_related(host) && kept_letters(host).length == PARTS.length;
+}
+
+/* A site no longer kept leaves no word of what it kept */
+function unkeep(host)
+{
+    var i;
+
+    edit_list("keep", host, 0);
+    for (i = 0; i < PARTS.length; i++) {
+        edit_list("nokeep_" + PARTS[i], host, 0);
+    }
+}
+
+function keep_part(host, part, value)
+{
+    var e;
+
+    if (PARTS.indexOf(part) < 0 || host == "") {
+        return;
+    }
+    e = keep_entry(host);
+    if (e == "") {
+        if (!value) {
+            return;
+        }
+        edit_list("keep", host, 1);
+        e = host;
+    }
+    edit_list("nokeep_" + part, e, value ? 0 : 1);
+}
+
 /* The site whose jar a cookie is in, when the jars are split */
 function cookie_jar(c)
 {
@@ -774,9 +858,9 @@ function cookie_kept(c)
 
     jar = cookie_jar(c);
     if (jar != "") {
-        return keep_related(jar);
+        return kept_part(jar, "cookies");
     }
-    return keep_related(cookie_host(c));
+    return kept_part(cookie_host(c), "cookies");
 }
 
 function remove_cookie(c)
@@ -851,7 +935,7 @@ function unkept_listed()
     for (k = 0; k < SITE_LISTS.length; k++) {
         a = lines_of(state[SITE_LISTS[k]]);
         for (i = 0; i < a.length; i++) {
-            if (!keep_related(a[i])) {
+            if (!kept_part(a[i], "settings")) {
                 out.push(a[i]);
             }
         }
@@ -919,13 +1003,13 @@ function wipe_unkept()
             if (!cookie_kept(cookies[i])) {
                 done.push(remove_cookie(cookies[i]));
                 /* storage is removed by host and its subdomains */
-                if (!keep_related(cookie_host(cookies[i]))) {
+                if (!kept_part(cookie_host(cookies[i]), "storage")) {
                     hosts[cookie_host(cookies[i])] = 1;
                 }
             }
         }
         for (i = 0; i < seen.length; i++) {
-            if (!keep_related(seen[i])) {
+            if (!kept_part(seen[i], "storage")) {
                 hosts[seen[i]] = 1;
             }
         }
@@ -982,7 +1066,7 @@ function wipe_history()
 
         a = [];
         for (i = 0; i < items.length; i++) {
-            if (!list_has(state.keep, hostname(items[i].url))) {
+            if (!kept_part(hostname(items[i].url), "history")) {
                 a.push(browser.history.deleteUrl({ url: items[i].url })
                     .catch(noop));
             }
@@ -1074,7 +1158,7 @@ function drop_from_lists(hosts, also_keep)
     }
     for (i = 0; i < hosts.length; i++) {
         if (also_keep) {
-            edit_list("keep", hosts[i], 0);
+            unkeep(hosts[i]);
         }
         delete http_once[hosts[i]];
         delete site_gen[hosts[i]];
@@ -1134,11 +1218,13 @@ function forget_site(host)
                 remove_cookie(cookies[i]);
             }
         }
-        if (!keep_related(host)) {
+        if (!kept_part(host, "storage")) {
             remove_storage([host]);
         }
-        edit_list("seen", host, 0);
-        browser.storage.local.set({ seen: state.seen });
+        if (!keep_related(host)) {
+            edit_list("seen", host, 0);
+            browser.storage.local.set({ seen: state.seen });
+        }
         delete ip_cache[host];
         forget_closed(host);
         return browser.downloads.search({});
@@ -1152,13 +1238,13 @@ function forget_site(host)
                 browser.downloads.erase({ id: list[i].id }).catch(noop);
             }
         }
-        return clear_site_history(host);
+        return kept_part(host, "history") ? null : clear_site_history(host);
     }).catch(noop);
 }
 
 function check_forget(host)
 {
-    if (!state.forget || host == "" || list_has(state.keep, host)) {
+    if (!state.forget || host == "" || kept_all(host)) {
         return;
     }
     browser.tabs.query({}).then(function (tabs) {
@@ -1303,6 +1389,7 @@ function site_info(host)
         ip: ip ? ip.ip : "",
         ip_time: ip ? ip.time : 0,
         kept: list_has(state.keep, host),
+        parts: kept_letters(host),
         js: (state.js || list_has(state.sites, host)) ? 1 : 0,
         js_site: list_has(state.sites, host),
         no_tor: list_has(state.no_tor, host),
@@ -1892,7 +1979,14 @@ function on_message(msg, sender)
         delete ip_cache[msg.host];
     }
     if (msg.cmd == "keep") {
-        edit_list("keep", msg.host, msg.value);
+        if (msg.value) {
+            edit_list("keep", msg.host, 1);
+        } else {
+            unkeep(msg.host);
+        }
+    }
+    if (msg.cmd == "keep_part" && msg.host) {
+        keep_part(String(msg.host), String(msg.part), msg.value);
     }
     if (msg.cmd == "http" && msg.host) {
         edit_list("http_ok", msg.host, msg.value);
@@ -1923,12 +2017,16 @@ function on_message(msg, sender)
         wipe_now();
     }
     if (msg.cmd == "set" || msg.cmd == "site" || msg.cmd == "keep" ||
+        msg.cmd == "keep_part" ||
         msg.cmd == "tor_site" || msg.cmd == "cookie_site" ||
         msg.cmd == "newid" || msg.cmd == "http")
     {
         save_state();
     }
-    if (msg.cmd == "keep" || (msg.cmd == "set" && msg.key == "keep")) {
+    if (msg.cmd == "keep" || msg.cmd == "keep_part" ||
+        (msg.cmd == "set" &&
+        (msg.key == "keep" || msg.key == "nokeep_face")))
+    {
         sync_faces();
     }
     return Promise.resolve(reply());
