@@ -62,7 +62,7 @@ Cookie banners are NOT handled by switch: that is left to the add-on
 3. Files
 --------
 
-extension/           the extension (manifest v2, version 0.16)
+extension/           the extension (manifest v2, version 0.17)
   manifest.json      permissions include proxy, webRequest(Blocking),
                      management, browsingData, cookies, contentScripts
   background.js      everything: settings, Tor routing (proxy.onRequest),
@@ -159,6 +159,8 @@ Version 0.16:
 - The pages' own keys no longer start IceCat's find bar
   (accessibility.typeaheadfind off; Ctrl+F and / still find).
 - The bookmarks toolbar shows on every page.
+- 0.17: the Sites page opens with the filter (search) focused; Enter
+  or Esc goes to the list.
 
 Version 0.15:
 

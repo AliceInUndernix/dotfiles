@@ -616,6 +616,8 @@ document.getElementById("b_hist").addEventListener("click", do_hist);
 document.getElementById("b_storage").addEventListener("click",
     do_storage);
 document.addEventListener("keydown", on_key);
+/* The page opens in the filter: type to narrow, Enter or Esc to the
+   rows, where the keys act; / comes back */
 load().then(function () {
-    focus_row(0);
+    document.getElementById("filter").focus();
 });
