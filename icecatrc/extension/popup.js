@@ -62,6 +62,9 @@ function show(s)
         "none" : "block";
     el("torsite_label").textContent = "Tor on " + host;
     el("http").checked = in_list(s.http_ok);
+    el("keep").checked = in_list(s.keep);
+    el("keep_line").style.display = host == "" ? "none" : "block";
+    el("keep_label").textContent = "Keep " + host;
     el("cookie").checked = in_list(s.cookie_sites);
     el("cookie_line").style.display = host == "" || s.cookie_all ?
         "none" : "block";
@@ -93,12 +96,34 @@ function show(s)
     warn(s);
 }
 
+var PART_NAMES = [
+    ["c", "cookies"], ["s", "storage"], ["h", "history"],
+    ["p", "settings"], ["f", "profile"]
+];
+
+function parts_text(letters)
+{
+    var out;
+    var i;
+
+    out = [];
+    for (i = 0; i < PART_NAMES.length; i++) {
+        if (letters.indexOf(PART_NAMES[i][0]) >= 0) {
+            out.push(PART_NAMES[i][1]);
+        }
+    }
+    return out.length > 0 ? out.join(", ") : "nothing";
+}
+
 function show_info(r)
 {
     if (host == "") {
         return;
     }
     say("face_text", "Looks like: " + r.face);
+    say("keep_text", r.kept ? "Keeps: " + parts_text(r.parts) +
+        " (choose on the Sites page, keys 1 to 5)." :
+        "Not kept: forgotten when its last tab closes and at quit.");
     if (r.ip == "" && cur && cur.tor && cur.auto_ip && !tried) {
         tried = 1;
         do_lookup();
@@ -220,7 +245,7 @@ function on_key(e)
         return;
     }
     /* our keys are ours: IceCat must not start a find with them */
-    if ("tjvshclrniwdok".indexOf(e.key) >= 0 && e.key.length == 1) {
+    if ("tjvshclrniwdokp".indexOf(e.key) >= 0 && e.key.length == 1) {
         e.preventDefault();
     }
     if (e.key == "t") {
@@ -240,6 +265,9 @@ function on_key(e)
     }
     if (e.key == "h" && host != "" && cur.https) {
         do_http(!in_list(cur.http_ok));
+    }
+    if (e.key == "p" && host != "") {
+        send("keep", "", !in_list(cur.keep));
     }
     if (e.key == "c") {
         do_face();
@@ -298,6 +326,9 @@ el("site").addEventListener("change", function () {
 });
 el("http").addEventListener("change", function () {
     do_http(this.checked);
+});
+el("keep").addEventListener("change", function () {
+    send("keep", "", this.checked);
 });
 el("face").addEventListener("click", do_face);
 el("lookup").addEventListener("click", do_lookup);

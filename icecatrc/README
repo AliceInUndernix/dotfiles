@@ -63,7 +63,7 @@ Cookie banners are NOT handled by switch: that is left to the add-on
 3. Files
 --------
 
-extension/           the extension (manifest v2, version 0.22)
+extension/           the extension (manifest v2, version 0.23)
   manifest.json      permissions include proxy, webRequest(Blocking),
                      management, browsingData, cookies, contentScripts
   background.js      everything: settings, Tor routing (proxy.onRequest),
@@ -150,6 +150,11 @@ tidy.sh              removes the empty storage/default/<origin>
 
 5. State
 --------
+
+Version 0.23:
+
+- The popup has "Keep <site>" (key p), and says what a kept site
+  keeps.
 
 Version 0.22:
 
