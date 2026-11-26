@@ -14,25 +14,26 @@ dictionaries ~/.system/share/steno/dictionaries
 # where steno -a and -A add strokes; it is made empty the first time.
 # Point it at a file in the dotterel repo to add to the theory instead.
 user ~/.system/share/steno/user.dict
+dict dotterel-base.dict off
+dict dotterel-old-base.dict off
+dict dotterel-proper-nouns.dict off
+dict dotterel-old-proper-nouns.dict off
+dict dotterel-punctuation.dict off
+dict dotterel-old-punctuation.dict off
+dict dotterel-affixes.dict off
+dict dotterel-commands.dict off
+dict dotterel-fingerspelling.dict off
+dict dotterel-numbers.dict off
+dict dotterel-raw off
+dict dotterel-movement off
+dict dotterel-modifiers off
+dict dotterel-generated.dict off
 # Your own base, proper nouns and punctuation, filled as you go
 # (steno -W puts each word in the right one), each with the old one
 # (dotterel-old-*) right under it, for every word not in yours yet;
 # turn an old one off on the status screen with space. Then Dotterel's
 # affixes, commands, fingerspelling and numbers, as they were.
-dict dotterel-base.dict
-dict dotterel-old-base.dict
-dict dotterel-proper-nouns.dict
-dict dotterel-old-proper-nouns.dict
-dict dotterel-punctuation.dict
-dict dotterel-old-punctuation.dict
-dict dotterel-affixes.dict
-dict dotterel-commands.dict
-dict dotterel-fingerspelling.dict
-dict dotterel-numbers.dict
 # built into steno (no file): raw mode, movement, modifiers
-dict dotterel-raw
-dict dotterel-movement
-dict dotterel-modifiers
 
 # uk_to_us.txt, Dotterel's UK/US list (default: ../data next to the
 # dictionaries)
