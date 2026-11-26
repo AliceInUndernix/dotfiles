@@ -18,6 +18,13 @@ function load()
 {
     return send({ cmd: "sites" }).then(function (r) {
         rows = r.rows;
+        document.getElementById("warn").textContent =
+            (r.wipe ? "" : "The wipe at start is off in Settings: " +
+            "these sites stay until you forget them. ") +
+            (r.forget ? "" : "Forgetting a site when its last tab " +
+            "closes is off in Settings.");
+        document.getElementById("warn").style.display =
+            (r.wipe && r.forget) ? "none" : "block";
         render();
     });
 }

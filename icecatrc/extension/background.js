@@ -40,8 +40,16 @@ var DEF = {
     fpi: 1, audit: 1, predict: 1, forget: 1, keep: "", wipe: 1,
     hist: "unkept", hist_days: "7", cache_min: "60", dl: 1, forms: 1,
     closed: 1, seen: "", faces: "", auto_ip: 0,
-    https: 1, http_ok: "", no_tor: "", cookie_all: 0, cookie_sites: ""
+    https: 1, http_ok: "", no_tor: "", cookie_all: 0, cookie_sites: "",
+    conf_v: 0
 };
+
+/*
+ * Settings saved by an older version get these once: before 0.20 the
+ * wipe at start could be off without notice, which left every site
+ * on the Sites page for good.
+ */
+var CONF_V = 1;
 
 var STORAGE_CODE = "(function () {" +
     "var out = { local: [], session: [], idb: [] };" +
@@ -877,14 +885,30 @@ function wipe_everything()
 
 function wipe_unkept()
 {
+    var seen;
+    var kept;
+    var i;
+
     if (lines_of(state.keep).length == 0) {
         return wipe_everything();
     }
+    /*
+     * The lists first, before anything that can fail or wait: a wipe
+     * that stops halfway must not leave the Sites page full.
+     */
+    seen = lines_of(state.seen);
+    kept = [];
+    for (i = 0; i < seen.length; i++) {
+        if (keep_related(seen[i])) {
+            kept.push(seen[i]);
+        }
+    }
+    state.seen = kept.join("\n");
+    drop_from_lists(unkept_listed(), 0);
+    browser.storage.local.set(snapshot()).catch(noop);
     return all_cookies().then(function (cookies) {
         var hosts;
         var list;
-        var kept;
-        var seen;
         var done;
         var i;
         var h;
@@ -900,12 +924,8 @@ function wipe_unkept()
                 }
             }
         }
-        seen = lines_of(state.seen);
-        kept = [];
         for (i = 0; i < seen.length; i++) {
-            if (keep_related(seen[i])) {
-                kept.push(seen[i]);
-            } else {
+            if (!keep_related(seen[i])) {
                 hosts[seen[i]] = 1;
             }
         }
@@ -919,9 +939,6 @@ function wipe_unkept()
             done.push(browser.browsingData.remove({ hostnames: list },
                 { cookies: true }).catch(noop));
         }
-        state.seen = kept.join("\n");
-        drop_from_lists(unkept_listed(), 0);
-        browser.storage.local.set(snapshot());
         ip_cache = {};
         http_once = {};
         forget_faces();
@@ -1349,7 +1366,10 @@ function site_rows()
         rows.sort(function (x, y) {
             return x.host < y.host ? -1 : (x.host > y.host ? 1 : 0);
         });
-        return { rows: rows, tor: state.tor, fp: state.fp };
+        return {
+            rows: rows, tor: state.tor, fp: state.fp,
+            wipe: state.wipe, forget: state.forget
+        };
     });
 }
 
@@ -1996,6 +2016,12 @@ function on_loaded(r)
         if (r[k] !== undefined) {
             state[k] = r[k];
         }
+    }
+    if (!(state.conf_v >= CONF_V)) {
+        state.conf_v = CONF_V;
+        state.wipe = 1;
+        state.forget = 1;
+        browser.storage.local.set(snapshot()).catch(noop);
     }
     state.loaded = 1;
     apply_state();
