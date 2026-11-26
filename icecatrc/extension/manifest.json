@@ -1,7 +1,7 @@
 {
     "manifest_version": 2,
     "name": "switch",
-    "version": "0.15",
+    "version": "0.16",
     "description": "JavaScript, Tor and anti-fingerprinting switches",
     "browser_specific_settings": {
         "gecko": { "id": "switch@example.org" }

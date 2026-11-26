@@ -62,7 +62,7 @@ Cookie banners are NOT handled by switch: that is left to the add-on
 3. Files
 --------
 
-extension/           the extension (manifest v2, version 0.15)
+extension/           the extension (manifest v2, version 0.16)
   manifest.json      permissions include proxy, webRequest(Blocking),
                      management, browsingData, cookies, contentScripts
   background.js      everything: settings, Tor routing (proxy.onRequest),
@@ -85,7 +85,7 @@ install.sh           configures an installed IceCat profile (and makes
                      -f replace add-ons, -d fetch without Tor,
                      -w only print the profile directory
                      env: TOR_SOCKS (127.0.0.1:9050), ICECAT_ROOT
-icecat.prefs         163 prefs written to user.js; one per line,
+icecat.prefs         166 prefs written to user.js; one per line,
                      "name value"; install.sh -u removes exactly these,
                      from user.js and prefs.js
 addons.txt           GNUzilla catalogue numbers of the add-ons to fetch
@@ -149,6 +149,16 @@ tidy.sh              removes the empty storage/default/<origin>
 
 5. State
 --------
+
+Version 0.16:
+
+- Sites page: every action on a site works on the marked sites (x,
+  Space, *, u), or else on the selected one: p keep, f forget, c new
+  face, i look up IP, h clear history, and new J (allow JavaScript) and
+  T (without Tor), each turning all on, or all off when all are on.
+- The pages' own keys no longer start IceCat's find bar
+  (accessibility.typeaheadfind off; Ctrl+F and / still find).
+- The bookmarks toolbar shows on every page.
 
 Version 0.15:
 

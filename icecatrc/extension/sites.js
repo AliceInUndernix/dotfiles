@@ -366,24 +366,96 @@ function do_forget()
     }
 }
 
+/* each(hosts, fn): fn(host) for each, one after another */
+function each(hosts, fn)
+{
+    var chain;
+    var i;
+
+    chain = Promise.resolve();
+    for (i = 0; i < hosts.length; i++) {
+        chain = chain.then(fn.bind(null, hosts[i]));
+    }
+    return chain;
+}
+
+function row_of(host)
+{
+    var i;
+
+    for (i = 0; i < rows.length; i++) {
+        if (rows[i].host == host) {
+            return rows[i];
+        }
+    }
+    return null;
+}
+
+function names(a)
+{
+    return a.length == 1 ? a[0] : a.length + " sites (" + a.join(", ") +
+        ")";
+}
+
 function do_face()
 {
-    var r;
-
-    r = current();
-    if (r) {
-        send({ cmd: "face", host: r.host }).then(refocus);
-    }
+    each(targets(), function (h) {
+        return send({ cmd: "face", host: h });
+    }).then(refocus);
 }
 
 function do_hist()
 {
-    var r;
+    var a;
 
-    r = current();
-    if (r && window.confirm("Clear the history of " + r.host + "?")) {
-        send({ cmd: "clear_history", host: r.host }).then(refocus);
+    a = targets();
+    if (a.length > 0 && window.confirm("Clear the history of " +
+        names(a) + "?"))
+    {
+        each(a, function (h) {
+            return send({ cmd: "clear_history", host: h });
+        }).then(refocus);
     }
+}
+
+/*
+ * J: allow JavaScript on them all, or, when all are allowed already,
+ * on none of them. T: the same for going without Tor.
+ */
+function do_js()
+{
+    var a;
+    var all;
+    var i;
+
+    a = targets();
+    all = 1;
+    for (i = 0; i < a.length; i++) {
+        if (!row_of(a[i]) || !row_of(a[i]).js_site) {
+            all = 0;
+        }
+    }
+    each(a, function (h) {
+        return send({ cmd: "site", host: h, allow: !all });
+    }).then(refocus);
+}
+
+function do_tor()
+{
+    var a;
+    var all;
+    var i;
+
+    a = targets();
+    all = 1;
+    for (i = 0; i < a.length; i++) {
+        if (!row_of(a[i]) || !row_of(a[i]).no_tor) {
+            all = 0;
+        }
+    }
+    each(a, function (h) {
+        return send({ cmd: "tor_site", host: h, value: all });
+    }).then(refocus);
 }
 
 function do_storage()
@@ -440,12 +512,14 @@ function look_up(r)
 
 function do_ip()
 {
-    var r;
+    each(targets(), function (h) {
+        var r;
 
-    r = current();
-    if (r) {
-        look_up(r);
-    }
+        r = row_of(h);
+        return r ? look_up(r) : null;
+    }).then(function () {
+        status("done");
+    });
 }
 
 function do_all()
@@ -486,6 +560,10 @@ function on_key(e)
     if (e.ctrlKey || e.altKey || e.metaKey) {
         return;
     }
+    /* our keys are ours: IceCat must not start a find with them */
+    if ("jk/xpfciahswru* JT".indexOf(e.key) >= 0 && e.key.length == 1) {
+        e.preventDefault();
+    }
     if (e.key == "j") {
         focus_row(sel + 1);
     } else if (e.key == "k") {
@@ -501,6 +579,10 @@ function on_key(e)
         mark_all(1);
     } else if (e.key == "u") {
         mark_all(0);
+    } else if (e.key == "J") {
+        do_js();
+    } else if (e.key == "T") {
+        do_tor();
     } else if (e.key == "p") {
         do_keep();
     } else if (e.key == "f") {

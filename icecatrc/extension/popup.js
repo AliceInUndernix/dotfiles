@@ -205,6 +205,10 @@ function on_key(e)
     if (e.ctrlKey || e.altKey || e.metaKey) {
         return;
     }
+    /* our keys are ours: IceCat must not start a find with them */
+    if ("tjvshclrniwdo".indexOf(e.key) >= 0 && e.key.length == 1) {
+        e.preventDefault();
+    }
     if (e.key == "t") {
         send("set", "tor", !cur.tor);
     }

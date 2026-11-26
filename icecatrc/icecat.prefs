@@ -221,6 +221,10 @@ accessibility.browsewithcaret_shortcut.enabled true
 ui.key.menuAccessKeyFocuses true
 browser.ctrlTab.sortByRecentlyUsed true
 general.autoScroll false
+# Typing letters on a page does not start a search (Ctrl+F and / do);
+# single keys stay free for switch's pages
+accessibility.typeaheadfind false
+accessibility.typeaheadfind.autostart false
 
 # --- HTTPS only ------------------------------------------------------
 # switch does HTTPS-only itself, with a list of sites allowed plain

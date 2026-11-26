@@ -1251,6 +1251,8 @@ function site_info(host)
         ip_time: ip ? ip.time : 0,
         kept: list_has(state.keep, host),
         js: (state.js || list_has(state.sites, host)) ? 1 : 0,
+        js_site: list_has(state.sites, host),
+        no_tor: list_has(state.no_tor, host),
         exempt: list_has(state.exempt, host),
         cookies: 0
     };

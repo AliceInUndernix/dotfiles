@@ -71,6 +71,7 @@ function on_key(e)
         return;
     }
     if (e.key >= "1" && e.key <= "6") {
+        e.preventDefault();
         h = document.getElementById("s" + e.key);
         h.scrollIntoView();
         h = h.nextElementSibling.querySelector("input, select, " +
