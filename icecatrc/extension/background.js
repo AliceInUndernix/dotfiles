@@ -851,8 +851,35 @@ function unkept_listed()
     return out;
 }
 
+/*
+ * With no site kept there is nothing to spare: IceCat's own clearing
+ * takes it all in one call, which cannot miss a cookie or a host.
+ */
+function wipe_everything()
+{
+    state.seen = "";
+    drop_from_lists(unkept_listed(), 0);
+    browser.storage.local.set(snapshot());
+    ip_cache = {};
+    http_once = {};
+    forget_faces();
+    forget_closed("");
+    return Promise.all([
+        browser.browsingData.remove({}, {
+            cookies: true, localStorage: true, indexedDB: true,
+            serviceWorkers: true, cache: true, history: true,
+            downloads: true, formData: true
+        }).catch(noop),
+        browser.history.deleteAll().catch(noop),
+        browser.downloads.erase({}).catch(noop)
+    ]).catch(noop);
+}
+
 function wipe_unkept()
 {
+    if (lines_of(state.keep).length == 0) {
+        return wipe_everything();
+    }
     return all_cookies().then(function (cookies) {
         var hosts;
         var list;
@@ -887,6 +914,11 @@ function wipe_unkept()
             list.push(h);
         }
         done.push(remove_storage(list));
+        /* and IceCat's own removal by host, in case one was missed */
+        if (list.length > 0) {
+            done.push(browser.browsingData.remove({ hostnames: list },
+                { cookies: true }).catch(noop));
+        }
         state.seen = kept.join("\n");
         drop_from_lists(unkept_listed(), 0);
         browser.storage.local.set(snapshot());
@@ -928,16 +960,18 @@ function wipe_history()
         return browser.history.deleteAll();
     }
     return all_history().then(function (items) {
+        var a;
         var i;
 
+        a = [];
         for (i = 0; i < items.length; i++) {
             if (!list_has(state.keep, hostname(items[i].url))) {
-                browser.history.deleteUrl({ url: items[i].url })
-                    .catch(noop);
+                a.push(browser.history.deleteUrl({ url: items[i].url })
+                    .catch(noop));
             }
         }
-        return prune_history();
-    });
+        return Promise.all(a);
+    }).then(prune_history);
 }
 
 function forget_closed(host)

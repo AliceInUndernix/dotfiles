@@ -62,7 +62,7 @@ Cookie banners are NOT handled by switch: that is left to the add-on
 3. Files
 --------
 
-extension/           the extension (manifest v2, version 0.18)
+extension/           the extension (manifest v2, version 0.19)
   manifest.json      permissions include proxy, webRequest(Blocking),
                      management, browsingData, cookies, contentScripts
   background.js      everything: settings, Tor routing (proxy.onRequest),
@@ -149,6 +149,15 @@ tidy.sh              removes the empty storage/default/<origin>
 
 5. State
 --------
+
+Version 0.19 (the wipe at start, made blunter while a report of data
+surviving a quit is looked into):
+
+- With no site kept, the wipe is one call to IceCat's own clearing of
+  cookies, storage, cache, history, downloads and forms, which cannot
+  miss a host.
+- With kept sites, cookies of unkept hosts are also removed by IceCat
+  by host name, besides one by one; history deletions are waited for.
 
 Version 0.18:
 
