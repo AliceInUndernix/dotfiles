@@ -89,6 +89,8 @@ var proxy_ok = 0;
 var rivals = "";
 var ip_busy = {};
 var http_once = {};
+/* allowed hosts whose HTTPS failed: plain HTTP for them until quit */
+var http_fell = {};
 var http_wait = {};
 var http_tries = {};
 /* the real OS (runtime.getPlatformInfo); profiles never change it */
@@ -906,6 +908,7 @@ function wipe_now()
 {
     ip_cache = {};
     http_once = {};
+    http_fell = {};
     secret = make_secret();
     site_gen = {};
     reset_faces();
@@ -954,6 +957,7 @@ function wipe_everything()
     browser.storage.local.set(snapshot());
     ip_cache = {};
     http_once = {};
+    http_fell = {};
     forget_faces();
     forget_closed("");
     return Promise.all([
@@ -1025,6 +1029,7 @@ function wipe_unkept()
         }
         ip_cache = {};
         http_once = {};
+    http_fell = {};
         forget_faces();
         wipe_extras();
         done.push(wipe_history());
@@ -1161,6 +1166,7 @@ function drop_from_lists(hosts, also_keep)
             unkeep(hosts[i]);
         }
         delete http_once[hosts[i]];
+        delete http_fell[hosts[i]];
         delete site_gen[hosts[i]];
         delete ip_cache[hosts[i]];
     }
@@ -1668,16 +1674,33 @@ function cookies_ok(site)
         list_has(state.cookie_sites, site)) ? 1 : 0;
 }
 
-/* Hosts that need no HTTPS: Tor encrypts onions, LAN is yours */
+/*
+ * Hosts not sent to HTTPS: Tor encrypts onions, LAN is yours, and
+ * allowed hosts whose HTTPS has already failed.
+ */
 function http_ok(host)
 {
     if (host == "" || is_private(host) || host.endsWith(".onion")) {
         return 1;
     }
-    if (http_once[host] || list_has(state.http_ok, host)) {
-        return 1;
+    return http_fell[host] ? 1 : 0;
+}
+
+/*
+ * Hosts allowed HTTP: they are still tried over HTTPS first, and fall
+ * back to plain HTTP, without asking, only when HTTPS fails.
+ */
+function http_allowed(host)
+{
+    return http_once[host] || list_has(state.http_ok, host) ? 1 : 0;
+}
+
+function fall_back(tab, url)
+{
+    http_fell[hostname(url)] = 1;
+    if (tab >= 0) {
+        browser.tabs.update(tab, { url: url }).catch(noop);
     }
-    return 0;
 }
 
 /*
@@ -1711,7 +1734,9 @@ function upgrade(d)
              * the page to be open to every site (web_accessible).
              */
             delete http_tries[d.tabId + " " + h];
-            if (d.tabId >= 0) {
+            if (http_allowed(h)) {
+                fall_back(d.tabId, d.url);
+            } else if (d.tabId >= 0) {
                 browser.tabs.update(d.tabId, {
                     url: nohttps_url(d.url, "loop")
                 }).catch(noop);
@@ -1751,6 +1776,10 @@ function on_error(d)
         d.url.indexOf("https://") != 0 ||
         hostname(d.url) != hostname(orig))
     {
+        return;
+    }
+    if (http_allowed(hostname(orig))) {
+        fall_back(d.tabId, orig);
         return;
     }
     browser.tabs.update(d.tabId, { url: nohttps_url(orig, "fail") });
@@ -1992,10 +2021,15 @@ function on_message(msg, sender)
         edit_list("http_ok", msg.host, msg.value);
         if (!msg.value) {
             delete http_once[msg.host];
+            delete http_fell[msg.host];
+        } else if (msg.fell) {
+            http_fell[msg.host] = 1;
         }
     }
     if (msg.cmd == "http_once" && msg.host) {
         http_once[msg.host] = 1;
+        /* this page came here because HTTPS has just failed */
+        http_fell[msg.host] = 1;
     }
     if (msg.cmd == "newid") {
         state.gen++;

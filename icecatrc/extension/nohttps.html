@@ -15,12 +15,13 @@
 the page and anything you send, and can change what you receive. With
 Tor on, that is the exit relay, run by a stranger.</p>
 <div>
-<button type="button" id="once">Load over HTTP this time [h]</button>
-<button type="button" id="always">Always allow this site [a]</button>
+<button type="button" id="once">Allow HTTP this time [h]</button>
+<button type="button" id="always">Allow HTTP on this site [a]</button>
 <button type="button" id="back">Go back [b]</button>
 </div>
-<p class="key">"This time" lasts until IceCat quits. Allowed sites are
-listed in Settings, under Network.</p>
+<p class="key">Allowed sites are still tried over HTTPS first and fall
+back to HTTP only when HTTPS fails. "This time" lasts until IceCat
+quits. Allowed sites are listed in Settings, under Network.</p>
 </div>
 <script type="text/javascript" src="nohttps.js"></script>
 </body>

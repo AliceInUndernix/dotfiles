@@ -7,7 +7,9 @@ function allow(cmd)
     if (host == "") {
         return;
     }
-    browser.runtime.sendMessage({ cmd: cmd, host: host, value: 1 })
+    browser.runtime.sendMessage({
+        cmd: cmd, host: host, value: 1, fell: 1
+    })
         .then(function () {
             window.location.replace(url);
         });

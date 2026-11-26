@@ -40,12 +40,14 @@ the site in the address bar. Popup key v.</div>
 <label for="https">HTTPS only</label>
 <div class="desc">Turns plain http:// addresses into https://, so that
 no Tor exit relay can read or change your pages. A site without HTTPS
-shows a page where you may load it over HTTP once, or always.</div>
+shows a page where you may allow HTTP for it once, or always.</div>
 </div>
 <div class="row">
-<label for="http_ok">Sites allowed plain HTTP</label>
+<label for="http_ok">Sites allowed HTTP</label>
 <div class="desc">One host name per line; a host also covers its
-subdomains. Onion and local addresses never need it.</div>
+subdomains. They are still tried over HTTPS first, and fall back to
+plain HTTP only when HTTPS fails. Onion and local addresses never
+need it.</div>
 <textarea id="http_ok" rows="3" cols="40"></textarea>
 </div>
 <div class="row">
@@ -284,7 +286,7 @@ workers</label>
 <label for="nokeep_history">3. History</label>
 <textarea id="nokeep_history" rows="2" cols="40"></textarea><br />
 <label for="nokeep_settings">4. Settings (JavaScript, Tor, cookies
-allowed, plain HTTP, exempt)</label>
+allowed, HTTP allowed, exempt)</label>
 <textarea id="nokeep_settings" rows="2" cols="40"></textarea><br />
 <label for="nokeep_face">5. Profile (the same face next time)</label>
 <textarea id="nokeep_face" rows="2" cols="40"></textarea><br />

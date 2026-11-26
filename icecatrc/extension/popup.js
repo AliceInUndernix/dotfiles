@@ -71,7 +71,7 @@ function show(s)
         "none" : "block";
     el("here").style.display = host == "" ? "none" : "block";
     el("site_label").textContent = "JavaScript on " + host;
-    el("http_label").textContent = "Plain HTTP on " + host;
+    el("http_label").textContent = "Allow HTTP on " + host;
     el("host_name").textContent = host;
     if (!s.tor) {
         say("tor_text", "Off: sites see your real address.", "off");
