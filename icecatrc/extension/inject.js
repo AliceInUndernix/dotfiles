@@ -485,8 +485,44 @@ function lie_uniform()
     }
 }
 
+/* No cookies for scripts either, unless the site may have them */
+function cookie_allowed()
+{
+    var i;
+
+    if (cfg.cookie_all) {
+        return 1;
+    }
+    for (i = 0; i < cfg.cookie_sites.length; i++) {
+        if (site == cfg.cookie_sites[i] ||
+            site.endsWith("." + cfg.cookie_sites[i]))
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+function block_cookies()
+{
+    var d;
+
+    d = new page.Object();
+    d.get = exportFunction(function () {
+        return "";
+    }, window);
+    d.set = exportFunction(function () {
+    }, window);
+    d.configurable = true;
+    page.Object.defineProperty(proto("Document"), "cookie", d);
+    delete page.cookieStore;
+}
+
 function lie_all()
 {
+    if (!cookie_allowed()) {
+        guard(block_cookies);
+    }
     if (cfg.fp == "profile") {
         lie_face();
     } else {

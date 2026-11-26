@@ -1,12 +1,13 @@
 var saved_timer = 0;
 
 var KEYS = [
-    "tor", "no_tor", "https", "http_ok", "auto_ip", "iso", "wipe_switch",
-    "webrtc", "lan", "js", "sites", "fp", "rfp",
-    "ua", "lang", "hw", "canvas", "audio", "screen", "geo", "geo_lat",
-    "geo_lon", "exempt", "ref", "strip", "skip", "beacon", "etag",
-    "fonts", "cookies", "fpi", "audit", "predict", "forget", "keep",
-    "wipe", "hist", "hist_days", "cache_min", "dl", "forms", "closed"
+    "tor", "no_tor", "https", "http_ok", "cookie_all", "cookie_sites",
+    "auto_ip", "iso", "wipe_switch", "webrtc", "lan", "js", "sites",
+    "fp", "rfp", "ua", "lang", "hw", "canvas", "audio", "screen", "geo",
+    "geo_lat", "geo_lon", "exempt", "ref", "strip", "skip", "beacon",
+    "etag", "fonts", "cookies", "fpi", "audit", "predict", "forget",
+    "keep", "wipe", "hist", "hist_days", "cache_min", "dl", "forms",
+    "closed"
 ];
 
 function show(s)

@@ -224,6 +224,20 @@ fetched in full more often.</div>
 can find out which fonts you have.</div>
 </div>
 <div class="row">
+<input type="checkbox" id="cookie_all" />
+<label for="cookie_all">Allow cookies everywhere</label>
+<div class="desc">When off, no site gets or sets a cookie, by header
+or by script, except the sites listed below. A kept site needs its
+cookies allowed to stay logged in.</div>
+</div>
+<div class="row">
+<label for="cookie_sites">Sites allowed cookies</label>
+<div class="desc">One host name per line; a host also covers its
+subdomains. What a listed site loads may use its cookies too.
+Popup key k.</div>
+<textarea id="cookie_sites" rows="3" cols="40"></textarea>
+</div>
+<div class="row">
 <input type="checkbox" id="cookies" />
 <label for="cookies">Block third-party cookies</label>
 </div>

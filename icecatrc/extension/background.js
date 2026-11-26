@@ -40,7 +40,7 @@ var DEF = {
     fpi: 1, audit: 1, predict: 1, forget: 1, keep: "", wipe: 1,
     hist: "unkept", hist_days: "7", cache_min: "60", dl: 1, forms: 1,
     closed: 1, seen: "", faces: "", auto_ip: 0,
-    https: 1, http_ok: "", no_tor: ""
+    https: 1, http_ok: "", no_tor: "", cookie_all: 0, cookie_sites: ""
 };
 
 var STORAGE_CODE = "(function () {" +
@@ -462,6 +462,8 @@ function page_cfg()
     cfg.site_gen = site_gen;
     cfg.fx = fx_major;
     cfg.os = real_os;
+    cfg.cookie_all = state.cookie_all;
+    cfg.cookie_sites = lines_of(state.cookie_sites);
     oses = ["win", "mac", "linux"];
     for (i = 0; i < oses.length; i++) {
         q = profile(oses[i]);
@@ -1007,7 +1009,7 @@ function site_cookie(c, host)
 }
 
 /* The settings that name sites; a forgotten site leaves none of them */
-var SITE_LISTS = ["sites", "http_ok", "no_tor", "exempt"];
+var SITE_LISTS = ["sites", "http_ok", "no_tor", "exempt", "cookie_sites"];
 
 function drop_from_lists(hosts, also_keep)
 {
@@ -1253,6 +1255,8 @@ function site_info(host)
         js: (state.js || list_has(state.sites, host)) ? 1 : 0,
         js_site: list_has(state.sites, host),
         no_tor: list_has(state.no_tor, host),
+        cookies_on: cookies_ok(host),
+        cookie_site: list_has(state.cookie_sites, host),
         exempt: list_has(state.exempt, host),
         cookies: 0
     };
@@ -1512,6 +1516,17 @@ function route(d)
     };
 }
 
+/*
+ * Cookies are switched like JavaScript: none, unless allowed for all
+ * or for the site in the address bar (which covers what it loads; a
+ * third party's cookies stay refused by cookieConfig).
+ */
+function cookies_ok(site)
+{
+    return state.loaded && (state.cookie_all ||
+        list_has(state.cookie_sites, site)) ? 1 : 0;
+}
+
 /* Hosts that need no HTTPS: Tor encrypts onions, LAN is yours */
 function http_ok(host)
 {
@@ -1683,8 +1698,10 @@ function on_send(d)
     var p;
     var i;
     var name;
+    var jar;
 
     h = d.requestHeaders;
+    jar = cookies_ok(first_party(d));
     if (state.fp == "profile") {
         p = profile(real_os);
     } else {
@@ -1695,6 +1712,9 @@ function on_send(d)
         name = h[i].name.toLowerCase();
         if (name == "user-agent" && p) {
             h[i].value = p.ua;
+        }
+        if (name == "cookie" && !jar) {
+            continue;
         }
         if (name == "accept-language" && state.lang) {
             h[i].value = LANG_VALUE;
@@ -1719,11 +1739,16 @@ function on_headers(d)
     var i;
     var frame;
     var run;
+    var jar;
 
     h = d.responseHeaders;
     out = [];
+    jar = cookies_ok(first_party(d));
     for (i = 0; i < h.length; i++) {
         if (state.etag && h[i].name.toLowerCase() == "etag") {
+            continue;
+        }
+        if (!jar && h[i].name.toLowerCase() == "set-cookie") {
             continue;
         }
         out.push(h[i]);
@@ -1796,6 +1821,9 @@ function on_message(msg, sender)
     if (msg.cmd == "site") {
         edit_list("sites", msg.host, msg.allow);
     }
+    if (msg.cmd == "cookie_site" && msg.host) {
+        edit_list("cookie_sites", msg.host, msg.value);
+    }
     if (msg.cmd == "tor_site" && msg.host &&
         list_has(state.no_tor, msg.host) != (msg.value ? 0 : 1))
     {
@@ -1841,7 +1869,7 @@ function on_message(msg, sender)
         wipe_now();
     }
     if (msg.cmd == "set" || msg.cmd == "site" || msg.cmd == "keep" ||
-        msg.cmd == "tor_site" ||
+        msg.cmd == "tor_site" || msg.cmd == "cookie_site" ||
         msg.cmd == "newid" || msg.cmd == "http")
     {
         save_state();

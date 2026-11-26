@@ -62,6 +62,10 @@ function show(s)
         "none" : "block";
     el("torsite_label").textContent = "Tor on " + host;
     el("http").checked = in_list(s.http_ok);
+    el("cookie").checked = in_list(s.cookie_sites);
+    el("cookie_line").style.display = host == "" || s.cookie_all ?
+        "none" : "block";
+    el("cookie_label").textContent = "Cookies on " + host;
     el("site_line").style.display = host == "" || s.js ? "none" : "block";
     el("http_line").style.display = host == "" || !s.https ?
         "none" : "block";
@@ -190,6 +194,16 @@ function do_http(on)
     });
 }
 
+function do_cookie(on)
+{
+    if (host == "") {
+        return;
+    }
+    send("cookie_site", "", on).then(function () {
+        browser.tabs.reload();
+    });
+}
+
 function do_tor_site(on)
 {
     if (host == "") {
@@ -206,7 +220,7 @@ function on_key(e)
         return;
     }
     /* our keys are ours: IceCat must not start a find with them */
-    if ("tjvshclrniwdo".indexOf(e.key) >= 0 && e.key.length == 1) {
+    if ("tjvshclrniwdok".indexOf(e.key) >= 0 && e.key.length == 1) {
         e.preventDefault();
     }
     if (e.key == "t") {
@@ -214,6 +228,9 @@ function on_key(e)
     }
     if (e.key == "j") {
         send("set", "js", !cur.js);
+    }
+    if (e.key == "k" && host != "" && !cur.cookie_all) {
+        do_cookie(!in_list(cur.cookie_sites));
     }
     if (e.key == "v" && host != "" && cur.tor) {
         do_tor_site(in_list(cur.no_tor));
@@ -269,6 +286,9 @@ el("tor").addEventListener("change", function () {
 });
 el("js").addEventListener("change", function () {
     send("set", "js", this.checked);
+});
+el("cookie").addEventListener("change", function () {
+    do_cookie(this.checked);
 });
 el("torsite").addEventListener("change", function () {
     do_tor_site(this.checked);

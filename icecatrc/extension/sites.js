@@ -83,7 +83,8 @@ function make_row(r, i)
 
     tr = document.createElement("tr");
     tr.tabIndex = 0;
-    cell(tr, marked[r.host] ? "[x]" : "[ ]", marked[r.host] ? "on" : "key");
+    cell(tr, marked[r.host] ? "[x]" : "[ ]",
+        marked[r.host] ? "mark on" : "mark");
     tr.firstChild.addEventListener("click", function () {
         toggle_mark(i);
     });
@@ -227,6 +228,7 @@ function details()
     document.getElementById("d_text").textContent =
         "Kept: " + (r.kept ? "yes" : "no") +
         ". Tor: " + (r.tor ? "yes" : "no, the VPN") +
+        ". Cookies: " + (r.cookies_on ? "allowed" : "blocked") +
         ". JavaScript: " + (r.js ? "allowed" : "blocked") +
         ". Exempt from lies: " + (r.exempt ? "yes" : "no") +
         ". Profile: " + r.face +
@@ -440,6 +442,24 @@ function do_js()
     }).then(refocus);
 }
 
+function do_cookie()
+{
+    var a;
+    var all;
+    var i;
+
+    a = targets();
+    all = 1;
+    for (i = 0; i < a.length; i++) {
+        if (!row_of(a[i]) || !row_of(a[i]).cookie_site) {
+            all = 0;
+        }
+    }
+    each(a, function (h) {
+        return send({ cmd: "cookie_site", host: h, value: !all });
+    }).then(refocus);
+}
+
 function do_tor()
 {
     var a;
@@ -561,7 +581,7 @@ function on_key(e)
         return;
     }
     /* our keys are ours: IceCat must not start a find with them */
-    if ("jk/xpfciahswru* JT".indexOf(e.key) >= 0 && e.key.length == 1) {
+    if ("jk/xpfciahswru* JTK".indexOf(e.key) >= 0 && e.key.length == 1) {
         e.preventDefault();
     }
     if (e.key == "j") {
@@ -581,6 +601,8 @@ function on_key(e)
         mark_all(0);
     } else if (e.key == "J") {
         do_js();
+    } else if (e.key == "K") {
+        do_cookie();
     } else if (e.key == "T") {
         do_tor();
     } else if (e.key == "p") {

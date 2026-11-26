@@ -62,7 +62,7 @@ Cookie banners are NOT handled by switch: that is left to the add-on
 3. Files
 --------
 
-extension/           the extension (manifest v2, version 0.17)
+extension/           the extension (manifest v2, version 0.18)
   manifest.json      permissions include proxy, webRequest(Blocking),
                      management, browsingData, cookies, contentScripts
   background.js      everything: settings, Tor routing (proxy.onRequest),
@@ -149,6 +149,16 @@ tidy.sh              removes the empty storage/default/<origin>
 
 5. State
 --------
+
+Version 0.18:
+
+- Cookies are switched like JavaScript: none by default, by header or
+  by script (document.cookie, cookieStore), unless allowed for all
+  (Settings) or for a site: popup key k, Sites page K for the marked
+  sites, the list "Sites allowed cookies". A kept site needs its
+  cookies allowed to stay logged in. The list empties of unkept sites
+  at quit, like the others.
+- The mark box on the Sites page is bigger.
 
 Version 0.16:
 
