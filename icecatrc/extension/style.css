@@ -172,6 +172,19 @@ select:focus, textarea:focus, input.text:focus, button:focus {
     margin: 0 0 6px 0;
 }
 
+/* one box per switch and its site switch, so none blends into another */
+.group {
+    margin: 0 0 8px 0;
+    padding: 6px 8px 0 8px;
+    border: 1px solid #3a3944;
+    border-radius: 4px;
+    background: #1c1b22;
+}
+
+.line.group {
+    padding-bottom: 6px;
+}
+
 .hint {
     float: right;
     min-width: 12px;
