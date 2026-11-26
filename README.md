@@ -41,7 +41,7 @@ are tests.
 | `xdg/` | Downloads, Pictures, Music and the rest all set to `~` | `~/.system/config/user-dirs.*` |
 | `mpv/`, `sioyek/`, `feh/`, `flameshot/`, `wiremix/`, `btop/` | video, PDF and EPUB, pictures, screenshots, mixer, system monitor | `~/.system/config/<name>` |
 | `net/` | Riseup VPN, Tor and a kill switch for Gentoo with OpenRC (`net/README`) | `/usr/local/bin/vpn`, `/etc/init.d/`, `/etc/vpn` |
-| `switch/` | IceCat: its settings, three add-ons and our extension "switch" (JavaScript, Tor per site, fingerprints, wipes, HTTPS only; `switch/README`) | the IceCat profile in `~/.mozilla/icecat` |
+| `icecatrc/` | IceCat: its settings, three add-ons and our extension "switch" (JavaScript, Tor per site, fingerprints, wipes, HTTPS only; `icecatrc/README`) | the IceCat profile in `~/.mozilla/icecat` |
 | `scripts/` | small helpers (`reset-usb`) | |
 | `archive/` | untouched copies of everything taken from elsewhere, with checksums | |
 | `install.sh`, `install/` | the installer | |
@@ -74,7 +74,7 @@ su -c '~user/dotfiles/install.sh --new-pc'   # root: a new computer, everything
 | `media` | `mpv sioyek wiremix btop` |
 | `tools` | `webarchiver clean seal ballfix diary` |
 | `keyboard` | `steno moonlander` |
-| `network` | `net switch` |
+| `network` | `net icecatrc` |
 | `games` | `ksp` (only when named) |
 | `browsers` | `icecat chromium` (only when named) |
 
@@ -106,7 +106,7 @@ The work is in three steps, each a file in `install/`:
    is missing from some). dnf and xbps are known but not tested.
 2. `apps.sh`, `./install.sh icecat chromium` (root, Gentoo): the
    browsers IceCat and ungoogled-chromium, built from source for hours,
-   so only when named. IceCat then gets the part `switch` at once.
+   so only when named. IceCat then gets the part `icecatrc` at once.
 3. `configs.sh`, `./install.sh` (no root): the configs and our own
    programs.
 
@@ -332,11 +332,11 @@ Tor. `vpn status` tells you how it is, `vpn` gives a menu, and your
 prompt shows `VPN` when something is wrong. `vpn selftest` checks
 every level (about 15 minutes); with no network, `vpn rescue`.
 
-## IceCat: switch
+## IceCat: icecatrc
 
-`./install.sh` (the part `switch`, in "all") puts IceCat's settings
-(`switch/icecat.prefs`, into `user.js`), Habamax colours for its window
-(`switch/userChrome.css`), the add-ons in `switch/addons.txt` (uBlock
+`./install.sh` (the part `icecatrc`, in "all") puts IceCat's settings
+(`icecatrc/icecat.prefs`, into `user.js`), Habamax colours for its window
+(`icecatrc/userChrome.css`), the add-ons in `icecatrc/addons.txt` (uBlock
 Origin, Dark Reader, I don't care about cookies; fetched through Tor)
 and our extension `switch` into your IceCat profile. When IceCat has
 never been started, it makes the profile; when IceCat isn't installed
@@ -344,11 +344,11 @@ yet, `su -c '~user/dotfiles/install.sh icecat'` builds it and runs the
 part right after. Close IceCat first. Then, once, in IceCat: enable the
 new add-ons it asks about, and in `about:addons` let switch run in
 private windows. Alt+Shift+s opens its popup; every key is in
-`switch/README`. By default pages are read, not run: JavaScript off,
+`icecatrc/README`. By default pages are read, not run: JavaScript off,
 Tor on, no web fonts and none of your own fonts shown to pages; both
 JavaScript (key s) and Tor (key v, then through the VPN) can be
 switched per site. The `icecat` command (`~/.system/bin/icecat`) runs
-the real IceCat and then `switch/tidy.sh`, so that no file left in the
+the real IceCat and then `icecatrc/tidy.sh`, so that no file left in the
 profile names a site you did not keep.
 
 The extension and its pages are JavaScript and its manifest is JSON,

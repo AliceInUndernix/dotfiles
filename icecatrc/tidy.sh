@@ -8,7 +8,7 @@
 #   - favicons.sqlite, and the page thumbnails and cache directories.
 # Directories that still hold data (kept sites) are left alone; so are
 # cookies, history and bookmarks (switch and IceCat clear those). The
-# icecat command of the dotfiles (switch/icecat) runs this every time
+# icecat command of the dotfiles (icecatrc/icecat) runs this every time
 # IceCat quits. Run as your ordinary user, with IceCat closed.
 #
 # Usage: ./tidy.sh [-n] [-q] [-r] [profile_directory]

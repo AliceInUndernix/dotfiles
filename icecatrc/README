@@ -1,13 +1,14 @@
-switch: IceCat, set up for privacy
-==================================
+icecatrc: IceCat, set up for privacy
+====================================
 
 Written with an AI (vibecoded), for one person's computer; read what
 it does before you use it. Improvements are welcome.
 
-The dotfiles install it as the part "switch" (../install.sh switch, and
-in "all"); switch/install.sh does the work and can be run on its own.
-These notes say what it is for and how it is built. Read them before
-changing anything.
+IceCat's settings, three add-ons, and our extension "switch". The
+dotfiles install it all as the part "icecatrc" (../install.sh icecatrc,
+and in "all"); icecatrc/install.sh does the work and can be run on its
+own. These notes say what it is for and how it is built. Read them
+before changing anything.
 
 
 1. The goal

@@ -1,6 +1,6 @@
 #!/bin/sh
 # icecat: IceCat, then tidy.sh once it has quit, so that no file in the
-# profile still names a site you did not keep (switch/README). The
+# profile still names a site you did not keep (icecatrc/README). The
 # dotfiles link it as ~/.system/bin/icecat, first in PATH, so dwm,
 # dmenu and the shell all start IceCat this way. It runs the real
 # icecat, the next one in PATH; arguments go to it unchanged. When

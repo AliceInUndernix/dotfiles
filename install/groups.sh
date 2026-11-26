@@ -11,7 +11,7 @@ group_parts() {
 	media)    echo "mpv sioyek wiremix btop" ;;
 	tools)    echo "webarchiver clean seal ballfix diary" ;;
 	keyboard) echo "steno moonlander" ;;
-	network)  echo "net switch" ;;
+	network)  echo "net icecatrc" ;;
 	games)    echo "ksp" ;;
 	browsers) echo "$APPS" ;;
 	esac
@@ -44,7 +44,7 @@ part_info() {
 	steno)       echo "steno engine and Dotterel's dictionaries" ;;
 	moonlander)  echo "Moonlander layout: QMK, build and flash" ;;
 	net)         echo "VPN, Tor and kill switch, Gentoo with OpenRC (root)" ;;
-	switch)      echo "IceCat: settings, add-ons, the switch extension" ;;
+	icecatrc)    echo "IceCat: settings, add-ons, the switch extension" ;;
 	ksp)         echo "Kerbal Space Program: kspkan and Principia" ;;
 	icecat)      echo "IceCat browser, hours to build (root, Gentoo)" ;;
 	chromium)    echo "ungoogled-chromium, hours to build (root, Gentoo)" ;;

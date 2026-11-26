@@ -70,11 +70,11 @@ run()
 make_profile()
 {
     if [ "$dry" = 1 ]; then
-        echo "would create the profile $root/switch.default"
+        echo "would create the profile $root/icecatrc.default"
         return
     fi
-    mkdir -p "$root/switch.default"
-    chmod 700 "$root" "$root/switch.default"
+    mkdir -p "$root/icecatrc.default"
+    chmod 700 "$root" "$root/icecatrc.default"
     {
         echo "[General]"
         echo "StartWithLastProfile=1"
@@ -83,10 +83,10 @@ make_profile()
         echo "[Profile0]"
         echo "Name=default"
         echo "IsRelative=1"
-        echo "Path=switch.default"
+        echo "Path=icecatrc.default"
         echo "Default=1"
     } > "$root/profiles.ini"
-    echo "Created the profile $root/switch.default"
+    echo "Created the profile $root/icecatrc.default"
 }
 
 default_profile()
@@ -314,7 +314,7 @@ if [ -z "$prof" ]; then
         make_profile
     fi
     if [ "$dry" = 1 ] && [ ! -f "$root/profiles.ini" ]; then
-        prof="$root/switch.default"
+        prof="$root/icecatrc.default"
     else
         prof=$(default_profile)
     fi

@@ -216,15 +216,15 @@ uninstall_browser() {
 		emerge $EMERGE_OPTS --depclean "$1" )
 }
 uninstall_icecat()   { uninstall_browser www-client/icecat icecat; }
-# switch: out of the IceCat profile, settings and all (switch/install.sh
+# icecatrc: out of the IceCat profile, settings and all (icecatrc/install.sh
 # -u); the profile and the add-ons stay
-uninstall_switch() {
-	unlink_part switch
-	if ! as_user "sh '$DOTFILES/switch/install.sh' -w" >/dev/null 2>&1; then
-		say "ok      switch: IceCat has no profile"
+uninstall_icecatrc() {
+	unlink_part icecatrc
+	if ! as_user "sh '$DOTFILES/icecatrc/install.sh' -w" >/dev/null 2>&1; then
+		say "ok      icecatrc: IceCat has no profile"
 		return 0
 	fi
-	as_user "sh '$DOTFILES/switch/install.sh' -u"
+	as_user "sh '$DOTFILES/icecatrc/install.sh' -u"
 }
 uninstall_chromium() { uninstall_browser www-client/ungoogled-chromium chromium; }
 

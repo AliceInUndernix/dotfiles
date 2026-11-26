@@ -371,21 +371,24 @@ plover_leftovers() {
 
 # WebArchiver: archives whole websites (see webarchiver/README). Built
 # and installed like the suckless tools; it runs wget for every download.
-# switch: IceCat's settings, the add-ons in switch/addons.txt and our
-# extension "switch" (switch/README), put into the user's IceCat
-# profile by switch/install.sh; when IceCat was never started, it makes
+# icecatrc: IceCat's settings, the add-ons in icecatrc/addons.txt and our
+# extension "switch" (icecatrc/README), put into the user's IceCat
+# profile by icecatrc/install.sh; when IceCat was never started, it makes
 # the profile. IceCat itself is the part icecat (root), which runs this
 # when it is done. The add-ons come through Tor (127.0.0.1:9050); when
 # Tor can't be reached they are left out, and it says so.
-# ~/.system/bin/icecat (switch/icecat) starts the real IceCat and runs
-# switch/tidy.sh when it quits.
-install_switch() {
-	link "$DOTFILES/switch/icecat" "$SYSBIN/icecat"
+# ~/.system/bin/icecat (icecatrc/icecat) starts the real IceCat and runs
+# icecatrc/tidy.sh when it quits.
+install_icecatrc() {
+	# the old name of this part was switch: its link goes, unbacked
+	[ "$(readlink "$SYSBIN/icecat" 2>/dev/null)" != "$DOTFILES/switch/icecat" ] ||
+		rm -f "$SYSBIN/icecat"
+	link "$DOTFILES/icecatrc/icecat" "$SYSBIN/icecat"
 	if ! have_icecat; then
-		warn "IceCat is not installed: switch is set up when it is (su -c '$DOTFILES/install.sh icecat')"
+		warn "IceCat is not installed: icecatrc is set up when it is (su -c '$DOTFILES/install.sh icecat')"
 		return 0
 	fi
-	as_user "sh '$DOTFILES/switch/install.sh'"
+	as_user "sh '$DOTFILES/icecatrc/install.sh'"
 }
 # have_icecat: is the real IceCat installed (not only our icecat)?
 have_icecat() {
