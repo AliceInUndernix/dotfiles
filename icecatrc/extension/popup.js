@@ -115,15 +115,33 @@ function parts_text(letters)
     return out.length > 0 ? out.join(", ") : "nothing";
 }
 
-function show_info(r)
+var PART_KEYS = ["cookies", "storage", "history", "settings", "face"];
+var parts = "";
+
+function do_part(n, on)
 {
     if (host == "") {
         return;
     }
+    send("keep_part", PART_KEYS[n], on);
+}
+
+function show_info(r)
+{
+    var i;
+
+    if (host == "") {
+        return;
+    }
     say("face_text", "Looks like: " + r.face);
-    say("keep_text", r.kept ? "Keeps: " + parts_text(r.parts) +
-        " (choose on the Sites page, keys 1 to 5)." :
-        "Not kept: forgotten when its last tab closes and at quit.");
+    say("keep_text", r.kept ? "Keeps what is checked below." :
+        "Not kept: forgotten when its last tab closes and at quit. " +
+        "Checking a part below keeps the site with it.");
+    parts = r.parts || "";
+    for (i = 0; i < PART_KEYS.length; i++) {
+        el("kp_" + PART_KEYS[i]).checked =
+            parts.indexOf(PART_NAMES[i][0]) >= 0;
+    }
     if (r.ip == "" && cur && cur.tor && cur.auto_ip && !tried) {
         tried = 1;
         do_lookup();
@@ -241,6 +259,8 @@ function do_tor_site(on)
 
 function on_key(e)
 {
+    var n;
+
     if (e.ctrlKey || e.altKey || e.metaKey) {
         return;
     }
@@ -265,6 +285,11 @@ function on_key(e)
     }
     if (e.key == "h" && host != "" && cur.https) {
         do_http(!in_list(cur.http_ok));
+    }
+    if (e.key >= "1" && e.key <= "5" && e.key.length == 1) {
+        e.preventDefault();
+        n = e.key.charCodeAt(0) - 49;
+        do_part(n, parts.indexOf(PART_NAMES[n][0]) < 0);
     }
     if (e.key == "p" && host != "") {
         send("keep", "", !in_list(cur.keep));
@@ -329,6 +354,11 @@ el("http").addEventListener("change", function () {
 });
 el("keep").addEventListener("change", function () {
     send("keep", "", this.checked);
+});
+PART_KEYS.forEach(function (k, n) {
+    el("kp_" + k).addEventListener("change", function () {
+        do_part(n, this.checked);
+    });
 });
 el("face").addEventListener("click", do_face);
 el("lookup").addEventListener("click", do_lookup);

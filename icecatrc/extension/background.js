@@ -2015,7 +2015,8 @@ function on_message(msg, sender)
         }
     }
     if (msg.cmd == "keep_part" && msg.host) {
-        keep_part(String(msg.host), String(msg.part), msg.value);
+        keep_part(String(msg.host), String(msg.part || msg.key),
+            msg.value);
     }
     if (msg.cmd == "http" && msg.host) {
         edit_list("http_ok", msg.host, msg.value);

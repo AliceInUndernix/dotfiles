@@ -181,6 +181,10 @@ select:focus, textarea:focus, input.text:focus, button:focus {
     background: #1c1b22;
 }
 
+.line.sub {
+    margin: 4px 0 0 22px;
+}
+
 .line.group {
     padding-bottom: 6px;
 }
