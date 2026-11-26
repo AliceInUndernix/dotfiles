@@ -190,7 +190,8 @@ browser.newtab.preload false
 browser.shell.checkDefaultBrowser false
 browser.aboutConfig.showWarning false
 browser.tabs.warnOnClose false
-browser.toolbars.bookmarks.visibility "never"
+# the bookmarks toolbar on every page, not only on new tabs
+browser.toolbars.bookmarks.visibility "always"
 browser.translations.enable false
 browser.vpn_promo.enabled false
 browser.promo.focus.enabled false
