@@ -33,6 +33,9 @@ privacy.clearOnShutdown.siteSettings true
 privacy.clearOnShutdown_v2.cache true
 privacy.clearOnShutdown_v2.cookiesAndStorage false
 privacy.clearOnShutdown_v2.historyFormDataAndDownloads true
+# the same in IceCat 136 and newer, which split it in two
+privacy.clearOnShutdown_v2.browsingHistoryAndDownloads true
+privacy.clearOnShutdown_v2.formdata true
 privacy.clearOnShutdown_v2.siteSettings true
 browser.cache.disk.enable false
 browser.sessionstore.privacy_level 2
