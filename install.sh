@@ -312,10 +312,12 @@ if [ -d "$old_bin" ] && [ ! -L "$old_bin" ]; then
 	rmdir "$old_bin" 2>/dev/null && say "remove  $old_bin (now empty)" || :
 fi
 
-# ~/.local/share, ~/.local/state and ~/.cache are no longer used: their
-# contents move into ~/.system/share, state and cache (the XDG directories
-# ~/.profile sets), and so does ~/.ksh_history. Nothing is deleted; a
-# name already taken in the new place is kept where it was and reported.
+# Only settings are moved: ~/.config goes into ~/.system/config. Data,
+# state and caches (~/.local/share with Steam and games, ~/.cache and
+# the like) are never moved or copied; programs that follow the XDG
+# directories ~/.profile sets write there themselves, and the ones that
+# don't stay where they are. Nothing is deleted; a name already taken in
+# the new place is kept where it was and reported.
 # moveinto <old dir> <new dir>: move every entry, merging directories. Each
 # file is listed in ~/.system/state/install/<date>-moved.txt; the screen
 # and the log only get how many (a browser's cache is thousands of files).
@@ -366,10 +368,6 @@ if [ ! -L "$HOME/.config" ]; then
 elif [ "$(readlink "$HOME/.config")" != .system/config ]; then
 	warn "$HOME/.config is a link to $(readlink "$HOME/.config"), not .system/config"
 fi
-moveinto "$HOME/.local/share" "$DATA"
-moveinto "$HOME/.local/state" "$STATE"
-moveinto "$HOME/.cache" "$CACHE"
-rmdir "$HOME/.local" 2>/dev/null && say "remove  $HOME/.local (now empty)" || :
 # Backups made in ~ by older versions (~/.profile.bak.<date> ...) go
 # to ~/.system/state/backup, with the others.
 for f in "$HOME"/.*.bak.[0-9]*-[0-9]*; do

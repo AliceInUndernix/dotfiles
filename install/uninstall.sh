@@ -1,8 +1,8 @@
 # ./install.sh uninstall [--purge] [part|group...] (or ./uninstall.sh):
 # takes out what install.sh put in. With no part named, everything, and
 # then your home goes back to how programs have it without these
-# dotfiles: ~/.system/config back to ~/.config, share and state to
-# ~/.local, cache to ~/.cache, and ~/.system goes when it is empty.
+# dotfiles: ~/.system/config back to ~/.config, and ~/.system goes when
+# it is empty (data, state and cache there are left alone).
 # Sourced by install.sh, not run.
 #
 # What was in the way when a config was linked (kept in
@@ -271,8 +271,8 @@ uninstall_default() {
 	unlink_part "$1"
 }
 
-# back_home: after a full uninstall, the XDG directories go back to
-# where programs have them by default, with what is left in them
+# back_home: after a full uninstall, the settings go back to ~/.config.
+# Data, state and caches are not touched (they are not ours to move).
 back_home() {
 	if [ -L "$HOME/.config" ] && [ "$(readlink "$HOME/.config")" = .system/config ]; then
 		rm "$HOME/.config"
@@ -281,8 +281,7 @@ back_home() {
 			say "move    $CONFIG -> $HOME/.config"
 		fi
 	fi
-	for d in "share:.local/share" "state:.local/state" "cache:.cache" \
-		"bin:.local/bin"
+	for d in "bin:.local/bin"
 	do
 		from=$SYSTEM/${d%%:*} to=$HOME/${d#*:}
 		[ -d "$from" ] || continue

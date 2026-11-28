@@ -49,8 +49,8 @@ are tests.
 Configs are symlinks into this repo, so editing `~/.system/config/nvim`
 edits `~/dotfiles/nvim`. Programs go into `~/.system` (commands in
 `~/.system/bin`, first in PATH; data, state and caches in
-`~/.system/share`, `state` and `cache`), so `~/.local` and `~/.cache`
-are not used (see "Where everything goes" below).
+`~/.system/share`, `state` and `cache`, where programs write them
+by XDG_*_HOME; the installer never moves them; see "Where everything goes" below).
 
 ## Install
 
@@ -146,7 +146,9 @@ Everything lives in one directory, so it is easy to find:
 
 In `~` there are only two links: `~/.profile` and `~/.config` (which
 points to `~/.system/config`, for programs that ignore
-`XDG_CONFIG_HOME`). `~/.local` and `~/.cache` are not used.
+`XDG_CONFIG_HOME`). Only settings are ever moved into `~/.system` (from `~/.config`);
+install.sh never moves or copies data or caches such as
+`~/.local/share` (Steam, games) or `~/.cache`.
 
 Root works the same way: root's real files are in `/root/.system`
 (`config/ksh`, and `net/` with the VPN's scripts, services and
@@ -193,10 +195,10 @@ goes back to what it was, `net` is switched off first (and kept, if it
 won't switch off), the original `torrc` and `proxychains.conf` come
 back, and Principia leaves the game (an older copy you had comes
 back). Your own data stays: the diary, kspkan's mod lists, the steno
-words you added. A full uninstall moves `~/.system/config`, `share`,
-`state` and `cache` back to `~/.config`, `~/.local/share`,
-`~/.local/state` and `~/.cache`, so your other programs keep their
-settings, and leaves the backups in `~/.local/state/backup`.
+words you added. A full uninstall moves `~/.system/config` back to `~/.config`, so
+your other programs keep their settings. `share`, `state` and `cache`
+(data your programs wrote there, and the backups) are left where they
+are.
 `--deps` also takes the packages out of Gentoo's world file (`emerge
 --depclean` is then up to you); the browsers go only when named.
 
