@@ -1805,7 +1805,13 @@ static void complete_path(void)
     if (!found)
         return;
     m = strlen(pbuf) - n;
-    memcpy(shown, pbuf, m);
+    if (m < 0) {
+        /* "~" was typed and completed to a longer name: show it whole */
+        sprintf(shown, "%.1000s%s", dir, dir[1] ? "/" : "");
+        m = strlen(shown);
+    } else {
+        memcpy(shown, pbuf, m);
+    }
     sprintf(shown + m, "%.1000s", best);
     if (found == 1) {
         sprintf(full, "%.2000s/%.1000s", dir, best);
@@ -1943,7 +1949,7 @@ static void unrecord(int s, const char *name, const char *to)
     static char buf[65536], outb[65536 + 400];
     const char *p;
     long n, k, o, m;
-    int fd;
+    int fd, r;
 
     st[0] = 0;
     subj_rel(rel, s, "attached");
@@ -1977,8 +1983,15 @@ static void unrecord(int s, const char *name, const char *to)
     fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, 0600);
     if (fd < 0)
         return;
-    write_all(fd, outb, o);
-    close(fd);
+    r = write_all(fd, outb, o);
+    if (r >= 0)
+        r = fsync(fd);
+    if (close(fd) < 0)
+        r = -1;
+    if (r < 0) {
+        unlink(tmp);
+        return;
+    }
     rename(tmp, path);
 }
 
