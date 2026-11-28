@@ -324,6 +324,7 @@ if [ "$where" = 1 ]; then
     exit 0
 fi
 [ -d "$prof" ] || [ "$dry" = 1 ] || die "no profile directory $prof"
+case "$prof" in /*) ;; *) prof=$PWD/${prof#./} ;; esac
 
 # IceCat holds a "lock" link to "address:+pid" while it uses a profile
 in_use()

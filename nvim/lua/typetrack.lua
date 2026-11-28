@@ -910,8 +910,16 @@ local function load_state()
 end
 local function save_state(data)
   vim.fn.mkdir(vim.fn.fnamemodify(state_file, ":h"), "p")
-  local f = io.open(state_file, "w")
-  if f then f:write(vim.json.encode(data)) f:close() end
+  local tmp = state_file .. ".tmp"
+  local f = io.open(tmp, "w")
+  if not f then return end
+  local ok = f:write(vim.json.encode(data))
+  local closed = f:close()
+  if ok and closed then
+    os.rename(tmp, state_file)
+  else
+    os.remove(tmp)
+  end
 end
 
 local tracked = {}   -- buf -> { book_path, book, chapters, ghost, start, upto, ... }

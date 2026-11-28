@@ -10,6 +10,7 @@ if [ "$(id -u)" != 0 ]; then
 fi
 
 count=0
+failed=0
 for drv in xhci_hcd xhci-pci-renesas ehci-pci ohci-pci uhci_hcd; do
     dir=/sys/bus/pci/drivers/$drv
     [ -d "$dir" ] || continue
@@ -17,10 +18,17 @@ for drv in xhci_hcd xhci-pci-renesas ehci-pci ohci-pci uhci_hcd; do
         [ -e "$d" ] || continue
         a=${d##*/}
         echo "reset-usb: $drv $a"
-        echo "$a" >| "$dir/unbind" || echo "reset-usb: unbind $a failed" >&2
+        if ! echo "$a" >| "$dir/unbind"; then
+            echo "reset-usb: unbind $a failed" >&2
+            failed=1
+        fi
         sleep 1
-        echo "$a" >| "$dir/bind" || echo "reset-usb: bind $a failed" >&2
-        count=$((count + 1))
+        if echo "$a" >| "$dir/bind"; then
+            count=$((count + 1))
+        else
+            echo "reset-usb: bind $a failed" >&2
+            failed=1
+        fi
     done
 done
 
@@ -29,4 +37,4 @@ if [ "$count" = 0 ]; then
     exit 1
 fi
 echo "reset-usb: reset $count controller(s)"
-exit 0
+exit "$failed"

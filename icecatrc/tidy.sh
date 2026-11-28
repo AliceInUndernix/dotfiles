@@ -74,6 +74,7 @@ if [ $# -gt 0 ]; then
 else
     prof=$(default_profile)
 fi
+prof=${prof%/}
 [ -d "$prof" ] || die "no profile directory $prof"
 
 if [ "$run" = 1 ]; then
