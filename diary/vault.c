@@ -592,6 +592,10 @@ int vault_save(void)
         if (r < 0)
             unlink(oldtmp);
     }
+    if (r < 0 && errno != ENOENT) {
+        /* no hard links here (vfat, some network mounts): no .old */
+        warn("no %s kept for this save: %s", old, strerror(errno));
+    }
     r = rename(tmp, vault_file);
     if (r < 0) {
         warn("can't make %s: %s", vault_file, strerror(errno));

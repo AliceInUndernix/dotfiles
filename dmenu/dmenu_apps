@@ -30,6 +30,6 @@ name=$(awk -F '\t' '!/^[ \t]*(#|$)/ { print $1 }' "$list" |
 	dmenu -i -P -H "$hist" "$@") || exit 0
 [ -n "$name" ] || exit 0
 
-cmd=$(awk -F '\t' -v n="$name" '!/^[ \t]*(#|$)/ && $1 == n {
+cmd=$(NAME=$name awk -F '\t' '!/^[ \t]*(#|$)/ && $1 == ENVIRON["NAME"] {
 	print (NF > 1 ? $2 : $1); exit }' "$list")
 exec ${SHELL:-/bin/sh} -c "${cmd:-$name}"

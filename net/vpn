@@ -1490,13 +1490,17 @@ cmd_on() {
     [ -x "$src/install.sh" ] && [ "$(stat -c %u "$src/install.sh")" = 0 ] &&
         [ -n "$u" ] ||
         die "no root copy of install.sh in $src: run install.sh net as root"
+    was_off=no
+    [ ! -e "$ETC/off" ] || was_off=yes
     rm -f "$ETC/off"
     say "Turning vpn back on: $src/install.sh net (for $u)"
     INSTALL_USER=$u "$src/install.sh" net ||
         die "install.sh net failed (its log says why)"
     # vpn off gave the cards their own MACs back, and vpnfw may still
-    # count as started, so it would not make new ones until a reboot
-    random_macs
+    # count as started, so it would not make new ones until a reboot.
+    # Not when vpn was never off: the cards go down for new MACs, and
+    # that broke Wi-Fi (see random_macs)
+    [ "$was_off" = no ] || random_macs
     rc-service vpnfw start
     rc-service vpn start
     say "on (vpn watch to follow it)"

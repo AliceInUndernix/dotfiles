@@ -13,6 +13,9 @@ state=${XDG_STATE_HOME:-$HOME/.system}
 # windows whose ksh reads .kshrc. This opens a window for each part of
 # .kshrc on its own, records every byte ksh sends to the screen (with
 # script), and which windows made st complain.
+# the file ksh reads at start: ENV (profile sets it), else ~/.kshrc
+kshrc=${ENV:-$HOME/.kshrc}
+
 if [ "${1:-}" = bytes ]; then
     out=$HOME/termcheck-bytes.txt
     d=$HOME/termcheck-bytes.d
@@ -20,8 +23,8 @@ if [ "${1:-}" = bytes ]; then
     mkdir -p "$d"
     rm -f "$out"
     echo 'set -o emacs' > "$d/emacs"
-    printf '%s\n' '. "$HOME/.kshrc"' 'set +o multiline' > "$d/nomulti"
-    printf '%s\n' '. "$HOME/.kshrc"' 'trap - KEYBD' > "$d/notrap"
+    printf '%s\n' ". \"$kshrc\"" 'set +o multiline' > "$d/nomulti"
+    printf '%s\n' ". \"$kshrc\"" 'trap - KEYBD' > "$d/notrap"
     printf '%s\n' 'set -o emacs' 'set +o multiline' > "$d/emacs-nomulti"
     bwin() {    # bwin <number> <ENV file> <what>
         echo "== window $1: $3"
@@ -53,7 +56,7 @@ if [ "${1:-}" = bytes ]; then
         done
         command -v tput; ls -l "$(command -v tput)"
         echo
-        bwin 1 "$HOME/.kshrc" "your .kshrc, as always"
+        bwin 1 "$kshrc" "your .kshrc, as always"
         bwin 2 "$d/nomulti" ".kshrc, then set +o multiline"
         bwin 3 "$d/notrap" ".kshrc without the Up/Down trap"
         bwin 4 "$d/emacs" "only set -o emacs"
@@ -194,7 +197,7 @@ t() {
     st -v 2>&1 | head -n 1
     echo
     echo "== files the shell reads"
-    ls -l ~/.profile ~/.kshrc 2>&1
+    ls -l ~/.profile "$kshrc" 2>&1
     echo
     echo "== history file (a huge or broken one can make ksh slow)"
     ls -l "$state/ksh/" 2>&1
@@ -204,9 +207,9 @@ t() {
     t 10 'ENV=/dev/null ksh -i -c exit </dev/null'
     echo
     echo "== 2. ksh with .kshrc, no terminal (trace of the last lines)"
-    t 10 'ksh -x -i -c exit </dev/null 2>/tmp/termcheck.$$; \
-        tail -n 25 /tmp/termcheck.$$'
-    rm -f /tmp/termcheck.$$
+    t 10 'ksh -x -i -c exit </dev/null 2>$HOME/.termcheck.$$; \
+        tail -n 25 $HOME/.termcheck.$$'
+    rm -f $HOME/.termcheck.$$
     echo
     echo "== 3. each part of .kshrc on its own"
     t 10 'mkdir -p "$HOME/.system/ksh"'
@@ -231,13 +234,13 @@ case $a in n|N) exit 0 ;; esac
     echo "== 4. ksh with .kshrc, in this terminal (trace)"
 } >> "$out"
 s=$(date +%s)
-timeout --foreground -k 2 10 ksh -x -i 2>/tmp/termcheck-tty.$$
+timeout --foreground -k 2 10 ksh -x -i 2>"$HOME/.termcheck-tty.$$"
 rc=$?
 {
     echo "-> exit $rc after $(( $(date +%s) - s )) s (124: hung)"
-    tail -n 40 /tmp/termcheck-tty.$$
+    tail -n 40 "$HOME/.termcheck-tty.$$"
 } >> "$out"
-rm -f /tmp/termcheck-tty.$$
+rm -f "$HOME/.termcheck-tty.$$"
 stty sane 2>/dev/null
 echo
 echo "Saved: $out (send it)"
