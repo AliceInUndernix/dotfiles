@@ -25,6 +25,7 @@
  * Tabs, newlines and backslashes in the text are written as \t, \n
  * and \\. Without a suggestions viewer, no suggestions are looked for.
  */
+#define _XOPEN_SOURCE 700
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -1293,11 +1294,41 @@ static long put_str(char *o, long n, const char *s)
  * there is one (else a new line at the end), and off any other line,
  * since an outline writes one thing. A line left with no outline
  * goes. */
+/* where a write must go: a dictionary that is a link (into a git
+ * directory, say) is written through the link, so it stays a link */
+static void real_path(const char *path, char *out, long size)
+{
+    struct stat sb;
+    char tmp[1100], *slash;
+    long r;
+    int i;
+
+    scopy(out, path, size);
+    for (i = 0; i < 8; i++) {
+        r = lstat(out, &sb);
+        if (r < 0 || !S_ISLNK(sb.st_mode))
+            return;
+        r = readlink(out, tmp, sizeof(tmp) - 1);
+        if (r <= 0)
+            return;
+        tmp[r] = 0;
+        if (tmp[0] != '/') {
+            slash = strrchr(out, '/');
+            if (slash) {
+                slash[1] = 0;
+                scat(out, tmp, size);
+                continue;
+            }
+        }
+        scopy(out, tmp, size);
+    }
+}
+
 static int write_entry(const char *path, const char *outline,
     const char *text)
 {
     char *f, *o, *line, *next, *tab, esc[TEXT_MAX * 2 + 8];
-    char rest[TEXT_MAX * 4], tmp[1100];
+    char rest[TEXT_MAX * 4], tmp[1100], real[1100];
     long size, need, n;
     int done, r, w, fd;
 
@@ -1359,7 +1390,8 @@ static int write_entry(const char *path, const char *outline,
     }
     free(f);
     /* a new file, then rename: never half a dictionary */
-    sprintf(tmp, "%.1000s.new", path);
+    real_path(path, real, sizeof(real));
+    sprintf(tmp, "%.1000s.new", real);
     fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd < 0) {
         say("can't write %s", tmp);
@@ -1375,9 +1407,9 @@ static int write_entry(const char *path, const char *outline,
         unlink(tmp);
         return -1;
     }
-    r = rename(tmp, path);
+    r = rename(tmp, real);
     if (r < 0) {
-        say("can't replace %s", path);
+        say("can't replace %s", real);
         unlink(tmp);
         return -1;
     }
@@ -1907,7 +1939,7 @@ int word_save(const char *path, const char *outline, const char *text)
  * with no outline goes); 0 when done */
 int word_drop(const char *path, const char *outline)
 {
-    char *f, *o, *line, *next, *tab, rest[TEXT_MAX * 4], tmp[1100];
+    char *f, *o, *line, *next, *tab, rest[TEXT_MAX * 4], tmp[1100], real[1100];
     long size, n;
     int r, w, fd;
 
@@ -1943,7 +1975,8 @@ int word_drop(const char *path, const char *outline)
         n = put_str(o, n, "\n");
     }
     free(f);
-    sprintf(tmp, "%.1000s.new", path);
+    real_path(path, real, sizeof(real));
+    sprintf(tmp, "%.1000s.new", real);
     fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd < 0) {
         free(o);
@@ -1953,7 +1986,7 @@ int word_drop(const char *path, const char *outline)
     r = write(fd, o, size);
     free(o);
     w = close(fd);
-    if (r != size || w < 0 || rename(tmp, path) < 0) {
+    if (r != size || w < 0 || rename(tmp, real) < 0) {
         unlink(tmp);
         return -1;
     }

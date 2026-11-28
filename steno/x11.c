@@ -786,6 +786,7 @@ void out_combo(const char *combo)
 {
     int res;
     int down[32], ndown, ev[256], evtype[256], nev, i, j, k, rel, code;
+    int mc[8], nm;
     char name[64];
     long sym;
     struct mapping *m;
@@ -848,18 +849,40 @@ void out_combo(const char *combo)
                 say("key pressed twice in combo: %s", name);
                 return;
             }
+        /* the modifiers the key needs (Shift for exclam) are held just
+           while it goes down */
+        nm = 0;
+        for (j = 0; j < 8; j++) {
+            if (!(m->mods & (1 << j)) || !mod_key[j])
+                continue;
+            for (k = 0; k < ndown && down[k] != mod_key[j]; k++)
+                ;
+            if (k == ndown) {
+                mc[nm] = mod_key[j];
+                nm++;
+            }
+        }
+        for (j = 0; j < nm && nev < 256; j++) {
+            ev[nev] = mc[j];
+            evtype[nev] = KEY_PRESS;
+            nev++;
+        }
         if (nev < 256) {
             ev[nev] = code;
             evtype[nev] = KEY_PRESS;
             nev++;
         }
-        if (rel) {
-            if (nev < 256) {
-                ev[nev] = code;
-                evtype[nev] = KEY_RELEASE;
-                nev++;
-            }
-        } else if (ndown < 32) {
+        if (rel && nev < 256) {
+            ev[nev] = code;
+            evtype[nev] = KEY_RELEASE;
+            nev++;
+        }
+        for (j = nm - 1; j >= 0 && nev < 256; j--) {
+            ev[nev] = mc[j];
+            evtype[nev] = KEY_RELEASE;
+            nev++;
+        }
+        if (!rel && ndown < 32) {
             down[ndown] = code;
             ndown++;
         }

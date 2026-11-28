@@ -832,6 +832,8 @@ static int read_config(const char *path, int must)
             undo_levels = atoi_small(val);
             if (undo_levels < 1)
                 undo_levels = 100;
+            if (undo_levels > 4000)
+                undo_levels = 4000;
         } else if (!strcmp(key, "start_capitalized")) {
             start_capitalized = yes(val);
         } else if (!strcmp(key, "start_attached")) {

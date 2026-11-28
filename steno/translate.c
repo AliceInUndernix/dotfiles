@@ -513,7 +513,8 @@ static int count_arg(const char *a)
     if (*a < '0' || *a > '9')
         return 1;
     while (*a >= '0' && *a <= '9') {
-        n = n * 10 + (*a - '0');
+        if (n < 100000)
+            n = n * 10 + (*a - '0');
         a++;
     }
     return n;
@@ -526,10 +527,10 @@ static void macro_repeat_translation(const char *arg)
     struct trans *t, *c;
 
     n = count_arg(arg);
-    if (!nhist)
+    if (!nhist || n <= 0)
         return;
     first = nhist - n;
-    if (first < 0 || n <= 0)
+    if (first < 0)
         first = 0;
     /* the ones to repeat, before the copies join the history */
     count = nhist - first;
