@@ -1036,8 +1036,8 @@ static void bad_line(const char *path, int ln, const char *what)
 {
     char m[1300];
 
-    sprintf(m, "%.1000s:%d: %%s", path, ln);
-    say(m, what);
+    sprintf(m, "%.1000s:%d: %.200s", path, ln, what);
+    say("%s", m);
 }
 
 /* every outline of a line, for text */
@@ -1576,8 +1576,9 @@ void dict_reload(void)
 {
     int res;
     static struct dict tmp;
+    char name[1024];
     long mtime, size;
-    int i, enabled;
+    int i, enabled, user;
 
     for (i = 0; i < ndicts; i++) {
         if (dicts[i].builtin)
@@ -1592,9 +1593,13 @@ void dict_reload(void)
             continue;
         }
         enabled = dicts[i].enabled;
+        user = dicts[i].user;
+        scopy(name, dicts[i].name, sizeof(name));
         dict_free(&dicts[i]);
         dicts[i] = tmp;
         dicts[i].enabled = enabled;
+        dicts[i].user = user;
+        scopy(dicts[i].name, name, sizeof(dicts[i].name));
         mods_stale = 1;
         dict_gen++;
         if (verbose)
