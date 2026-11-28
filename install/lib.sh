@@ -257,6 +257,16 @@ as_user() {
 # kspkan) up to date. A fast-forward if it can; if upstream's history
 # was started again (no commit in common) and the clone has no changes
 # of its own, it is reset to upstream. Fails when neither works.
+# retire_clone DIR: DIR is an old separate git clone (the source now
+# lives in the dotfiles tree). Move it whole into the backup folder;
+# nothing in it is deleted.
+retire_clone() {
+	[ -d "$1/.git" ] || return 0
+	userdir "$BACKUP"
+	mv "$1" "$BACKUP/${1##*/}-clone.$STAMP" &&
+		say "move    $1 -> $BACKUP/ (the source is in $DOTFILES now)"
+}
+
 git_follow() {
 	rc=0
 	as_user "d='$1'

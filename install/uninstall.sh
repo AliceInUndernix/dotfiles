@@ -146,7 +146,6 @@ uninstall_moonlander() {
 		[ -L "$f" ] || continue
 		case $(readlink "$f") in "$QMK_DIR"/*) rm "$f"; say "remove  $f" ;; esac
 	done
-	remove "$ML_SRC"
 	remove "$QMK_DIR"
 }
 
@@ -156,7 +155,6 @@ uninstall_ksp() {
 			( cd "$KSPKAN_SRC" && make -s PREFIX="$SYSTEM" uninstall ) \
 				>/dev/null 2>&1 || rm -f "$SYSBIN/kspkan"
 		fi
-		remove "$KSPKAN_SRC"
 	fi
 	[ ! -d "$DATA/kspkan" ] ||
 		say "kept    $DATA/kspkan: kspkan's game folders and mod lists"

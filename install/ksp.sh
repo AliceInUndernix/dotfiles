@@ -21,10 +21,9 @@
 # 20 or newer). They are system packages: a root run emerges them
 # (su -c './install.sh ksp'), then does the rest as you.
 
-KSPKAN_REPO=${KSPKAN_REPO:-https://github.com/AliceInUndernix/kspkan}
-# the source; kspkan keeps its own data (game folders, mod lists,
-# downloads) in $DATA/kspkan, so the two stay apart
-KSPKAN_SRC=$SYSTEM/kspkan
+# the source is in the dotfiles tree (kspkan/); kspkan keeps its own data
+# (game folders, mod lists, downloads) in $DATA/kspkan
+KSPKAN_SRC=$DOTFILES/kspkan
 KSP_LIBS="llvm-runtimes/libcxx llvm-runtimes/libcxxabi llvm-runtimes/libunwind"
 # a zip that unpacks to more than this is refused (zip bombs)
 PRINCIPIA_MAX_BYTES=2000000000
@@ -164,27 +163,10 @@ kspkan_move_old() {
 }
 
 install_kspkan() {
-	command -v git >/dev/null 2>&1 ||
-		die "git not found (su -c '$DOTFILES/install.sh --deps')"
 	kspkan_move_old
-	if [ -d "$KSPKAN_SRC/.git" ]; then
-		if git_follow "$KSPKAN_SRC"; then
-			say "ok      $KSPKAN_SRC ($(git -C "$KSPKAN_SRC" log -1 --format=%h))"
-		else
-			warn "could not update $KSPKAN_SRC; building what is there"
-		fi
-	else
-		userdir "$DATA"
-		say "clone   $KSPKAN_REPO -> $KSPKAN_SRC"
-		git clone --quiet "$KSPKAN_REPO" "$KSPKAN_SRC" || {
-			warn "could not clone $KSPKAN_REPO (no network?); kspkan skipped"
-			return 0
-		}
-	fi
+	retire_clone "$SYSTEM/kspkan"
 	if [ ! -f "$KSPKAN_SRC/Makefile" ]; then
-		say "note    kspkan has no code yet (no Makefile in $KSPKAN_REPO);"
-		say "        run ./install.sh ksp again once it is pushed"
-		return 0
+		die "no Makefile in $KSPKAN_SRC"
 	fi
 	userdir "$SYSBIN"
 	built=yes

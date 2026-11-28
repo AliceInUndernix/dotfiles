@@ -172,18 +172,13 @@ ck_part() {
 		fi ;;
 	moonlander)
 		if [ -x "$SYSBIN/qmk" ]; then ck_ok "qmk"; else ck_bad "qmk is missing: ./install.sh moonlander"; fi
-		if [ ! -d "$ML_SRC/.git" ]; then
-			ck_bad "the layout is not cloned: ./install.sh moonlander"
+		b=$ML_SRC/$ML_BIN
+		if [ ! -f "$b" ]; then
+			ck_bad "no firmware built: ./install.sh moonlander"
+		elif [ -n "$(find "$ML_SRC/canary" -type f -newer "$b" 2>/dev/null)" ]; then
+			ck_bad "the firmware is older than the layout: ./install.sh moonlander"
 		else
-			ck_git "$ML_SRC" "the Moonlander layout"
-			b=$ML_SRC/$ML_BIN
-			if [ ! -f "$b" ]; then
-				ck_bad "no firmware built: ./install.sh moonlander"
-			elif [ -n "$(find "$ML_SRC/canary" -type f -newer "$b" 2>/dev/null)" ]; then
-				ck_bad "the firmware is older than the layout: ./install.sh moonlander"
-			else
-				ck_ok "firmware $ML_BIN is from the current layout"
-			fi
+			ck_ok "firmware $ML_BIN is from the current layout"
 		fi ;;
 	claude)
 		r=$SYSTEM/claude-desktop/app/.release

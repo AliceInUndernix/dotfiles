@@ -463,33 +463,26 @@ install_slock() {
 	build_suckless slock
 }
 
-# Moonlander: the layout and its build script live in their own repo,
-# AliceInUndernix/moonlander (see its README.md), so anyone can build
-# it. It is cloned into ~/.system/moonlander and its build.sh runs
+# Moonlander: the layout and its build script (moonlander/) also stand alone;
+# see moonlander/README.md, so anyone can build
+# it. It lives in the dotfiles tree (moonlander/) and its build.sh runs
 # as the user, with everything in the user's home:
 #   ~/.system/qmk/zsa_qmk   ZSA's QMK source (firmware25), patched
 #   ~/.system/qmk/venv      Python environment for the qmk command
 #   ~/.system/qmk/arm-gnu-toolchain   ARM compiler
 #   ~/.system/bin/qmk, arm-none-eabi-*     links to the two above
-#   ~/.system/moonlander/zsa_moonlander_revb_canary.bin   firmware
-# Each run updates the clone, builds and flashes (as root: the user
+#   ~/dotfiles/moonlander/zsa_moonlander_revb_canary.bin   firmware
+# The layout source is in the dotfiles tree (moonlander/). Each run
+# builds and flashes (as root: the user
 # builds, root flashes, since root reaches the keyboard without udev
 # rules). MOONLANDER_FLASH=no ./install.sh moonlander only builds.
-ML_REPO=${ML_REPO:-https://github.com/AliceInUndernix/moonlander}
-ML_SRC=$SYSTEM/moonlander
+
+ML_SRC=$DOTFILES/moonlander
 QMK_DIR=$SYSTEM/qmk
 ML_BIN=zsa_moonlander_revb_canary.bin
 
 install_moonlander() {
-	command -v git >/dev/null 2>&1 || die "git not found (su -c '$DOTFILES/install.sh --deps')"
-	if [ -d "$ML_SRC/.git" ]; then
-		git_follow "$ML_SRC" ||
-			warn "could not update $ML_SRC; building what is there"
-	else
-		userdir "${ML_SRC%/*}"
-		say "clone   $ML_REPO -> $ML_SRC"
-		as_user "git clone --quiet '$ML_REPO' '$ML_SRC'"
-	fi
+	retire_clone "$SYSTEM/moonlander"
 	say "build   the Moonlander layout ($ML_SRC/build.sh)"
 	if [ "$AS_ROOT" = yes ]; then
 		as_user "QMK_DIR='$QMK_DIR' LINK_DIR='$SYSBIN' MOONLANDER_FLASH=no sh '$ML_SRC/build.sh'"

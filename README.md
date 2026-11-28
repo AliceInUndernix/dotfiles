@@ -15,6 +15,8 @@ C89, statically linked, with no dependency but the kernel at run time:
 
 | Program | What it does |
 |---|---|
+| `moonlander/` | the QMK layout for the ZSA Moonlander and its build script (also usable alone: `moonlander/build.sh` puts QMK where `QMK_DIR` says) |
+| `kspkan/` | a small mod manager for Kerbal Space Program (also usable alone: `make PREFIX=dir install`) |
 | `steno/` | a steno engine (a port of Plover's) for a Gemini PR keyboard, with Dotterel's dictionaries; paper tape, suggestions, adding and looking up strokes |
 | `diary/` | a private diary in one encrypted file, opened into RAM only: days, people and places, notes, plans, calendars, attachments, search |
 | `seal/` | `seal DIR` turns a directory into one encrypted file (Argon2id, XChaCha20-Poly1305); `unseal FILE` gives it back, into RAM by default |
@@ -152,8 +154,7 @@ data or caches (Steam, browsers and the rest keep theirs in
 | `~/.system/steno` | steno: dotterel source, dictionaries, your added words, sounds |
 | `~/.system/ksh` | shell history |
 | `~/.system/fonts` | the Symbols Nerd Font for st |
-| `~/.system/moonlander`, `~/.system/qmk` | the layout source, QMK and the ARM compiler |
-| `~/.system/kspkan` | the kspkan source (its data is in `~/.local/share/kspkan`) |
+| `~/.system/qmk` | QMK and the ARM compiler (the layout source is `moonlander/` here) |
 | `~/.system/install`, `~/.system/backup` | install logs, and the files the installer replaced |
 | `~/.system/claude-desktop` | the unpacked Claude desktop app (only with part `claude`) |
 
@@ -191,9 +192,8 @@ What it does, and what it never does:
   other permissions off everything in your home.
 - Browsers get only the program; their settings and profiles are not
   touched.
-- `moonlander` clones the layout into `~/.system/moonlander` and
-  runs its `build.sh` (QMK and the ARM compiler go into
-  `~/.system/qmk`), then builds and flashes the firmware.
+- `moonlander` runs `moonlander/build.sh` from this tree (QMK and
+  the ARM compiler go into `~/.system/qmk`), then flashes the firmware.
 - `steno` builds steno and clones dotterel into
   `~/.system/steno/dotterel`; each run updates it and keeps the
   words you added.
@@ -223,11 +223,9 @@ your other programs keep their settings. The other directories in
 
 Only when named. It installs:
 
-- **kspkan**, our KSP mod manager, cloned from
-  [kspkan](https://github.com/AliceInUndernix/kspkan) into
-  `~/.system/kspkan` and built into `~/.system/bin`
-  (kspkan's own data, the game folders and mod lists, is in
-  `~/.local/share/kspkan`).
+- **kspkan**, our KSP mod manager, whose source is `kspkan/` in this
+  tree; it is built into `~/.system/bin` (kspkan's own data, the game
+  folders and mod lists, is in `~/.local/share/kspkan`).
 - **[Principia](https://github.com/mockingbirdnest/Principia)**, the
   n-body gravity mod. Its binary is linked from its README and is not
   on GitHub, so download the zip yourself, anywhere in `~`. The
@@ -257,11 +255,11 @@ what is missing.
 Each can be used without the rest; `./install.sh keyboard games`
 sets them up here.
 
-- [moonlander](https://github.com/AliceInUndernix/moonlander):
+- moonlander (now in this repository, `moonlander/`):
   the QMK layout for the ZSA Moonlander
 - [dotterel](https://github.com/AliceInUndernix/dotterel):
   the British English steno theory and its dictionaries
-- [kspkan](https://github.com/AliceInUndernix/kspkan):
+- kspkan (now in this repository, `kspkan/`):
   a small mod manager for Kerbal Space Program
 
 ## Colours: Habamax everywhere

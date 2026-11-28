@@ -25,3 +25,9 @@ steno/steno
 steno/mkwords
 steno/words.c
 steno/test/out
+# moonlander build output
+moonlander/*.bin
+# kspkan build output
+kspkan/*.o
+kspkan/kspkan
+kspkan/kspkan.new
