@@ -110,7 +110,14 @@ static void setup(void)
         exit(1);
     }
     memset(sec, 0, sizeof *sec);
-    mlock(sec, sizeof *sec);       /* best effort: kept out of swap */
+    /* all of it, or at least the key and the passwords (the first
+     * 2 KiB and a bit) when the limit is small */
+    if (mlock(sec, sizeof *sec) < 0 &&
+        mlock(sec, sizeof sec->key + sizeof sec->pass + sizeof sec->pass2) < 0)
+    {
+        warn("%s", "can't lock the password and key in RAM (raise "
+            "RLIMIT_MEMLOCK); they may reach swap", 0);
+    }
 
     memset(&sa, 0, sizeof sa);
     sa.sa_handler = on_signal;
@@ -416,7 +423,7 @@ static long links_update(const char *add_link, const char *add_target,
     struct stat st;
     char *text, *line, *tab, *end, tmp[PATH_SIZE];
     long n, size, removed;
-    int fd, out, r, keep;
+    int fd, out, r, keep, werr;
 
     if (!links_file[0])
         return -1;
@@ -464,6 +471,7 @@ static long links_update(const char *add_link, const char *add_target,
         return -1;
     }
     removed = 0;
+    werr = 0;
     line = text;
     while (line && line < text + size) {
         end = strchr(line, '\n');
@@ -486,22 +494,28 @@ static long links_update(const char *add_link, const char *add_target,
             }
             *tab = '\t';
             if (keep) {
-                write_all(out, line, strlen(line));
-                write_all(out, "\n", 1);
+                if (write_all(out, line, strlen(line)) < 0 ||
+                    write_all(out, "\n", 1) < 0)
+                {
+                    werr = 1;
+                }
             }
         }
         line = end + 1;
     }
     if (add_link) {
-        write_all(out, add_link, strlen(add_link));
-        write_all(out, "\t", 1);
-        write_all(out, add_target, strlen(add_target));
-        write_all(out, "\n", 1);
+        if (write_all(out, add_link, strlen(add_link)) < 0 ||
+            write_all(out, "\t", 1) < 0 ||
+            write_all(out, add_target, strlen(add_target)) < 0 ||
+            write_all(out, "\n", 1) < 0)
+        {
+            werr = 1;
+        }
     }
     free(text);
     r = fsync(out);
     n = close(out);
-    if (r < 0 || n < 0) {
+    if (r < 0 || n < 0 || werr) {
         unlink(tmp);
         return -1;
     }

@@ -85,7 +85,12 @@ static void setup(void)
         exit(1);
     }
     memset(sec, 0, sizeof *sec);
-    mlock(sec, sizeof *sec);
+    if (mlock(sec, sizeof *sec) < 0 &&
+        mlock(sec, sizeof sec->key + sizeof sec->pass + sizeof sec->pass2) < 0)
+    {
+        warn("%s", "can't lock the password and key in RAM (raise "
+            "RLIMIT_MEMLOCK); they may reach swap", 0);
+    }
 
     catch_signals(1);
     memset(&sa, 0, sizeof sa);
@@ -286,7 +291,34 @@ static int write_pid(void)
     sprintf(buf, "%ld\n", (long)getpid());
     r = write_all(fd, buf, strlen(buf));
     close(fd);
+    if (r < 0)
+        return r;
+    /* which diary file this RAM copy belongs to, for recover() */
+    sprintf(path, "%.3000s/source", ram_base_dir);
+    unlink(path);
+    fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0600);
+    if (fd < 0)
+        return 0;
+    r = write_all(fd, vault_file, strlen(vault_file));
+    close(fd);
     return r;
+}
+
+/* the diary file the RAM copy came from; "" when not known */
+static void read_source(char *out, long size)
+{
+    char path[PATH_SIZE];
+    long n;
+    int fd;
+
+    out[0] = 0;
+    sprintf(path, "%.3000s/source", ram_base_dir);
+    fd = open(path, O_RDONLY | O_NOFOLLOW);
+    if (fd < 0)
+        return;
+    n = read_full(fd, out, size - 1);
+    close(fd);
+    out[n > 0 ? n : 0] = 0;
 }
 
 static void remove_pid(void)
@@ -294,6 +326,8 @@ static void remove_pid(void)
     char path[PATH_SIZE];
 
     sprintf(path, "%.3000s/pid", ram_base_dir);
+    unlink(path);
+    sprintf(path, "%.3000s/source", ram_base_dir);
     unlink(path);
 }
 
@@ -713,7 +747,8 @@ static void clean_leftovers(void)
     d = opendir(dir);
     while (d && (e = readdir(d)) != 0) {
         if (e->d_name[0] == '.' && !strncmp(e->d_name + 1, base, n) &&
-            e->d_name[n + 1] == '.' && strspn(e->d_name + n + 2, "0123456789abcdef") == 12 &&
+            e->d_name[n + 1] == '.' &&
+            strspn(e->d_name + n + 2, "0123456789abcdef") == 12 &&
             (e->d_name[n + 14] == 0 ||
             !strcmp(e->d_name + n + 14, ".old")))
         {
@@ -746,7 +781,7 @@ static int ask_key(const char *question, const char *keys)
  * terminal gone): open it, save it, or wipe it */
 static int recover(int pass_stdin, int *opened)
 {
-    char q[2 * PATH_SIZE + 400], when[64];
+    char q[2 * PATH_SIZE + 400], when[64], src[PATH_SIZE];
     struct stat st;
     struct tm *tm;
     time_t tt;
@@ -763,6 +798,13 @@ static int recover(int pass_stdin, int *opened)
         sprintf(when, " (last change %04d-%02d-%02d %02d:%02d)",
             tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
             tm->tm_hour, tm->tm_min);
+    read_source(src, sizeof src);
+    if (src[0] && strcmp(src, vault_file)) {
+        warn("a diary that wasn't closed is in %s, from the file %s; "
+            "open that one (diary -f FILE) to open, save or wipe it",
+            tree_dir, src);
+        return -1;
+    }
     if (pass_stdin) {
         warn("a diary that wasn't closed is in %s; run diary on a "
             "terminal to open, save or wipe it", tree_dir, 0);
