@@ -36,6 +36,10 @@
 #                              source, takes hours; not in "all")
 #   ./install.sh ksp           Kerbal Space Program: kspkan and the
 #                              Principia mod (install/ksp.sh; not in "all")
+#   ./install.sh claude        the Claude desktop app: fetched, checked
+#                              against Anthropic's signing key, and
+#                              unpacked into ~/.system (run it again to
+#                              update; claude-desktop/)
 #   ./install.sh --new-pc      a new computer, as root: --deps, all (net
 #                              and slock too), and asks which browsers to
 #                              build (or name them: --new-pc icecat)

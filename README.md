@@ -43,6 +43,7 @@ are tests.
 | `net/` | Riseup VPN, Tor and a kill switch for Gentoo with OpenRC (`net/README`) | `/usr/local/bin/vpn`, `/etc/init.d/`, `/etc/vpn` |
 | `icecatrc/` | IceCat: its settings, three add-ons and our extension "switch" (JavaScript, Tor per site, fingerprints, wipes, HTTPS only; `icecatrc/README`) | the IceCat profile in `~/.mozilla/icecat` |
 | `scripts/` | small helpers (`reset-usb`) | |
+| `claude-desktop/` | `get-claude-desktop.sh`: fetches Anthropic's Claude desktop .deb, checks its signed index, key fingerprint and SHA256, and unpacks it (part `claude`, run again to update) | `~/.system/claude-desktop`, `~/.system/bin/claude-desktop` |
 | `archive/` | untouched copies of everything taken from elsewhere, with checksums | |
 | `install.sh`, `install/` | the installer | |
 
@@ -203,7 +204,7 @@ words you added. A full uninstall moves `~/.system/config` back to `~/.config`, 
 your other programs keep their settings. `state` (the backups) is left
 where it is.
 `--deps` also takes the packages out of Gentoo's world file (`emerge
---depclean` is then up to you); the browsers go only when named.
+-qv --depclean` is then up to you); the browsers go only when named.
 
 ### Kerbal Space Program: `./install.sh ksp`
 
