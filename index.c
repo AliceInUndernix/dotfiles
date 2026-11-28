@@ -995,6 +995,9 @@ static char *find_version(const char *text)
                 p++;
             }
             if (!is_digit(*p)) {
+                if (*p == 0) {
+                    break;
+                }
                 continue;
             }
             n = 0;

@@ -510,6 +510,9 @@ static int solve(struct solver *s, struct goal *g)
         return 0;
     }
     nalt = alts_of(&g->r, alts, MAX_ALTS);
+    if (nalt == 0) {
+        alts[0].name = NULL;
+    }
     for (a = 0; a < nalt; a++) {
         if (alts[a].name != NULL && satisfied(s, &alts[a])) {
             return solve(s, g->next);

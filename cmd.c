@@ -566,8 +566,8 @@ int cmd_install(struct ctx *c, char **ids, int n)
             nents = nents2;
         }
     }
-    mark_wanted(c, ids, n);
     if (nents == 0) {
+        mark_wanted(c, ids, n);
         printf("nothing to do\n");
         return 0;
     }
@@ -580,6 +580,7 @@ int cmd_install(struct ctx *c, char **ids, int n)
         free(ents);
         return 1;
     }
+    mark_wanted(c, ids, n);
     rc = install_entries(c, ents, nents, want, nwant);
     free(ents);
     return rc;

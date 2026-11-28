@@ -402,7 +402,7 @@ static int avc_version(struct ctx *c, char **t, int nt, char *out)
 static char *guess_version(struct ctx *c, struct cand *k)
 {
     struct entry *e;
-    char avc[48];
+    char avc[96];
     long a[4], b[4];
     const char *nm;
     int cnt, i, j, hasavc;
