@@ -527,9 +527,11 @@ static void make_link(const char *file, const char *name,
         if (r == 0 && strcmp(dir, "."))
             r = join(cwd, cwd, "/");
         if (r == 0 && strcmp(dir, "."))
-            r = join(dir, cwd, dir);
+            r = join(link, cwd, dir);
         else if (r == 0)
-            r = join(dir, cwd, "");
+            r = join(link, cwd, "");
+        if (r == 0)
+            r = join(dir, link, "");
     }
     if (r == 0)
         r = join(link, dir, strcmp(dir, "/") ? "/" : "");

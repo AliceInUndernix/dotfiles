@@ -706,13 +706,16 @@ static void clean_leftovers(void)
     wipe_tree(path);
     if (d)
         closedir(d);
+    sprintf(path, "%.3000s/errors", ram_base_dir);
+    unlink(path);
     split(vault_file, dir, base);
     n = strlen(base);
     d = opendir(dir);
     while (d && (e = readdir(d)) != 0) {
         if (e->d_name[0] == '.' && !strncmp(e->d_name + 1, base, n) &&
-            e->d_name[n + 1] == '.' && strlen(e->d_name + n + 2) >= 12 &&
-            strcmp(e->d_name + n + 1, ".old"))
+            e->d_name[n + 1] == '.' && strspn(e->d_name + n + 2, "0123456789abcdef") == 12 &&
+            (e->d_name[n + 14] == 0 ||
+            !strcmp(e->d_name + n + 14, ".old")))
         {
             sprintf(path, "%.3000s/%.255s", dir, e->d_name);
             unlink(path);
@@ -734,7 +737,7 @@ static int ask_key(const char *question, const char *keys)
     write_all(fd, question, strlen(question));
     n = read_line(fd, buf, sizeof buf);
     close(fd);
-    if (n < 1 || !strchr(keys, buf[0]))
+    if (n != 1 || !strchr(keys, buf[0]))
         return 'q';
     return buf[0];
 }
