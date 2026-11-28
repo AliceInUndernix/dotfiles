@@ -576,6 +576,7 @@ void store_object(const char *path, const char *sha, int move)
 {
     char tail[32];
     char *dst, *dir, *tmp;
+    int moved;
 
     dst = obj_path(sha);
     if (is_file(dst)) {
@@ -589,15 +590,20 @@ void store_object(const char *path, const char *sha, int move)
     free(dir);
     sprintf(tail, ".%ld.tmp", (long)getpid());
     tmp = str2(dst, tail);
-    if (move) {
-        if (rename(path, tmp) != 0) {
-            copy_file(path, tmp);
-            unlink(path);
+    moved = 0;
+    if (move)
+        moved = rename(path, tmp) == 0;
+    if (!moved) {
+        if (!copy_file(path, tmp)) {
+            free(tmp);
+            free(dst);
+            return;
         }
-    } else {
-        copy_file(path, tmp);
+        if (move)
+            unlink(path);
     }
-    rename(tmp, dst);
+    if (rename(tmp, dst) != 0)
+        unlink(tmp);
     free(tmp);
     free(dst);
 }

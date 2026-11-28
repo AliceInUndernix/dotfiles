@@ -273,12 +273,12 @@ static int dedupe(const char *d, struct table *index, struct table *cache,
             key = str2("sha:", sha);
             k = tab_get(index, key);
             kp = k ? abs_out(k) : 0;
-            if (k && strcmp(k, r) && is_file(kp) && !is_link(kp) &&
-                !strcmp(hash_of(cache, kp), sha))
+            if (k && sha[0] && strcmp(k, r) && is_file(kp) &&
+                !is_link(kp) && !strcmp(hash_of(cache, kp), sha))
             {
                 tab_set(index, dkey, k);
                 sl_add(&gone, files.v[i]);
-            } else {
+            } else if (sha[0]) {
                 tab_set(index, key, r);
                 tab_del(index, dkey);
             }
@@ -603,13 +603,22 @@ static char *big_get_new(struct big *g, const char *url)
                 "");
             {
                 char *src, *dir;
+                int cok;
 
                 src = abs_out(r);
                 dir = xstrndup(dest, strrchr(dest, '/') - dest);
                 mkdirs(dir);
-                copy_file(src, dest);
+                cok = copy_file(src, dest);
                 free(dir);
                 free(src);
+                if (!cok) {
+                    say("  ! copying failed, downloading it again: ", url,
+                        "");
+                    free(dest);
+                    free(p);
+                    free(r);
+                    continue;
+                }
             }
             g->dups++;
             big_register(g, &keys, p);

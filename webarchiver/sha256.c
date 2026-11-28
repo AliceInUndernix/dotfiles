@@ -172,6 +172,8 @@ int sha_file(const char *path, char *hex)
     while ((n = read(fd, tmp, sizeof(tmp))) > 0)
         sha_update(&c, tmp, n);
     close(fd);
+    if (n < 0)
+        return 0;
     sha_final(&c, digest);
     sha_hex(digest, hex);
     return 1;

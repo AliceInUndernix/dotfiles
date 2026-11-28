@@ -766,8 +766,13 @@ int copy_file(const char *src, const char *dst)
     ok = 1;
     while (ok && (n = read(in, tmp, sizeof(tmp))) > 0)
         ok = write_all(out, tmp, n);
+    if (n < 0)
+        ok = 0;
     close(in);
-    close(out);
+    if (close(out) != 0)
+        ok = 0;
+    if (!ok)
+        unlink(dst);
     return ok;
 }
 
