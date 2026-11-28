@@ -1,3 +1,5 @@
+#include <stdio.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include "kspkan.h"
@@ -124,6 +126,12 @@ int registry_load(struct ctx *c)
     c->reg.cap = 0;
     p = state_path(c, "installed");
     text = read_file(p, &len, 1L << 26);
+    if (text == NULL && access(p, F_OK) == 0) {
+        /* there, but not readable: never go on and write it empty */
+        fprintf(stderr, "kspkan: cannot read the record of installed "
+            "modules, %s (too big, or no permission)\n", p);
+        exit(1);
+    }
     free(p);
     if (text == NULL) {
         return 0;

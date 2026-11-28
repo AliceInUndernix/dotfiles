@@ -105,6 +105,7 @@ static int read_key(void)
 {
     unsigned char ch, s[4];
     long r;
+    int first;
 
     if (pending_key >= 0) {
         r = pending_key;
@@ -152,17 +153,44 @@ static int read_key(void)
         return KEY_END;
     }
     if (s[0] >= '1' && s[0] <= '8') {
-        r = (long)read(0, &ch, 1);
-        if (s[0] == '5') {
-            return KEY_PGUP;
+        /* ESC [ N ~, or ESC [ 1 ; 2 C (modified): read to the final byte */
+        first = s[0];
+        ch = 0;
+        while (byte_ready()) {
+            r = (long)read(0, &ch, 1);
+            if (r <= 0 || (ch >= 0x40 && ch <= 0x7e)) {
+                break;
+            }
+            ch = 0;
         }
-        if (s[0] == '6') {
-            return KEY_PGDN;
+        if (ch == '~') {
+            if (first == '5') {
+                return KEY_PGUP;
+            }
+            if (first == '6') {
+                return KEY_PGDN;
+            }
+            if (first == '1' || first == '7') {
+                return KEY_HOME;
+            }
+            if (first == '4' || first == '8') {
+                return KEY_END;
+            }
+            return 0;
         }
-        if (s[0] == '1' || s[0] == '7') {
+        if (ch == 'A') {
+            return KEY_UP;
+        }
+        if (ch == 'B') {
+            return KEY_DOWN;
+        }
+        if (ch == 'H') {
             return KEY_HOME;
         }
-        return KEY_END;
+        if (ch == 'F') {
+            return KEY_END;
+        }
+        return 0;
     }
     return 0;
 }
