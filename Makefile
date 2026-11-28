@@ -39,6 +39,7 @@ uninstall:
 test: kspkan
 	sh tests/instances.sh
 	sh tests/evil.sh
+	sh tests/upgrade.sh
 	sh tests/modlist.sh
 	sh tests/test.sh
 

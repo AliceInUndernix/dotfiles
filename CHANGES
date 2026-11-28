@@ -1,3 +1,13 @@
+next
+    - an upgrade is written over the old files and takes away only what
+      the new version no longer has: a failed upgrade keeps the mod
+    - remove and upgrade copy a .cfg file they take away to
+      <state>/removed/<id>/ first (settings you may have edited)
+    - modlist delete refuses a CKAN or JSON file given by path
+    - modified arrow keys no longer clear the marks; an installed
+      record that can't be read stops the run instead of being
+      written empty; a few reads past the end of a buffer fixed
+
 0.6.0  2026-11-25
     - fixed: carrying out marks in the full screen mode cleared them
       all first, so a clash or a missing dependency lost every mark.
