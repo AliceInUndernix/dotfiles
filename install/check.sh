@@ -66,25 +66,29 @@ ck_built() {
 	fi
 }
 
+ck_g() {
+	git -c safe.directory="$ck_dir" -C "$ck_dir" "$@"
+}
+
 # ck_git <dir> <name>: uncommitted changes, newer commits upstream
 ck_git() {
-	g="git -c safe.directory=$1 -C $1"
-	if ! $g rev-parse >/dev/null 2>&1; then
+	ck_dir=$1
+	if ! ck_g rev-parse >/dev/null 2>&1; then
 		ck_bad "$2 is not a git checkout ($1)"
 		return
 	fi
-	if $g status --porcelain 2>/dev/null | grep -q .; then
+	if ck_g status --porcelain 2>/dev/null | grep -q .; then
 		ck_info "$2 has changes not committed"
 	fi
-	if ! $g fetch -q 2>/dev/null; then
+	if ! ck_g fetch -q 2>/dev/null; then
 		ck_info "$2: could not ask upstream for newer commits (network?)"
 		return
 	fi
-	n=$($g rev-list --count 'HEAD..@{upstream}' 2>/dev/null || echo 0)
+	n=$(ck_g rev-list --count 'HEAD..@{upstream}' 2>/dev/null || echo 0)
 	if [ "$n" -gt 0 ]; then
 		ck_bad "$2 is $n commits behind: git -C $1 pull"
 	else
-		ck_ok "$2 is up to date ($($g log -1 --format=%h))"
+		ck_ok "$2 is up to date ($(ck_g log -1 --format=%h))"
 	fi
 }
 

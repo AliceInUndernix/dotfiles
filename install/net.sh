@@ -33,7 +33,7 @@ install_net() {
 	install -d -m 755 "$N" "$N/bin" "$N/init.d" /usr/local/bin
 	# /etc/vpn: vpn's settings and state, kept in $N/etc
 	if [ -d /etc/vpn ] && [ ! -L /etc/vpn ]; then
-		rm -rf "$N/etc"
+		[ ! -e "$N/etc" ] || mv "$N/etc" "$N/etc.old.${STAMP:-$$}"
 		mv /etc/vpn "$N/etc"
 		say "move    /etc/vpn -> $N/etc"
 	fi
@@ -126,7 +126,7 @@ install_net() {
 	# (Gentoo's), or Gentoo's defaults
 	keep=$(grep -E '^[[:space:]]*(User|DataDirectory)[[:space:]]' \
 		/etc/tor/torrc 2>/dev/null) || :
-	if [ -z "$keep" ] && [ ! -f /etc/tor/torrc ]; then
+	if [ -z "$keep" ]; then
 		keep=$(printf 'User tor\nDataDirectory /var/lib/tor/data')
 	fi
 	{
