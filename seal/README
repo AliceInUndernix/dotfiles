@@ -107,7 +107,7 @@ does it for every unsealed directory at once. (If something named
 baba is already there, unseal says so and makes no link; -L makes
 none.)
 
-Each link is written down in ~/.system/state/seal/links before it is
+Each link is written down in ~/.system/seal/links before it is
 made. After a crash or a reboot RAM is empty and the links point
 nowhere: seal -c takes them away, and so does every login (~/.profile
 runs seal -c -q). So someone who takes the disk finds no plain files,

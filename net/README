@@ -118,7 +118,7 @@ another:
 
     9200-9299  proxychains PROGRAM: each program gets one for itself,
                the first time it runs, and keeps it (the list is
-               ~/.system/state/proxychains/ports; delete a line to
+               ~/.system/proxychains/ports; delete a line to
                free a port). What the program starts uses its port too.
     9150       IceCat      } set the browser's SOCKS5 proxy to
     9151       Chromium    } 127.0.0.1 and its port, with DNS

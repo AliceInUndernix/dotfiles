@@ -115,7 +115,7 @@ o.clipboard = "unnamedplus"    -- yank/paste uses the system clipboard
                                -- installs it)
 
 -- Persistent history. Neovim keeps these in its own state directory
--- (~/.system/state/nvim/) so your project directories stay clean.
+-- (~/.system/nvim/) so your project directories stay clean.
 local state = vim.fn.stdpath("state")
 o.undofile = true              -- undo survives closing the file
 o.undodir = state .. "/undo//" -- ...stored here, one file per edited file
@@ -245,7 +245,11 @@ end
 -- reported and left out.
 -- Everything that must work without plugins sits ABOVE this section,
 -- because the file stops at the `return` below if one is missing.
-local pack_dir = vim.fn.stdpath("data") .. "/site/pack/plugins/opt/"
+-- ~/.system/nvim: beside ~/.system/config (not stdpath("state"), which
+-- diary points at RAM for its editor).
+local sys_nvim = vim.fn.fnamemodify(vim.fn.stdpath("config"), ":h:h") .. "/nvim"
+vim.opt.packpath:prepend(sys_nvim .. "/site")
+local pack_dir = sys_nvim .. "/site/pack/plugins/opt/"
 local function plugin(repo)
   local name = repo:match("[^/]+$")
   local path = pack_dir .. name

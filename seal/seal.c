@@ -351,7 +351,7 @@ static int write_from(const char *base, const char *name,
 
 /* unseal leaves a link next to the sealed file, pointing to the
  * directory in RAM. Every link is written down first, in
- * ~/.system/state/seal/links (one "LINK<tab>TARGET" per line), so that
+ * ~/.system/seal/links (one "LINK<tab>TARGET" per line), so that
  * after a crash, when RAM is empty, seal -c still knows which links to
  * take away. A link goes when its directory is sealed again. */
 

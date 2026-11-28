@@ -7,7 +7,7 @@
 # Each test gives up after 10 seconds, so it can't hang itself.
 
 out=$HOME/termcheck.txt
-state=${XDG_STATE_HOME:-$HOME/.system/state}
+state=${XDG_STATE_HOME:-$HOME/.system}
 
 # termcheck bytes: st says "erresc: unknown sequence ESC 0x20" only in
 # windows whose ksh reads .kshrc. This opens a window for each part of
@@ -209,7 +209,7 @@ t() {
     rm -f /tmp/termcheck.$$
     echo
     echo "== 3. each part of .kshrc on its own"
-    t 10 'mkdir -p "$HOME/.system/state/ksh"'
+    t 10 'mkdir -p "$HOME/.system/ksh"'
     t 10 'id -u'
     t 10 'cat /run/vpn/state'
     t 10 'ls -l /run/vpn/state'

@@ -45,7 +45,7 @@ char user_dict[1024];          /* where -a writes ("user" setting) */
 
 static int tape_fd = -1, sugg_fd = -1;
 
-/* $XDG_STATE_HOME/steno/NAME, or ~/.local/state/steno/NAME; the
+/* $XDG_STATE_HOME/steno/NAME, or ~/.system/steno/NAME; the
  * directories are made (0700) when missing */
 const char *feed_path(const char *name)
 {
@@ -63,7 +63,7 @@ const char *feed_path(const char *name)
     if (x && x[0] == '/')
         scopy(p, x, 1000);
     else
-        scopy(p, config_path("~/.local/state"), 1000);
+        scopy(p, config_path("~/.system"), 1000);
     scat(p, "/steno", sizeof(p));
     for (s = p + 1; *s; s++) {
         if (*s == '/') {

@@ -118,7 +118,7 @@ ck_part() {
 		else
 			ck_bad "nvim is not installed: su -c '$DOTFILES/install.sh --deps'"
 		fi
-		pack=$DATA/nvim/site/pack/plugins/opt
+		pack=$SYSTEM/nvim/site/pack/plugins/opt
 		for t in "$DOTFILES"/archive/nvim-plugins/*.tar.gz; do
 			n=$(basename "$t" .tar.gz)
 			if [ -d "$pack/$n" ]; then ck_ok "plugin $n"

@@ -6,7 +6,7 @@
  *   clean -u [-nqv] FILE...     put the newest backup back
  *
  * The file is replaced by its clean version; the original is kept in
- * ~/.system/state/clean (list: that directory's file "list"). */
+ * ~/.system/clean (list: that directory's file "list"). */
 #define _XOPEN_SOURCE 500
 #include <errno.h>
 #include <fcntl.h>
@@ -432,7 +432,7 @@ static void set_backup_dir(void)
     }
     s = getenv("HOME");
     join(backup_dir, sizeof backup_dir, s ? s : "/tmp",
-        "/.system/state/clean");
+        "/.system/clean");
 }
 
 /* tidy_path: drop "//", "/./" and "dir/.." in an absolute path, so
@@ -1199,7 +1199,7 @@ static void help(FILE *f)
         "back\n"
         "Takes the metadata out of each file. In place, the original "
         "goes to\n"
-        "~/.system/state/clean first.\n");
+        "~/.system/clean first.\n");
     fprintf(f,
         "Pictures: JPEG, PNG, GIF, WebP, HEIF/AVIF, TIFF, camera raw, "
         "SVG, BMP.\n"

@@ -18,7 +18,7 @@ mention `nvim-config/nvim` now mean this `nvim/` directory.
 2. Back up any old config: `mv ~/.system/config/nvim ~/.system/config/nvim.bak`
 3. Link this directory: `ln -s ~/dotfiles/nvim ~/.system/config/nvim`
 4. Unpack the 5 plugins from the repo's `archive/nvim-plugins/` into
-   `~/.local/share/nvim/site/pack/plugins/opt/` (one directory each).
+   `~/.system/nvim/site/pack/plugins/opt/` (one directory each).
    Neovim never downloads them itself: a missing one is reported and
    left out.
 
@@ -78,7 +78,7 @@ nothing is needed in the terminal or here. By hand: `Ctrl-k - M` types
 
 To update one, put a newer tarball in `archive/nvim-plugins/` (see
 `archive/README.md`), delete its directory in
-`~/.local/share/nvim/site/pack/plugins/opt/` and run
+`~/.system/nvim/site/pack/plugins/opt/` and run
 `./install.sh nvim`. Syntax colours come from Vim's
 built-in syntax files (no Tree-sitter plugin).
 
@@ -106,7 +106,7 @@ moves between Neovim and the browser. Neovim needs xclip for that;
 
 ## What Neovim remembers between sessions
 
-Everything is kept in `~/.system/state/nvim/`, out of your project directories:
+Everything is kept in `~/.system/nvim/`, out of your project directories:
 
 - `undo/`: full undo history per file, so `u` works even after a restart.
 - `view/`: your folds and cursor position per file.

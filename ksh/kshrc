@@ -10,8 +10,8 @@ set -o noclobber          # > will not overwrite a file; >| does
 # terminal can be found with the arrows in the others. ksh has no
 # "unlimited", so a million commands stands in for it (ksh93 itself
 # uses only the newest 16384 of them).
-# It is in ~/.system/state/ksh (install.sh moves an old ~/.ksh_history).
-HISTFILE=${XDG_STATE_HOME:-$HOME/.system/state}/ksh/history
+# It is in ~/.system/ksh (install.sh moves an old ~/.ksh_history).
+HISTFILE=${XDG_STATE_HOME:-$HOME/.system}/ksh/history
 [ -d "${HISTFILE%/*}" ] || mkdir -p "${HISTFILE%/*}"
 HISTSIZE=1000000
 # Up/Down search history for commands that start with what you typed

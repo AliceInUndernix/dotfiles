@@ -7,7 +7,7 @@
  */
 static char *font = "Liberation Mono:pixelsize=18:antialias=true:autohint=true";
 /* font2 patch: fonts tried first for glyphs the main font lacks (icons,
- * powerline arrows, symbols); install.sh puts this one in ~/.local/share/fonts */
+ * powerline arrows, symbols); install.sh puts this one in ~/.system/fonts */
 static char *font2[] = {
 	"Symbols Nerd Font Mono:pixelsize=18:antialias=true:autohint=true",
 };

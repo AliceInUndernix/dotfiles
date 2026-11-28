@@ -15,7 +15,7 @@ Pictures, documents, video and audio carry more than you see: the camera
 and its serial number, where a photo was taken, who wrote a document
 and with which program, dates, earlier versions, comments. clean takes
 it out, in place: the file is replaced by its clean version, and the
-original is kept in ~/.system/state/clean first.
+original is kept in ~/.system/clean first.
 
 It says what it took out:
 
@@ -250,12 +250,12 @@ What it leaves
 The backups
 -----------
 
-Each original goes to ~/.system/state/clean (only yours, mode 700),
+Each original goes to ~/.system/clean (only yours, mode 700),
 named by the time (UTC); the file "list" there says which file each
 one was. The backups still hold all the metadata: delete them when you
 no longer need an undo:
 
-    rm -r ~/.system/state/clean
+    rm -r ~/.system/clean
 
 Or make none: clean -b. A picture or document is then still replaced
 in one step (a new file, renamed over the old one), so a crash leaves

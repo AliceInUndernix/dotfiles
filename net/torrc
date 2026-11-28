@@ -20,7 +20,7 @@ SocksPort 127.0.0.1:9152
 SocksPort 127.0.0.1:9153
 # programs run with "proxychains PROGRAM": each program gets one of
 # these for itself (net/proxychains, the list in
-# ~/.system/state/proxychains/ports)
+# ~/.system/proxychains/ports)
 SocksPort 127.0.0.1:9200
 SocksPort 127.0.0.1:9201
 SocksPort 127.0.0.1:9202

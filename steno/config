@@ -8,12 +8,12 @@ port auto
 # Dotterel's dictionaries in steno's plain format: the dictionaries/
 # of steno's clone of the dotterel repo (./install.sh steno updates it
 # and links them here).
-dictionaries ~/.local/share/steno/dictionaries
+dictionaries ~/.system/steno/dictionaries
 
 # The first dictionary wins, as at the top of Plover's list. user is
 # where steno -a and -A add strokes; it is made empty the first time.
 # Point it at a file in the dotterel repo to add to the theory instead.
-user ~/.local/share/steno/user.dict
+user ~/.system/steno/user.dict
 dict dotterel-base.dict off
 dict dotterel-old-base.dict off
 dict dotterel-proper-nouns.dict off
@@ -37,7 +37,7 @@ dict dotterel-generated.dict off
 
 # uk_to_us.txt, Dotterel's UK/US list (default: ../data next to the
 # dictionaries)
-#data ~/.local/share/steno/data
+#data ~/.system/steno/data
 
 undo 100
 start_capitalized no

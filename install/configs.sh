@@ -10,7 +10,7 @@ install_nvim() {
 	link "$DOTFILES/nvim" "$CONFIG/nvim"
 	# Unpack archived plugins that are not there yet, so the first start
 	# works offline. init.lua only downloads plugins that are missing.
-	pack=$DATA/nvim/site/pack/plugins/opt
+	pack=$SYSTEM/nvim/site/pack/plugins/opt
 	# A plugin the config no longer uses (plover-vim-tutor: Plover is
 	# gone)
 	for name in plover-vim-tutor; do
@@ -234,14 +234,14 @@ install_diary() {
 
 # steno: our own steno engine, in C (see steno/README), built like the
 # suckless tools. Its dictionaries are Dotterel's, from the dotterel repo,
-# cloned into ~/.local/share/steno/dotterel and updated every run:
-#   ~/.local/share/steno/dictionaries  -> dotterel/dictionaries
-#   ~/.local/share/steno/data          -> dotterel/data
-#   ~/.local/share/steno/user.dict     the strokes you add (steno -a)
+# cloned into ~/.system/steno/dotterel and updated every run:
+#   ~/.system/steno/dictionaries  -> dotterel/dictionaries
+#   ~/.system/steno/data          -> dotterel/data
+#   ~/.system/steno/user.dict     the strokes you add (steno -a)
 #   dotterel/dictionaries/dotterel-*.dict  the words you add (steno -W)
 # Reading the keyboard needs your user in the serial port's group; a
 # root run adds you.
-STENO_DIR=$DATA/steno
+STENO_DIR=$SYSTEM/steno
 DOTTEREL_REPO=${DOTTEREL_REPO:-https://github.com/AliceInUndernix/dotterel}
 
 # Bring the Dotterel clone to exactly the repo's version, plus the
@@ -249,7 +249,7 @@ DOTTEREL_REPO=${DOTTEREL_REPO:-https://github.com/AliceInUndernix/dotterel}
 # are committed in the clone ("Words added with steno -W") and put on
 # top of the new version. If they don't go on top cleanly, the repo's
 # version wins whole and your changes are kept in
-# ~/.local/share/steno/kept-TIME.patch. Never a half-done merge.
+# ~/.system/steno/kept-TIME.patch. Never a half-done merge.
 update_dotterel() {
 	d=$1
 	kept=$STENO_DIR/kept-$(date -u +%Y%m%d-%H%M%S).patch
@@ -406,7 +406,7 @@ install_webarchiver() {
 # root. It comes from archive/fonts/ (no download); to get a newer
 # release, put it there and delete the directory below, then run
 # ./install.sh st again.
-NERD_FONTS=$DATA/fonts/NerdFontsSymbolsOnly
+NERD_FONTS=$SYSTEM/fonts/NerdFontsSymbolsOnly
 
 install_st() {
 	build_suckless st
@@ -428,6 +428,13 @@ install_st() {
 			warn "no Symbols Nerd Font in $DOTFILES/archive/fonts; st still works without it"
 		fi
 	fi
+	# fontconfig looks in ~/.local/share/fonts by default, not here
+	userdir "$CONFIG/fontconfig"
+	printf '%s\n' '<?xml version="1.0"?>' \
+		'<!DOCTYPE fontconfig SYSTEM "fonts.dtd">' '<fontconfig>' \
+		"	<dir>${NERD_FONTS%/*}</dir>" '</fontconfig>' \
+		> "$CONFIG/fontconfig/fonts.conf"
+	own "$CONFIG/fontconfig/fonts.conf"
 	if command -v fc-cache >/dev/null 2>&1; then
 		fc-cache "${NERD_FONTS%/*}"
 	else
@@ -450,19 +457,19 @@ install_slock() {
 
 # Moonlander: the layout and its build script live in their own repo,
 # AliceInUndernix/moonlander (see its README.md), so anyone can build
-# it. It is cloned into ~/.local/share/moonlander and its build.sh runs
+# it. It is cloned into ~/.system/moonlander and its build.sh runs
 # as the user, with everything in the user's home:
-#   ~/.local/share/qmk/zsa_qmk   ZSA's QMK source (firmware25), patched
-#   ~/.local/share/qmk/venv      Python environment for the qmk command
-#   ~/.local/share/qmk/arm-gnu-toolchain   ARM compiler
+#   ~/.system/qmk/zsa_qmk   ZSA's QMK source (firmware25), patched
+#   ~/.system/qmk/venv      Python environment for the qmk command
+#   ~/.system/qmk/arm-gnu-toolchain   ARM compiler
 #   ~/.system/bin/qmk, arm-none-eabi-*     links to the two above
-#   ~/.local/share/moonlander/zsa_moonlander_revb_canary.bin   firmware
+#   ~/.system/moonlander/zsa_moonlander_revb_canary.bin   firmware
 # Each run updates the clone, builds and flashes (as root: the user
 # builds, root flashes, since root reaches the keyboard without udev
 # rules). MOONLANDER_FLASH=no ./install.sh moonlander only builds.
 ML_REPO=${ML_REPO:-https://github.com/AliceInUndernix/moonlander}
-ML_SRC=$DATA/moonlander
-QMK_DIR=$DATA/qmk
+ML_SRC=$SYSTEM/moonlander
+QMK_DIR=$SYSTEM/qmk
 ML_BIN=zsa_moonlander_revb_canary.bin
 
 install_moonlander() {

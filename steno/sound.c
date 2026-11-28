@@ -4,7 +4,7 @@
  * Every fetch goes through Tor (proxychains, from net/), never
  * straight: each one tells Cambridge a word you are adding. Without
  * proxychains nothing is fetched. The page's two sound links and each
- * mp3 are kept for good in $XDG_DATA_HOME/steno/sound, so a word is
+ * mp3 are kept for good in ~/.system/steno/sound, so a word is
  * fetched once; delete the directory to forget them.
  *
  * Fetching and playing are apart: steno -W starts a word's fetch (both
@@ -60,20 +60,16 @@ static int xdg_dir(const char *var, const char *home_dir, char *out)
     return 1;
 }
 
-/* $XDG_DATA_HOME/steno/sound (or ~/.local/share/...), made; 0 when
- * not. Kept for good: data, not a cache anything clears. Where the
- * first version kept them ($XDG_CACHE_HOME/steno/sound), they are
- * moved from. */
+/* $XDG_STATE_HOME/steno/sound (or ~/.system/steno/sound), made; 0
+ * when not. Kept for good: not a cache anything clears. */
 static int sound_dir(void)
 {
     static int made;
-    char old[1024];
     char *s;
-    struct stat sb;
 
     if (made)
         return 1;
-    if (!xdg_dir("XDG_DATA_HOME", "/.local/share", dir))
+    if (!xdg_dir("XDG_STATE_HOME", "/.system", dir))
         return 0;
     for (s = dir + 1; *s; s++) {
         if (*s == '/') {
@@ -81,11 +77,6 @@ static int sound_dir(void)
             mkdir(dir, 0700);
             *s = '/';
         }
-    }
-    if (stat(dir, &sb) < 0 && xdg_dir("XDG_CACHE_HOME", "/.cache", old) &&
-        stat(old, &sb) == 0)
-    {
-        rename(old, dir);
     }
     mkdir(dir, 0700);
     made = access(dir, W_OK) == 0;

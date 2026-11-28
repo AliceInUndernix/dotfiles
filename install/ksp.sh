@@ -3,7 +3,7 @@
 # (./install.sh ksp; not in "all"). Sourced by install.sh, not run.
 #
 #   kspkan     our own KSP mod manager, from the kspkan repo, cloned into
-#              ~/.local/share/kspkan-src, built and installed into
+#              ~/.system/kspkan, built and installed into
 #              ~/.system/bin like the suckless tools. Until that repo has
 #              its code (a Makefile), this says so and goes on.
 #   Principia  the n-body gravity mod, from a zip you download yourself
@@ -15,7 +15,7 @@
 #              layout (principia_root), and goes into GameData/Principia
 #              of KSP_DIR, or of the first KSP found
 #              in the usual places (Steam, GOG, ~/KSP). An old one is
-#              moved to ~/.system/state/backup/ksp/Principia.<date>.
+#              moved to ~/.system/backup/ksp/Principia.<date>.
 #
 # Principia's Linux build needs libc++, libc++abi and libunwind (LLVM's,
 # 20 or newer). They are system packages: a root run emerges them
@@ -24,7 +24,7 @@
 KSPKAN_REPO=${KSPKAN_REPO:-https://github.com/AliceInUndernix/kspkan}
 # the source; kspkan keeps its own data (game folders, mod lists,
 # downloads) in $DATA/kspkan, so the two stay apart
-KSPKAN_SRC=$DATA/kspkan-src
+KSPKAN_SRC=$SYSTEM/kspkan
 KSP_LIBS="llvm-runtimes/libcxx llvm-runtimes/libcxxabi llvm-runtimes/libunwind"
 # a zip that unpacks to more than this is refused (zip bombs)
 PRINCIPIA_MAX_BYTES=2000000000

@@ -3,7 +3,7 @@
 # port of its own (9200-9299 in /etc/tor/torrc), so no two programs
 # share Tor circuits or exits, and a site can't link one program to
 # another by the exit it comes from. The same program always gets the
-# same port; the list is ~/.system/state/proxychains/ports ("name
+# same port; the list is ~/.system/proxychains/ports ("name
 # port", one per line: delete a line to free its port).
 # Installed as /usr/local/bin/proxychains by install.sh net; the real
 # proxychains-ng is /usr/bin/proxychains4 or /usr/bin/proxychains, run
@@ -31,7 +31,7 @@ done
 [ -n "$real" ] ||
     die "proxychains4 is missing (emerge -qv net-misc/proxychains)"
 
-state=${XDG_STATE_HOME:-$HOME/.system/state}/proxychains
+state=${XDG_STATE_HOME:-$HOME/.system}/proxychains
 list=$state/ports
 
 quiet=

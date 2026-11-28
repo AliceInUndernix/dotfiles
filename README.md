@@ -135,20 +135,29 @@ that home belongs to that user.
 
 ### Where everything goes: `~/.system`
 
-`~/.system` holds settings, our commands, the Claude desktop app
-(a program, part `claude`) and a little state, nothing else; no program is pointed at it for its data or caches:
+`~/.system` holds the settings, our commands, and one directory for each
+program that needs files of its own. There is no `share`, `state` or
+`cache` directory, and no program is pointed at `~/.system` for its
+data or caches (Steam, browsers and the rest keep theirs in
+`~/.local/share` and `~/.cache`).
 
 | Where | What |
 |---|---|
 | `~/.system/config` | the settings, each a link into `~/dotfiles` |
 | `~/.system/bin` | the commands (first in PATH) |
+| `~/.system/nvim` | Neovim: plugins, undo, marks (`config/nvim` is only its settings) |
+| `~/.system/steno` | steno: dotterel source, dictionaries, your added words, sounds |
+| `~/.system/ksh` | shell history |
+| `~/.system/fonts` | the Symbols Nerd Font for st |
+| `~/.system/moonlander`, `~/.system/qmk` | the layout source, QMK and the ARM compiler |
+| `~/.system/kspkan` | the kspkan source (its data is in `~/.local/share/kspkan`) |
+| `~/.system/install`, `~/.system/backup` | install logs, and the files the installer replaced |
 | `~/.system/claude-desktop` | the unpacked Claude desktop app (only with part `claude`) |
-| `~/.system/state` | install logs, backups, shell history, Neovim undo (like config) |
 
-What the installer puts in place as data goes to `~/.local/share`
-(Neovim plugins, fonts, the steno dictionaries and your added words,
-kspkan, QMK, moonlander); `install.sh` moves older copies there from
-`~/.system/share`.
+(XDG_STATE_HOME is `~/.system`, so a program that keeps state there
+gets a directory of its own, like `clean`, `seal`, `proxychains`.)
+`install.sh` moves what older versions put in `~/.system/share` and
+`~/.system/state` into these directories.
 
 In `~` there are only two links: `~/.profile` and `~/.config` (which
 points to `~/.system/config`, for programs that ignore
@@ -168,22 +177,22 @@ directories is a real file of ours.
 What it does, and what it never does:
 
 - Anything already where a config goes is moved to
-  `~/.system/state/backup/<path>.<date>` (root's to
+  `~/.system/backup/<path>.<date>` (root's to
   `/root/.system/state/backup`), never deleted. Running it again is
   safe.
 - The suckless tools and our programs are built, installed into
   `~/.system/bin` and cleaned up again.
-- Each run is logged to `~/.system/state/install/latest.log`, which
+- Each run is logged to `~/.system/install/latest.log`, which
   stays on your computer.
 - New files are yours alone (umask 077), and each run takes group and
   other permissions off everything in your home.
 - Browsers get only the program; their settings and profiles are not
   touched.
-- `moonlander` clones the layout into `~/.local/share/moonlander` and
+- `moonlander` clones the layout into `~/.system/moonlander` and
   runs its `build.sh` (QMK and the ARM compiler go into
-  `~/.local/share/qmk`), then builds and flashes the firmware.
+  `~/.system/qmk`), then builds and flashes the firmware.
 - `steno` builds steno and clones dotterel into
-  `~/.local/share/steno/dotterel`; each run updates it and keeps the
+  `~/.system/steno/dotterel`; each run updates it and keeps the
   words you added.
 
 ### Uninstall
@@ -202,8 +211,8 @@ won't switch off), the original `torrc` and `proxychains.conf` come
 back, and Principia leaves the game (an older copy you had comes
 back). Your own data stays: the diary, kspkan's mod lists, the steno
 words you added. A full uninstall moves `~/.system/config` back to `~/.config`, so
-your other programs keep their settings. `state` (the backups) is left
-where it is.
+your other programs keep their settings. The other directories in
+`~/.system` (backups, steno, ...) are left where they are.
 `--deps` also takes the packages out of Gentoo's world file (`emerge
 -qv --depclean` is then up to you); the browsers go only when named.
 
@@ -213,7 +222,7 @@ Only when named. It installs:
 
 - **kspkan**, our KSP mod manager, cloned from
   [kspkan](https://github.com/AliceInUndernix/kspkan) into
-  `~/.local/share/kspkan-src` and built into `~/.system/bin`
+  `~/.system/kspkan` and built into `~/.system/bin`
   (kspkan's own data, the game folders and mod lists, is in
   `~/.local/share/kspkan`).
 - **[Principia](https://github.com/mockingbirdnest/Principia)**, the
@@ -229,7 +238,7 @@ Only when named. It installs:
   `principia.so`), leaves out anything else in the zip, and puts it
   into `GameData/Principia` of `KSP_DIR`, or of the first KSP found in
   Steam's, GOG's or `~/KSP`. An old one is moved
-  out of the game to `~/.system/state/backup/ksp/`. Start a new save
+  out of the game to `~/.system/backup/ksp/`. Start a new save
   after installing it.
 
 Principia on Linux needs LLVM's libc++, libc++abi and libunwind (20

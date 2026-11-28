@@ -6,7 +6,7 @@
 # Sourced by install.sh, not run.
 #
 # What was in the way when a config was linked (kept in
-# ~/.system/state/backup) is
+# ~/.system/backup) is
 # put back. Your own data stays: steno's user.dict and the words you
 # added, the diary (~/.diary), Principia's old copies; --purge also
 # deletes what install.sh made that holds your data (steno's
@@ -95,7 +95,7 @@ uninstall_nvim() {
 	[ ! -L "$SYSBIN/vim" ] || case $(readlink "$SYSBIN/vim") in
 		*/nvim) rm "$SYSBIN/vim"; say "remove  $SYSBIN/vim" ;;
 	esac
-	pack=$DATA/nvim/site/pack/plugins/opt
+	pack=$SYSTEM/nvim/site/pack/plugins/opt
 	for t in "$DOTFILES"/archive/nvim-plugins/*.tar.gz; do
 		[ -e "$t" ] || continue
 		remove "$pack/$(basename "$t" .tar.gz)"

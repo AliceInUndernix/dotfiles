@@ -54,13 +54,13 @@
 # INSTALL_USER=name ./install.sh as root). Everything put in that
 # user's home belongs to them, not to root. Configs are symlinked, so
 # editing them in ~/.system/config edits this repo. Anything already in
-# the way is moved to ~/.system/state/backup, never deleted. Every
+# the way is moved to ~/.system/backup, never deleted. Every
 # program it builds goes into the user's ~/.system (commands in
 # ~/.system/bin, first in PATH, settings in ~/.system/config); in ~
 # only the links ~/.profile and ~/.config. Outside the home there are
 # only links, into /root/.system (see net/README).
 # POSIX sh, so it runs on any distro. Each run is logged, with facts
-# about the system, to ~/.system/state/install/latest.log.
+# about the system, to ~/.system/install/latest.log.
 
 DOTFILES=$(cd "$(dirname "$0")" && pwd)
 for arg in "$@"; do case $arg in -h|--help)
@@ -216,7 +216,7 @@ if [ -z "$parts" ] || [ "$want_all" = yes ]; then
 fi
 
 # The log: the script runs itself again with everything it prints also
-# copied (by tee) to ~/.system/state/install/<date>.log, after a header of
+# copied (by tee) to ~/.system/install/<date>.log, after a header of
 # facts about the system, and ends it with the exit status. latest.log is
 # the newest. A run started by this one (steno as the user) adds to it.
 if [ -z "${INSTALL_LOG:-}" ]; then
@@ -316,33 +316,13 @@ if [ -d "$old_bin" ] && [ ! -L "$old_bin" ]; then
 	rmdir "$old_bin" 2>/dev/null && say "remove  $old_bin (now empty)" || :
 fi
 
-# What older versions put into ~/.system/share (our own data only:
-# Neovim plugins, fonts, steno, kspkan, moonlander, QMK, sioyek) goes
-# back to ~/.local/share, where programs keep data. Anything else found
-# in ~/.system/share or ~/.system/cache is not ours: it is only listed.
-old_share=$SYSTEM/share
-for n in nvim fonts steno kspkan kspkan-src moonlander qmk sioyek; do
-	[ -e "$old_share/$n" ] && [ ! -L "$old_share/$n" ] || continue
-	if [ -e "$DATA/$n" ] || [ -L "$DATA/$n" ]; then
-		warn "kept    $old_share/$n ($DATA/$n already exists)"
-		continue
-	fi
-	userdir "$DATA"
-	mv "$old_share/$n" "$DATA/$n" && say "move    $old_share/$n -> $DATA/$n"
-done
-rmdir "$old_share" 2>/dev/null || :
-for d in "$old_share" "$SYSTEM/cache"; do
-	[ -d "$d" ] || continue
-	warn "not ours, please look: $d ($(ls -A "$d" | tr '\n' ' '))"
-done
-# Only settings are moved: ~/.config goes into ~/.system/config. Data,
-# state and caches (~/.local/share with Steam and games, ~/.cache and
-# the like) are never moved or copied; programs that follow the XDG
-# directories ~/.profile sets write there themselves, and the ones that
-# don't stay where they are. Nothing is deleted; a name already taken in
-# the new place is kept where it was and reported.
+# Only settings are moved from the home directory: ~/.config goes into
+# ~/.system/config. Data and caches (~/.local/share with Steam and
+# games, ~/.cache and the like) are never moved or copied. Nothing is
+# deleted; a name already taken in the new place is kept where it was
+# and reported.
 # moveinto <old dir> <new dir>: move every entry, merging directories. Each
-# file is listed in ~/.system/state/install/<date>-moved.txt; the screen
+# file is listed in ~/.system/install/<date>-moved.txt; the screen
 # and the log only get how many (a browser's cache is thousands of files).
 MOVED=$LOG_DIR/$STAMP-moved.txt
 moveinto_r() {
@@ -376,6 +356,42 @@ moveinto() {
 	[ "$k" -eq 0 ] ||
 		warn "kept    $k entries in $1: already in $2 (list: $MOVED)"
 }
+# ~/.system has no share, state or cache directory: what older versions
+# put in them goes to a directory of its program (~/.system/nvim, steno,
+# ...), or back to ~/.local/share for what is not ours. Nothing is
+# deleted; a name already taken is kept where it was and reported.
+move_one() {
+	[ -e "$1" ] || [ -L "$1" ] || return 0
+	if [ -e "$2" ] || [ -L "$2" ]; then
+		if [ -d "$1" ] && [ ! -L "$1" ] && [ -d "$2" ] && [ ! -L "$2" ]; then
+			( moveinto_r "$1" "$2" )
+			return 0
+		fi
+		warn "kept    $1 ($2 already exists)"
+		return 0
+	fi
+	userdir "$(dirname "$2")"
+	mv "$1" "$2" && say "move    $1 -> $2"
+}
+old_share=$SYSTEM/share
+old_state=$SYSTEM/state
+move_one "$old_share/nvim/site" "$SYSTEM/nvim/site"
+rmdir "$old_share/nvim" 2>/dev/null || :
+for n in fonts steno moonlander qmk; do
+	move_one "$old_share/$n" "$SYSTEM/$n"
+done
+move_one "$old_share/kspkan-src" "$SYSTEM/kspkan"
+move_one "$old_share/kspkan" "$DATA/kspkan"
+move_one "$old_share/sioyek" "$DATA/sioyek"
+for n in backup ksp ksh proxychains steno nvim clean seal; do
+	move_one "$old_state/$n" "$SYSTEM/$n"
+done
+move_one "$old_state/Xauthority" "$SYSTEM/x/Xauthority"
+for d in "$old_share" "$old_state" "$SYSTEM/cache"; do
+	rmdir "$d" 2>/dev/null || :
+	[ -d "$d" ] || continue
+	warn "left in $d (not moved; look, and delete it if it is junk) ($(ls -A "$d" | tr '\n' ' '))"
+done
 # Settings too: ~/.config moves into ~/.system/config, and ~/.config
 # becomes a link to it, for programs that don't ask XDG_CONFIG_HOME.
 if [ ! -L "$HOME/.config" ]; then
@@ -392,7 +408,7 @@ elif [ "$(readlink "$HOME/.config")" != .system/config ]; then
 	warn "$HOME/.config is a link to $(readlink "$HOME/.config"), not .system/config"
 fi
 # Backups made in ~ by older versions (~/.profile.bak.<date> ...) go
-# to ~/.system/state/backup, with the others.
+# to ~/.system/backup, with the others.
 for f in "$HOME"/.*.bak.[0-9]*-[0-9]*; do
 	[ -e "$f" ] || [ -L "$f" ] || continue
 	b=${f##*/}

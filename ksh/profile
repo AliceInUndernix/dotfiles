@@ -14,18 +14,20 @@ export LESS=-iFR
 # Not for root: files it makes in /etc or /usr must stay readable.
 [ "$(id -u)" -eq 0 ] || umask 077
 
-# Where programs keep their files: ~/.system holds settings only (and
-# a little state). Data (~/.local/share) and caches (~/.cache) stay where
-# programs put them; nothing redirects them into ~/.system. In ~ there
-# are only two links, this file (~/.profile) and ~/.config (->
-# .system/config, for programs that don't ask XDG_CONFIG_HOME):
-#   config  settings: ksh, X, Neovim, tmux, ... (links into the dotfiles)
-#   state   history and logs: ksh history, Neovim undo, the X login cookie
+# Where programs keep their files: ~/.system holds settings, and for a
+# program that needs one, a directory of its own (~/.system/nvim: undo,
+# plugins; ~/.system/steno: dictionaries, source; ~/.system/ksh: history).
+# There is no share, state or cache directory: data (~/.local/share) and
+# caches (~/.cache) stay where programs put them, nothing redirects them
+# into ~/.system. In ~ there are only two links, this file (~/.profile)
+# and ~/.config (-> .system/config, for programs that don't ask
+# XDG_CONFIG_HOME). XDG_STATE_HOME is ~/.system, so a program's state
+# is in ~/.system/<its name>.
 export XDG_CONFIG_HOME=$HOME/.system/config
-export XDG_STATE_HOME=$HOME/.system/state
+export XDG_STATE_HOME=$HOME/.system
 unset XDG_DATA_HOME XDG_CACHE_HOME
-mkdir -p "$XDG_STATE_HOME"
-export XAUTHORITY=$XDG_STATE_HOME/Xauthority  # startx's cookie, not ~/.Xauthority
+mkdir -p "$XDG_STATE_HOME/x"
+export XAUTHORITY=$XDG_STATE_HOME/x/Xauthority  # startx's cookie, not ~/.Xauthority
 export ENV=$XDG_CONFIG_HOME/ksh/kshrc   # ksh reads it in every interactive shell
 export XINITRC=$XDG_CONFIG_HOME/x/xinitrc   # what startx runs, not ~/.xinitrc
 

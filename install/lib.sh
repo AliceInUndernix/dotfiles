@@ -39,7 +39,7 @@ SYSBIN=$SYSTEM/bin            # ...their commands here (first in PATH)
 # place, and no XDG_DATA_HOME or XDG_CACHE_HOME redirects programs.
 CONFIG=$SYSTEM/config
 DATA=$HOME/.local/share
-STATE=$SYSTEM/state
+STATE=$SYSTEM
 export XDG_CONFIG_HOME="$CONFIG" XDG_STATE_HOME="$STATE"
 unset XDG_DATA_HOME XDG_CACHE_HOME
 PREFIX=${PREFIX:-$SYSTEM}     # our programs: PREFIX/bin = ~/.system/bin
@@ -69,7 +69,7 @@ userdir() {
 }
 
 # Backups of what was in the way of a link: in your home they go to
-# ~/.system/state/backup/<path>.<date>, so nothing but links is left
+# ~/.system/backup/<path>.<date>, so nothing but links is left
 # outside ~/.system; elsewhere <path>.bak.<date>, next to it.
 BACKUP=$STATE/backup
 bak_path() {
