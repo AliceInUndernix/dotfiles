@@ -422,7 +422,7 @@ static int is_picture_name(struct entry *e)
     return 0;
 }
 
-static void edit(struct entry *e, struct buf *now, const struct xrule *r)
+static int edit(struct entry *e, struct buf *now, const struct xrule *r)
 {
     struct buf out;
     int rc;
@@ -432,6 +432,7 @@ static void edit(struct entry *e, struct buf *now, const struct xrule *r)
     if (rc == 0)
         set_part(e, out.p, out.n, now);
     buf_free(&out);
+    return rc;
 }
 
 /* part: what to do with one entry; -1 when it can't be read */
@@ -442,6 +443,7 @@ static int part(struct entry *e, int type)
     int rc, info;
 
     r = 0;
+    rc = 0;
     info = 0;
     if (type == z_ooxml) {
         if (name_is(e, "docProps/core.xml") ||
@@ -502,11 +504,11 @@ static int part(struct entry *e, int type)
     else if (info == 4)
         odf_printer(e, &now);
     else if (r)
-        edit(e, &now, r);
+        rc = edit(e, &now, r);
     else
         picture(e, &now);
     buf_free(&now);
-    return 0;
+    return rc < 0 ? -1 : 0;
 }
 
 /* epub_date: EPUB 3 needs its change date; it becomes 2000-01-01 */

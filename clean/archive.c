@@ -334,7 +334,11 @@ static int gz_walk(const unsigned char *in, long n, struct buf *out,
         if (mode == 0 && is_tar(data.p, data.n)) {
             tar_changes = 0;
             rc = tar_walk(-1, data.p, data.n, &end);
-            changed = rc == 0 && tar_changes > 0;
+            if (rc < 0) {
+                buf_free(&data);
+                return -1;
+            }
+            changed = tar_changes > 0;
         }
         memcpy(h, "\037\213\010\000\000\000\000\000\000\377", 10);
         if (mode == 1)

@@ -89,7 +89,7 @@ long bmp_end(const unsigned char *p, long n)
     if (n < 54 || p[0] != 'B' || p[1] != 'M')
         return -1;
     hs = get32le(p + 14);
-    if (hs < 40)
+    if (hs < 40 || 14 + hs > n)
         return -1;
     w = get32le(p + 18);
     h = get32le(p + 22);
