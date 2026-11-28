@@ -3,7 +3,7 @@
 # (./install.sh ksp; not in "all"). Sourced by install.sh, not run.
 #
 #   kspkan     our own KSP mod manager, from the kspkan repo, cloned into
-#              ~/.system/share/kspkan-src, built and installed into
+#              ~/.local/share/kspkan-src, built and installed into
 #              ~/.system/bin like the suckless tools. Until that repo has
 #              its code (a Makefile), this says so and goes on.
 #   Principia  the n-body gravity mod, from a zip you download yourself

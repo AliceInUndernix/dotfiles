@@ -20,7 +20,7 @@ applied in this order; st.c/x.c already have them, so don't apply again):
   anysize            st-anysize-20220718-baa9357.diff
 Their config.def.h hunks are not applied (config.def.h stays upstream);
 the settings are in config.h. font2 uses Symbols Nerd Font Mono, which
-install.sh downloads into ~/.system/share/fonts.
+install.sh downloads into ~/.local/share/fonts.
 
 Speed-ups by hand in st.c (2026-11-17; same output, checked pixel for
 pixel against the build before them):

@@ -48,8 +48,9 @@ are tests.
 
 Configs are symlinks into this repo, so editing `~/.system/config/nvim`
 edits `~/dotfiles/nvim`. Programs go into `~/.system` (commands in
-`~/.system/bin`, first in PATH; data and state in
-`~/.system/share` and `state`; caches are not ours and stay in `~/.cache`; see "Where everything goes" below).
+`~/.system/bin`, first in PATH). Data stays in `~/.local/share` and
+caches in `~/.cache`, where programs put them (see "Where everything
+goes" below).
 
 ## Install
 
@@ -133,20 +134,25 @@ that home belongs to that user.
 
 ### Where everything goes: `~/.system`
 
-Everything lives in one directory, so it is easy to find:
+`~/.system` holds settings, our commands and a little state, nothing
+else; no program is pointed at it for its data or caches:
 
 | Where | What |
 |---|---|
 | `~/.system/config` | the settings, each a link into `~/dotfiles` |
 | `~/.system/bin` | the commands (first in PATH) |
-| `~/.system/share` | data: the steno dictionaries, kspkan, QMK |
-| `~/.system/state` | install logs, backups, the steno words you added |
+| `~/.system/state` | install logs, backups, shell history, Neovim undo (like config) |
+
+What the installer puts in place as data goes to `~/.local/share`
+(Neovim plugins, fonts, the steno dictionaries and your added words,
+kspkan, QMK, moonlander); `install.sh` moves older copies there from
+`~/.system/share`.
 
 In `~` there are only two links: `~/.profile` and `~/.config` (which
 points to `~/.system/config`, for programs that ignore
 `XDG_CONFIG_HOME`). Only settings are ever moved into `~/.system` (from `~/.config`);
-install.sh never moves or copies data or caches such as
-`~/.local/share` (Steam, games) or `~/.cache`.
+install.sh never moves or copies data or caches such as Steam or
+`~/.cache`.
 
 Root works the same way: root's real files are in `/root/.system`
 (`config/ksh`, and `net/` with the VPN's scripts, services and
@@ -171,11 +177,11 @@ What it does, and what it never does:
   other permissions off everything in your home.
 - Browsers get only the program; their settings and profiles are not
   touched.
-- `moonlander` clones the layout into `~/.system/share/moonlander` and
+- `moonlander` clones the layout into `~/.local/share/moonlander` and
   runs its `build.sh` (QMK and the ARM compiler go into
-  `~/.system/share/qmk`), then builds and flashes the firmware.
+  `~/.local/share/qmk`), then builds and flashes the firmware.
 - `steno` builds steno and clones dotterel into
-  `~/.system/share/steno/dotterel`; each run updates it and keeps the
+  `~/.local/share/steno/dotterel`; each run updates it and keeps the
   words you added.
 
 ### Uninstall
@@ -194,9 +200,8 @@ won't switch off), the original `torrc` and `proxychains.conf` come
 back, and Principia leaves the game (an older copy you had comes
 back). Your own data stays: the diary, kspkan's mod lists, the steno
 words you added. A full uninstall moves `~/.system/config` back to `~/.config`, so
-your other programs keep their settings. `share` and `state`
-(data your programs wrote there, and the backups) are left where they
-are.
+your other programs keep their settings. `state` (the backups) is left
+where it is.
 `--deps` also takes the packages out of Gentoo's world file (`emerge
 --depclean` is then up to you); the browsers go only when named.
 
@@ -206,9 +211,9 @@ Only when named. It installs:
 
 - **kspkan**, our KSP mod manager, cloned from
   [kspkan](https://github.com/AliceInUndernix/kspkan) into
-  `~/.system/share/kspkan-src` and built into `~/.system/bin`
+  `~/.local/share/kspkan-src` and built into `~/.system/bin`
   (kspkan's own data, the game folders and mod lists, is in
-  `~/.system/share/kspkan`).
+  `~/.local/share/kspkan`).
 - **[Principia](https://github.com/mockingbirdnest/Principia)**, the
   n-body gravity mod. Its binary is linked from its README and is not
   on GitHub, so download the zip yourself, anywhere in `~`. The

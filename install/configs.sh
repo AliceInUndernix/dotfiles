@@ -234,10 +234,10 @@ install_diary() {
 
 # steno: our own steno engine, in C (see steno/README), built like the
 # suckless tools. Its dictionaries are Dotterel's, from the dotterel repo,
-# cloned into ~/.system/share/steno/dotterel and updated every run:
-#   ~/.system/share/steno/dictionaries  -> dotterel/dictionaries
-#   ~/.system/share/steno/data          -> dotterel/data
-#   ~/.system/share/steno/user.dict     the strokes you add (steno -a)
+# cloned into ~/.local/share/steno/dotterel and updated every run:
+#   ~/.local/share/steno/dictionaries  -> dotterel/dictionaries
+#   ~/.local/share/steno/data          -> dotterel/data
+#   ~/.local/share/steno/user.dict     the strokes you add (steno -a)
 #   dotterel/dictionaries/dotterel-*.dict  the words you add (steno -W)
 # Reading the keyboard needs your user in the serial port's group; a
 # root run adds you.
@@ -249,7 +249,7 @@ DOTTEREL_REPO=${DOTTEREL_REPO:-https://github.com/AliceInUndernix/dotterel}
 # are committed in the clone ("Words added with steno -W") and put on
 # top of the new version. If they don't go on top cleanly, the repo's
 # version wins whole and your changes are kept in
-# ~/.system/share/steno/kept-TIME.patch. Never a half-done merge.
+# ~/.local/share/steno/kept-TIME.patch. Never a half-done merge.
 update_dotterel() {
 	d=$1
 	kept=$STENO_DIR/kept-$(date -u +%Y%m%d-%H%M%S).patch
@@ -450,13 +450,13 @@ install_slock() {
 
 # Moonlander: the layout and its build script live in their own repo,
 # AliceInUndernix/moonlander (see its README.md), so anyone can build
-# it. It is cloned into ~/.system/share/moonlander and its build.sh runs
+# it. It is cloned into ~/.local/share/moonlander and its build.sh runs
 # as the user, with everything in the user's home:
-#   ~/.system/share/qmk/zsa_qmk   ZSA's QMK source (firmware25), patched
-#   ~/.system/share/qmk/venv      Python environment for the qmk command
-#   ~/.system/share/qmk/arm-gnu-toolchain   ARM compiler
+#   ~/.local/share/qmk/zsa_qmk   ZSA's QMK source (firmware25), patched
+#   ~/.local/share/qmk/venv      Python environment for the qmk command
+#   ~/.local/share/qmk/arm-gnu-toolchain   ARM compiler
 #   ~/.system/bin/qmk, arm-none-eabi-*     links to the two above
-#   ~/.system/share/moonlander/zsa_moonlander_revb_canary.bin   firmware
+#   ~/.local/share/moonlander/zsa_moonlander_revb_canary.bin   firmware
 # Each run updates the clone, builds and flashes (as root: the user
 # builds, root flashes, since root reaches the keyboard without udev
 # rules). MOONLANDER_FLASH=no ./install.sh moonlander only builds.

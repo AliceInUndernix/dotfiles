@@ -1,7 +1,7 @@
 Sioyek (development branch) on Gentoo: read the default keys.config and
 prefs.config from /etc/sioyek, where GURU's ebuild installs them (it
 looked in /usr/share/sioyek, found none, and so had no key bindings),
-and keep its data in $XDG_DATA_HOME/sioyek (~/.system/share/sioyek)
+and keep its data in $XDG_DATA_HOME/sioyek (~/.local/share/sioyek)
 instead of always ~/.local/share/sioyek. install.sh --deps copies this
 to /etc/portage/patches/app-text/sioyek/, so emerge applies it.
 

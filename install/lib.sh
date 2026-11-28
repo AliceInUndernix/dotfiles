@@ -32,16 +32,16 @@ HOME=${pw##*:}
 SYSTEM=$HOME/.system          # all installed programs live here
 SYSBIN=$SYSTEM/bin            # ...their commands here (first in PATH)
 # Where programs keep their files, the same as ~/.profile sets for the
-# login: everything in ~/.system, settings in ~/.system/config (~/.config
-# is a link to it, for programs that don't ask), not in ~/.local or
-# ~/.cache. Exported, so what this script runs (nvim, fc-cache) uses
-# them too, and root's own settings don't leak in.
+# login: only settings and a little state live in ~/.system (settings in
+# ~/.system/config, ~/.config is a link to it, for programs that don't
+# ask). Data stays in ~/.local/share and caches in ~/.cache, where
+# programs put them: DATA below is only what this installer puts in
+# place, and no XDG_DATA_HOME or XDG_CACHE_HOME redirects programs.
 CONFIG=$SYSTEM/config
-DATA=$SYSTEM/share
+DATA=$HOME/.local/share
 STATE=$SYSTEM/state
-export XDG_CONFIG_HOME="$CONFIG" XDG_DATA_HOME="$DATA" \
-	XDG_STATE_HOME="$STATE"
-unset XDG_CACHE_HOME   # caches stay where programs put them (~/.cache)
+export XDG_CONFIG_HOME="$CONFIG" XDG_STATE_HOME="$STATE"
+unset XDG_DATA_HOME XDG_CACHE_HOME
 PREFIX=${PREFIX:-$SYSTEM}     # our programs: PREFIX/bin = ~/.system/bin
 export HOME
 LOG_DIR=$STATE/install

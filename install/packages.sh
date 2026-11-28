@@ -130,7 +130,7 @@ gentoo_sioyek() {
 	enable_overlay guru
 	# Our patches for it (sioyek/gentoo-patches): its default key
 	# bindings from /etc/sioyek, where the ebuild puts them (without it
-	# no key works, only the mouse), and its data in ~/.system/share.
+	# no key works, only the mouse), and its data in ~/.local/share.
 	pd=/etc/portage/patches/app-text/sioyek
 	mkdir -p "$pd"
 	for f in "$DOTFILES"/sioyek/gentoo-patches/*.patch; do

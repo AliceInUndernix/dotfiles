@@ -63,7 +63,7 @@ parsed for them. A dict line names them without an extension:
 
 The dictionaries are Dotterel's, in steno's own plain format:
 ./install.sh steno clones the dotterel repo into
-~/.system/share/steno/dotterel and updates it every run. steno needs
+~/.local/share/steno/dotterel and updates it every run. steno needs
 nothing of Plover's: to use Plover dictionaries of your own, turn them
 into steno's format once with steno -C.
 
@@ -85,7 +85,7 @@ in a small screen, in the look of btop:
     | since start 212 strokes, 10 dictionaries, 130831 entries      |
     +-+q quit+-+o output+-+t tape+-+s suggestions+-+b both+-+A add..+
     +-+dictionaries+------------------------------------------------+
-    |> 1 on  ~/.system/share/steno/user.dict    3  dict, -a adds .. |
+    |> 1 on  ~/.local/share/steno/user.dict    3  dict, -a adds .. |
     |  2 on  dotterel-base.dict            113816  dict             |
     |  3 off dotterel-affixes.dict            602  dict             |
     |  ...                                                          |
@@ -217,7 +217,7 @@ skipped. When an outline is on two lines, the last one wins.
 
 Dotterel's are in its repo, in steno/ (made from the JSON by its
 steno/make.sh, which runs steno -C). ./install.sh steno links them
-into ~/.system/share/steno, or, when they are older than the JSON,
+into ~/.local/share/steno, or, when they are older than the JSON,
 makes them there and says so.
 
 PAPER TAPE AND SUGGESTIONS
@@ -434,7 +434,7 @@ The sounds are fetched through Tor only (proxychains, ./install.sh
 net), since each fetch tells Cambridge a word you are adding; without
 proxychains nothing is fetched. The page's sound links and each mp3
 are kept for good in $XDG_DATA_HOME/steno/sound
-(~/.system/share/steno/sound), so a word goes out once; delete the
+(~/.local/share/steno/sound), so a word goes out once; delete the
 directory to forget them.
 
 It saves into dotterel-NAME.dict in the dictionaries directory, NAME

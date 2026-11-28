@@ -18,7 +18,7 @@ mention `nvim-config/nvim` now mean this `nvim/` directory.
 2. Back up any old config: `mv ~/.system/config/nvim ~/.system/config/nvim.bak`
 3. Link this directory: `ln -s ~/dotfiles/nvim ~/.system/config/nvim`
 4. Unpack the 5 plugins from the repo's `archive/nvim-plugins/` into
-   `~/.system/share/nvim/site/pack/plugins/opt/` (one directory each).
+   `~/.local/share/nvim/site/pack/plugins/opt/` (one directory each).
    Neovim never downloads them itself: a missing one is reported and
    left out.
 
@@ -78,7 +78,7 @@ nothing is needed in the terminal or here. By hand: `Ctrl-k - M` types
 
 To update one, put a newer tarball in `archive/nvim-plugins/` (see
 `archive/README.md`), delete its directory in
-`~/.system/share/nvim/site/pack/plugins/opt/` and run
+`~/.local/share/nvim/site/pack/plugins/opt/` and run
 `./install.sh nvim`. Syntax colours come from Vim's
 built-in syntax files (no Tree-sitter plugin).
 

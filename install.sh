@@ -312,6 +312,25 @@ if [ -d "$old_bin" ] && [ ! -L "$old_bin" ]; then
 	rmdir "$old_bin" 2>/dev/null && say "remove  $old_bin (now empty)" || :
 fi
 
+# What older versions put into ~/.system/share (our own data only:
+# Neovim plugins, fonts, steno, kspkan, moonlander, QMK, sioyek) goes
+# back to ~/.local/share, where programs keep data. Anything else found
+# in ~/.system/share or ~/.system/cache is not ours: it is only listed.
+old_share=$SYSTEM/share
+for n in nvim fonts steno kspkan kspkan-src moonlander qmk sioyek; do
+	[ -e "$old_share/$n" ] && [ ! -L "$old_share/$n" ] || continue
+	if [ -e "$DATA/$n" ] || [ -L "$DATA/$n" ]; then
+		warn "kept    $old_share/$n ($DATA/$n already exists)"
+		continue
+	fi
+	userdir "$DATA"
+	mv "$old_share/$n" "$DATA/$n" && say "move    $old_share/$n -> $DATA/$n"
+done
+rmdir "$old_share" 2>/dev/null || :
+for d in "$old_share" "$SYSTEM/cache"; do
+	[ -d "$d" ] || continue
+	warn "not ours, please look: $d ($(ls -A "$d" | tr '\n' ' '))"
+done
 # Only settings are moved: ~/.config goes into ~/.system/config. Data,
 # state and caches (~/.local/share with Steam and games, ~/.cache and
 # the like) are never moved or copied; programs that follow the XDG
