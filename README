@@ -236,7 +236,9 @@ BUILDING
 
 Needs a C compiler, make, and libc.  The tests also need sh, python3
 (only to build hostile test archives and serve them locally) and a
-network connection, and use only scratch folders.
+network connection, and use only scratch folders.  tests/test.sh needs
+the module list first: run  kspkan update  once (it stops and says so
+when there is none).
 
 
 OTHER REPOSITORIES

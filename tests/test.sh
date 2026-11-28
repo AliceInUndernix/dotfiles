@@ -6,6 +6,11 @@
 
 KK=${KK:-$(cd "$(dirname "$0")/.." && pwd)/kspkan}
 LIST=${1:-${XDG_DATA_HOME:-$HOME/.local/share}/kspkan}
+if [ ! -e "$LIST/index" ]; then
+    echo "no module list in $LIST: run  kspkan update  first" >&2
+    echo "(or give the folder that holds it as the first argument)" >&2
+    exit 2
+fi
 W=${TMPDIR:-/tmp}/kspkan-test.$$
 G=$W/game
 S=$W/state
