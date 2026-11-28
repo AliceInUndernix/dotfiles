@@ -15,17 +15,17 @@ export LESS=-iFR
 [ "$(id -u)" -eq 0 ] || umask 077
 
 # Where programs keep their files: all in ~/.system, so nothing goes
-# to ~/.local or ~/.cache, and in ~ there are only two links, this file
+# to ~/.cache, and in ~ there are only two links, this file
 # (~/.profile) and ~/.config (-> .system/config, for programs that
 # don't ask XDG_CONFIG_HOME):
 #   config  settings: ksh, X, Neovim, tmux, ... (links into the dotfiles)
 #   share   data: fonts, Neovim plugins, QMK
 #   state   history and logs: ksh history, Neovim undo, the X login cookie
-#   cache   things that can be thrown away
+#   (caches are not settings: they stay in ~/.cache, set by the programs)
 export XDG_CONFIG_HOME=$HOME/.system/config
 export XDG_DATA_HOME=$HOME/.system/share
 export XDG_STATE_HOME=$HOME/.system/state
-export XDG_CACHE_HOME=$HOME/.system/cache
+unset XDG_CACHE_HOME
 mkdir -p "$XDG_STATE_HOME"
 export XAUTHORITY=$XDG_STATE_HOME/Xauthority  # startx's cookie, not ~/.Xauthority
 export ENV=$XDG_CONFIG_HOME/ksh/kshrc   # ksh reads it in every interactive shell

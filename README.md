@@ -48,9 +48,8 @@ are tests.
 
 Configs are symlinks into this repo, so editing `~/.system/config/nvim`
 edits `~/dotfiles/nvim`. Programs go into `~/.system` (commands in
-`~/.system/bin`, first in PATH; data, state and caches in
-`~/.system/share`, `state` and `cache`, where programs write them
-by XDG_*_HOME; the installer never moves them; see "Where everything goes" below).
+`~/.system/bin`, first in PATH; data and state in
+`~/.system/share` and `state`; caches are not ours and stay in `~/.cache`; see "Where everything goes" below).
 
 ## Install
 
@@ -142,7 +141,6 @@ Everything lives in one directory, so it is easy to find:
 | `~/.system/bin` | the commands (first in PATH) |
 | `~/.system/share` | data: the steno dictionaries, kspkan, QMK |
 | `~/.system/state` | install logs, backups, the steno words you added |
-| `~/.system/cache` | caches |
 
 In `~` there are only two links: `~/.profile` and `~/.config` (which
 points to `~/.system/config`, for programs that ignore
@@ -196,7 +194,7 @@ won't switch off), the original `torrc` and `proxychains.conf` come
 back, and Principia leaves the game (an older copy you had comes
 back). Your own data stays: the diary, kspkan's mod lists, the steno
 words you added. A full uninstall moves `~/.system/config` back to `~/.config`, so
-your other programs keep their settings. `share`, `state` and `cache`
+your other programs keep their settings. `share` and `state`
 (data your programs wrote there, and the backups) are left where they
 are.
 `--deps` also takes the packages out of Gentoo's world file (`emerge

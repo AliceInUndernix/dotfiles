@@ -239,8 +239,8 @@ install_principia() {
 	case $size in ''|*[!0-9]*) die "can't read the size of $z" ;; esac
 	[ "$size" -le "$PRINCIPIA_MAX_BYTES" ] ||
 		die "$z unpacks to $size bytes (over $PRINCIPIA_MAX_BYTES); not installed"
-	tmp=$CACHE/principia.$STAMP
-	userdir "$tmp"
+	tmp=$(mktemp -d "${TMPDIR:-/tmp}/principia.XXXXXX") ||
+		die "no temporary directory"
 	# and while unpacking: no file bigger than that either
 	if ! ( ulimit -f $((PRINCIPIA_MAX_BYTES / 512)); unzip -q "$z" -d "$tmp" )
 	then

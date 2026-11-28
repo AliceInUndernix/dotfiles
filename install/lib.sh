@@ -39,9 +39,9 @@ SYSBIN=$SYSTEM/bin            # ...their commands here (first in PATH)
 CONFIG=$SYSTEM/config
 DATA=$SYSTEM/share
 STATE=$SYSTEM/state
-CACHE=$SYSTEM/cache
 export XDG_CONFIG_HOME="$CONFIG" XDG_DATA_HOME="$DATA" \
-	XDG_STATE_HOME="$STATE" XDG_CACHE_HOME="$CACHE"
+	XDG_STATE_HOME="$STATE"
+unset XDG_CACHE_HOME   # caches stay where programs put them (~/.cache)
 PREFIX=${PREFIX:-$SYSTEM}     # our programs: PREFIX/bin = ~/.system/bin
 export HOME
 LOG_DIR=$STATE/install
@@ -297,7 +297,7 @@ in_group() {
 # user's ~/.system. Call it in a subshell, so the rest keeps the user's.
 root_env() {
 	HOME=$(home_of root)
-	unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME
+	unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME
 }
 
 # enable_overlay <name>: add a Gentoo overlay with eselect repository.
