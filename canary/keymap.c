@@ -1108,7 +1108,11 @@ static void type_mark_space(uint16_t mark, bool capitalize_next) {
 static void type_pair(uint16_t open, uint16_t close) {
     lang_shift_tap_key(open);
     lang_shift_tap_key(close);
+    // held Shift or Alt must not turn the arrow into a selection
+    uint8_t mods = get_mods();
+    clear_mods();
     tap_code(KC_LEFT);
+    set_mods(mods);
 }
 
 // Type "..." and, if add_space is true, a space after it.
