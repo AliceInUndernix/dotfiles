@@ -640,7 +640,8 @@ static int ml_import(struct ctx *c, const char *file, const char *name)
 int cmd_modlist(struct ctx *c, char **args, int n)
 {
     const char *sub;
-    char *p;
+    char *p, *text;
+    long len, k;
     int rc, count;
 
     sub = n > 0 ? args[0] : "list";
@@ -679,6 +680,27 @@ int cmd_modlist(struct ctx *c, char **args, int n)
         return 0;
     }
     if (strcmp(sub, "delete") == 0 || strcmp(sub, "rm") == 0) {
+        if (strchr(args[1], '/') != NULL) {
+            /* a path: never a file CKAN (or anything else) wrote */
+            text = read_file(p, &len, 1L << 16);
+            if (text != NULL) {
+                k = 0;
+                while (text[k] == ' ' || text[k] == '\t' ||
+                    text[k] == '\n' || text[k] == '\r')
+                {
+                    k++;
+                }
+                if (text[k] == '{' || text[k] == '[') {
+                    fprintf(stderr, "kspkan: %s is not a kspkan modlist "
+                        "(a CKAN or JSON file?); not deleted. Use "
+                        "modlist import to keep it as a modlist.\n", p);
+                    free(text);
+                    free(p);
+                    return 1;
+                }
+                free(text);
+            }
+        }
         rc = unlink(p);
         if (rc < 0) {
             fprintf(stderr, "kspkan: no modlist %s\n", p);

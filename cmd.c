@@ -363,17 +363,15 @@ static int install_entries(struct ctx *c, struct entry **ents, int n,
         rc = install_plan(&a, entry_json(c, ents[i]), ents[i]->id, &p, err,
             sizeof(err));
         if (rc == 0) {
-            /* check before the old copy goes, so a refused upgrade
-               leaves the old version installed */
+            /* check first; an upgrade is written over the old files
+               and the old ones the new has not go afterwards, so a
+               failed upgrade leaves the module installed */
             rc = install_check(c, &p, ents[i]->id, err, sizeof(err));
             if (rc < 0) {
                 plan_free(&p);
             }
         }
         if (rc == 0) {
-            if (old != NULL) {
-                remove_module(c, ents[i]->id);
-            }
             rc = install_extract(c, &a, &p, ents[i]->id,
                 ents[i]->version, autoinst, err, sizeof(err));
             plan_free(&p);

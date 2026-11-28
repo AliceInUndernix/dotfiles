@@ -391,10 +391,55 @@ static void prune_dirs(struct ctx *c, const char *rel)
     free(p);
 }
 
+/* a module's settings (.cfg) may be edited by you: a copy of such a
+   file goes to <state>/removed/<id>/<path> before it is taken away */
+static void keep_cfg(struct ctx *c, const char *id, const char *rel,
+    const char *full)
+{
+    char *data, *dst, *dir, *slash, *rd;
+    long len;
+
+    len = (long)strlen(rel);
+    if (len < 5 || strcmp(rel + len - 4, ".cfg") != 0) {
+        return;
+    }
+    data = read_file(full, &len, 1L << 24);
+    if (data == NULL) {
+        return;
+    }
+    rd = (char *)xalloc((long)(strlen(c->state) + strlen(id) + strlen(rel)) +
+        20);
+    sprintf(rd, "%s/removed/%s", c->state, id);
+    dst = join_path(rd, rel);
+    free(rd);
+    dir = xstrdup(dst);
+    slash = strrchr(dir, '/');
+    if (slash != NULL) {
+        *slash = 0;
+        make_dirs(dir);
+    }
+    free(dir);
+    write_file(dst, data, len);
+    free(dst);
+    free(data);
+}
+
+static void drop_file(struct ctx *c, const char *id, const char *rel)
+{
+    char *full;
+
+    if (!path_is_safe(rel)) {
+        return;
+    }
+    full = join_path(c->game, rel);
+    keep_cfg(c, id, rel, full);
+    unlink(full);
+    free(full);
+}
+
 int remove_module(struct ctx *c, const char *id)
 {
     struct inst *m;
-    char *full;
     int i;
 
     m = registry_find(&c->reg, id);
@@ -402,12 +447,7 @@ int remove_module(struct ctx *c, const char *id)
         return -1;
     }
     for (i = 0; i < m->files.n; i++) {
-        if (!path_is_safe(m->files.v[i])) {
-            continue;
-        }
-        full = join_path(c->game, m->files.v[i]);
-        unlink(full);
-        free(full);
+        drop_file(c, id, m->files.v[i]);
     }
     for (i = 0; i < m->files.n; i++) {
         if (path_is_safe(m->files.v[i])) {
@@ -459,17 +499,33 @@ int install_extract(struct ctx *c, struct archive *a, struct plan *p,
     int errsz)
 {
     struct inst *m;
+    struct strs oldfiles;
     unsigned char *data;
-    char *full, *dir, *slash;
+    char *full, *dir, *slash, *oldver;
     long len;
-    int i, rc;
+    int i, k, rc, oldauto, upgrade;
 
     rc = install_check(c, p, id, err, errsz);
     if (rc < 0) {
         return -1;
     }
+    /* an upgrade writes the new files over the old ones and only then
+       takes away what the new version no longer has, so a failure
+       leaves the module installed (the old version, perhaps mixed) */
+    oldfiles.v = NULL;
+    oldfiles.n = 0;
+    oldfiles.cap = 0;
+    oldver = NULL;
+    oldauto = 0;
+    upgrade = 0;
     m = registry_find(&c->reg, id);
     if (m != NULL) {
+        upgrade = 1;
+        oldver = xstrdup(m->version);
+        oldauto = m->autoinst;
+        for (i = 0; i < m->files.n; i++) {
+            strs_add(&oldfiles, xstrdup(m->files.v[i]));
+        }
         registry_drop(&c->reg, id);
     }
     m = registry_add(&c->reg, id, version, autoinst);
@@ -504,9 +560,43 @@ int install_extract(struct ctx *c, struct archive *a, struct plan *p,
     }
     rc = 0;
 quit:
-    if (rc < 0) {
+    if (rc < 0 && !upgrade) {
         remove_module(c, id);
+    } else if (rc < 0) {
+        /* back to the old version's record, with every file known */
+        for (i = 0; i < oldfiles.n; i++) {
+            for (k = 0; k < m->files.n &&
+                strcmp(m->files.v[k], oldfiles.v[i]) != 0; k++)
+            {
+                continue;
+            }
+            if (k == m->files.n) {
+                strs_add(&m->files, xstrdup(oldfiles.v[i]));
+            }
+        }
+        free(m->version);
+        m->version = oldver;
+        oldver = NULL;
+        m->autoinst = oldauto;
+    } else if (upgrade) {
+        for (i = 0; i < oldfiles.n; i++) {
+            for (k = 0; k < m->files.n &&
+                strcmp(m->files.v[k], oldfiles.v[i]) != 0; k++)
+            {
+                continue;
+            }
+            if (k == m->files.n) {
+                drop_file(c, id, oldfiles.v[i]);
+            }
+        }
+        for (i = 0; i < oldfiles.n; i++) {
+            if (path_is_safe(oldfiles.v[i])) {
+                prune_dirs(c, oldfiles.v[i]);
+            }
+        }
     }
+    free(oldver);
+    strs_free(&oldfiles);
     return rc;
 }
 
