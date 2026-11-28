@@ -226,7 +226,9 @@ int clean_jpeg(const unsigned char *in, long n, struct buf *out)
             i += len;
             continue;
         }
-        if (m != 0xe0 && !orient_done) {
+        /* the rotation goes in before the first picture segment, so an
+           Exif that comes after an ICC profile is still seen */
+        if ((m < 0xe0 || m > 0xef) && !orient_done) {
             orient_done = 1;
             if (orient > 1 && orient <= 8) {
                 memcpy(block, "\377\341\000\042Exif\000\000", 10);

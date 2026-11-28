@@ -163,6 +163,30 @@ static void udta_words(int fd, long long off, long long end, char *d)
     }
 }
 
+/* udta_has: whether a user-data box holds a box of this name (chapters) */
+static int udta_has(int fd, long long off, long long end, const char *name)
+{
+    int rc;
+    unsigned char h[8];
+    long long size;
+    int n;
+
+    n = 0;
+    while (off + 8 <= end && n < 200) {
+        rc = at_read(fd, off, h, 8);
+        if (rc < 0)
+            return 0;
+        size = (long long)get32be(h) & 0xffffffffLL;
+        if (size < 8 || off + size > end)
+            return 0;
+        if (is_word(h + 4, name))
+            return 1;
+        off += size;
+        n++;
+    }
+    return 0;
+}
+
 /* mp4_free: a box becomes "free" with only zeros in it */
 static int mp4_free(int fd, long long off, long long hdr, long long size)
 {
@@ -171,6 +195,35 @@ static int mp4_free(int fd, long long off, long long hdr, long long size)
     if (rc < 0)
         return -1;
     return at_zero(fd, off + hdr, size - hdr);
+}
+
+/* mp4_free_except: every box between off and end becomes "free" but the
+   ones with this name */
+static int mp4_free_except(int fd, long long off, long long end,
+    const char *name)
+{
+    int rc;
+    unsigned char h[8];
+    long long size;
+    int n;
+
+    n = 0;
+    while (off + 8 <= end && n < 200) {
+        rc = at_read(fd, off, h, 8);
+        if (rc < 0)
+            return -1;
+        size = (long long)get32be(h) & 0xffffffffLL;
+        if (size < 8 || off + size > end)
+            return 0;
+        if (!is_word(h + 4, name)) {
+            rc = mp4_free(fd, off, 8, size);
+            if (rc < 0)
+                return -1;
+        }
+        off += size;
+        n++;
+    }
+    return 0;
 }
 
 /* mp4_program: the encoder's name in a video sample description */
@@ -296,7 +349,12 @@ static int mp4_walk(int fd, long long off, long long end, int depth)
             d[0] = 0;
             udta_words(fd, off + hdr, off + size, d);
             note2("user data", d);
-            r = mp4_free(fd, off, hdr, size);
+            if (udta_has(fd, off + hdr, off + size, "chpl")) {
+                /* chapters stay; the rest of the box goes */
+                r = mp4_free_except(fd, off + hdr, off + size, "chpl");
+            } else {
+                r = mp4_free(fd, off, hdr, size);
+            }
         } else if (is_word(t, "meta") && depth > 0) {
             d[0] = 0;
             if (has_text(fd, off + hdr, size - hdr, "location"))
