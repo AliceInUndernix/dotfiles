@@ -782,8 +782,11 @@ static int clean_in_memory(const char *path, const char *abs, int fd,
         save_notes();
         notes = 0;
         rc = run_in_memory(kind, &out, &again);
-        if (rc == 0 && !same_notes())
+        if (rc == 0 && (!same_notes() || out.n != in.n ||
+            memcmp(out.p, in.p, in.n) != 0))
+        {
             changed = 1;
+        }
         restore_notes();
         buf_free(&again);
     }
