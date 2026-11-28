@@ -520,6 +520,7 @@ start_ovpn() {
     rm -f "$RUN/up"
     OVPN_WHY=
     l0=$(wc -l 2>/dev/null < "$RUN/openvpn.log") || l0=0
+    ( umask 077; : >> "$RUN/openvpn.log" )
     openvpn --config "$1" --log-append "$RUN/openvpn.log" \
         </dev/null >/dev/null 2>&1 &
     OVPN_PID=$!
@@ -849,7 +850,7 @@ clock_tor() {
 # --- Tor -------------------------------------------------------------
 
 start_tor() {
-    : > "$RUN/tor.log"
+    ( umask 077; : > "$RUN/tor.log" )
     chown tor "$RUN/tor.log" 2>/dev/null
     if rc-service tor restart >/dev/null 2>&1; then
         S_TOR=running

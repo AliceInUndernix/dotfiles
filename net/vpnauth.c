@@ -196,6 +196,8 @@ static int args_ok(int argc, char **argv)
 {
     int i, known;
 
+    if (argc < 1)
+        return 0;
     if (argc == 1)
         return 1;               /* the menu */
     if (argc > ARGS_MAX + 1)
