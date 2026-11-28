@@ -27,7 +27,7 @@
 -- Pencil re-flowing single Enters.
 
 -- Keep the compiled form of every Lua file Neovim loads (this file, the
--- plugins) in ~/.system/cache/nvim/luac, so starting does not compile
+-- plugins) in ~/.cache/nvim/luac, so starting does not compile
 -- them again. A file that changed is compiled again by itself.
 vim.loader.enable()
 

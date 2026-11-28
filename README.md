@@ -135,13 +135,14 @@ that home belongs to that user.
 
 ### Where everything goes: `~/.system`
 
-`~/.system` holds settings, our commands and a little state, nothing
-else; no program is pointed at it for its data or caches:
+`~/.system` holds settings, our commands, the Claude desktop app
+(a program, part `claude`) and a little state, nothing else; no program is pointed at it for its data or caches:
 
 | Where | What |
 |---|---|
 | `~/.system/config` | the settings, each a link into `~/dotfiles` |
 | `~/.system/bin` | the commands (first in PATH) |
+| `~/.system/claude-desktop` | the unpacked Claude desktop app (only with part `claude`) |
 | `~/.system/state` | install logs, backups, shell history, Neovim undo (like config) |
 
 What the installer puts in place as data goes to `~/.local/share`
