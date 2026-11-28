@@ -63,6 +63,7 @@ run instead.
 git clone https://github.com/AliceInUndernix/dotfiles ~/dotfiles
 su -c '~user/dotfiles/install.sh --new-pc'   # root: a new computer, everything
 ~/dotfiles/install.sh                        # later: all parts needing no root
+su -c '~user/dotfiles/install.sh root'       # all with root: --deps, all, net, slock
 ~/dotfiles/install.sh pick                   # or choose from a menu
 ```
 
@@ -83,7 +84,9 @@ A part, a group or a number (`./install.sh --list` shows them) can be
 named anywhere a part can:
 
 ```sh
-./install.sh                 # every part that needs no root (= all)
+./install.sh                 # every part that needs no root (= all; as root
+                             # too: net and slock only in "root" or --new-pc)
+su -c './install.sh root'    # all with root: --deps, all, net and slock
 ./install.sh nvim dwm        # only these parts
 ./install.sh desktop media   # whole groups
 ./install.sh 4 12            # by number (0 is --deps)

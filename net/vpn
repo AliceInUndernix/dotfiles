@@ -478,12 +478,24 @@ provider_fetch() {
         return 1
     fi
     mkdir -p "$ETC"
-    for f in ca.crt client.crt gateways; do
-        chmod 644 "$t/$f"
-        mv -f "$t/$f" "$ETC/$f"
+    # copied next to the old ones first (/run is another filesystem, so
+    # a move would be a copy that could stop half way), then renamed
+    for f in ca.crt client.crt gateways client.key; do
+        m=644
+        [ "$f" != client.key ] || m=600
+        if ! (umask 077; cp "$t/$f" "$ETC/$f.new") ||
+            ! chmod "$m" "$ETC/$f.new"
+        then
+            warn "can't write $ETC/$f.new (disk full?); the old files stay"
+            rm -f "$ETC/ca.crt.new" "$ETC/client.crt.new" \
+                "$ETC/gateways.new" "$ETC/client.key.new"
+            rm -rf "$t"
+            return 1
+        fi
     done
-    chmod 600 "$t/client.key"
-    mv -f "$t/client.key" "$ETC/client.key"
+    for f in client.key client.crt ca.crt gateways; do
+        mv -f "$ETC/$f.new" "$ETC/$f"
+    done
     rm -rf "$t"
     S_CERT=$(cert_end)
     return 0
@@ -1378,6 +1390,15 @@ resolv_is_tor() {
         grep -q '^nameserver'
 }
 
+# keep_now FILE: a copy of the file as it is, in $bk (cmd_off), so that
+# putting the old one back never loses an edit
+keep_now() {
+    [ -f "$1" ] || return 0
+    mkdir -p "$bk${1%/*}" && cp -p "$1" "$bk$1" &&
+        say "  $1: kept as $bk$1"
+    return 0
+}
+
 cmd_off() {
     need_root off
     say "Turning everything of vpn off:"
@@ -1395,12 +1416,17 @@ cmd_off() {
     sysctl -qw net.ipv6.conf.all.disable_ipv6=0 >/dev/null 2>&1
     sysctl -qw net.ipv6.conf.default.disable_ipv6=0 >/dev/null 2>&1
     say "  IPv6: on again"
+    # what is there now is kept first (your edits since net went in),
+    # in $ETC/before-off.DATE/, as copies of the files
+    bk=$ETC/before-off.$(date +%Y%m%d-%H%M%S)
     for f in $SYS_FILES; do
         if [ -f "$ORIG$f" ]; then
             cmp -s "$ORIG$f" "$f" 2>/dev/null && continue
+            keep_now "$f"
             cp -p "$ORIG$f" "$f"
             say "  $f: back as it was"
         elif [ -e "$ORIG$f.absent" ] && [ -e "$f" ]; then
+            keep_now "$f"
             rm -f "$f"
             say "  $f: removed (it wasn't there before)"
         fi
@@ -1409,6 +1435,7 @@ cmd_off() {
     if [ ! -f "$ORIG/etc/dhcpcd.conf" ] &&
         grep -q '^# vpn (dotfiles' /etc/dhcpcd.conf 2>/dev/null
     then
+        keep_now /etc/dhcpcd.conf
         sed -i '/^# vpn (dotfiles/,/^anonymous$/d' /etc/dhcpcd.conf
         say "  /etc/dhcpcd.conf: vpn's lines taken out"
     fi

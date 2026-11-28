@@ -144,6 +144,14 @@ ksp_libs_missing() {
 kspkan_move_old() {
 	old=$DATA/kspkan
 	[ -d "$old/.git" ] || return 0
+	# nothing of yours goes with it: changes, or commits not pushed
+	if [ -n "$(git -C "$old" status --porcelain 2>/dev/null)" ] ||
+		[ -n "$(git -C "$old" log '@{upstream}..' --oneline 2>/dev/null)" ] ||
+		! git -C "$old" rev-parse '@{upstream}' >/dev/null 2>&1
+	then
+		warn "$old has changes or commits not pushed (or no upstream); left as it is"
+		return 0
+	fi
 	say "move    the kspkan source out of $old (its data stays)"
 	git -C "$old" ls-files | while read -r f; do
 		rm -f "$old/$f"
@@ -272,6 +280,11 @@ install_principia() {
 	fi
 	mv "$new" "$dst" || {
 		rm -rf "$tmp"
+		# put the old one back
+		if [ ! -e "$dst" ] && [ -e "$BACKUP/ksp/Principia.$STAMP" ]; then
+			mv "$BACKUP/ksp/Principia.$STAMP" "$dst" &&
+				say "restore $dst (from $BACKUP/ksp/Principia.$STAMP)"
+		fi
 		die "could not move Principia into $dst"
 	}
 	rm -rf "$tmp"

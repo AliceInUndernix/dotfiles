@@ -289,7 +289,7 @@ update_dotterel() {
 		say "reset   $d to the new Dotterel (its history was started again)"
 		[ ! -s "$kept" ] ||
 			warn "your words added before are in $kept (git -C $d apply --3way $kept)"
-		git -C "$d" clean -fdq -e dotterel-generated.dict -- dictionaries data
+		git -C "$d" clean -fdq -e 'dotterel-*.dict' -- dictionaries data
 		return 0
 	fi
 	if [ -n "$(git -C "$d" status --porcelain --untracked-files=no)" ]; then
@@ -302,7 +302,7 @@ update_dotterel() {
 		git -C "$d" reset --quiet --hard "$up"
 		warn "your words in $d clashed with the new Dotterel; the new one is in, yours are in $kept"
 	fi
-	git -C "$d" clean -fdq -e dotterel-generated.dict -- dictionaries data
+	git -C "$d" clean -fdq -e 'dotterel-*.dict' -- dictionaries data
 }
 
 install_steno() {
@@ -433,7 +433,15 @@ install_st() {
 	printf '%s\n' '<?xml version="1.0"?>' \
 		'<!DOCTYPE fontconfig SYSTEM "fonts.dtd">' '<fontconfig>' \
 		"	<dir>${NERD_FONTS%/*}</dir>" '</fontconfig>' \
-		> "$CONFIG/fontconfig/fonts.conf"
+		> "$CONFIG/fontconfig/fonts.conf.new"
+	if [ -f "$CONFIG/fontconfig/fonts.conf" ] &&
+		! cmp -s "$CONFIG/fontconfig/fonts.conf.new" "$CONFIG/fontconfig/fonts.conf"
+	then
+		userdir "$BACKUP/fontconfig"
+		cp -p "$CONFIG/fontconfig/fonts.conf" "$BACKUP/fontconfig/fonts.conf.$STAMP"
+		say "backup  fonts.conf -> $BACKUP/fontconfig/fonts.conf.$STAMP"
+	fi
+	mv "$CONFIG/fontconfig/fonts.conf.new" "$CONFIG/fontconfig/fonts.conf"
 	own "$CONFIG/fontconfig/fonts.conf"
 	if command -v fc-cache >/dev/null 2>&1; then
 		fc-cache "${NERD_FONTS%/*}"

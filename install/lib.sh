@@ -166,15 +166,15 @@ root_put() {
 }
 
 # root_link <file in root's ~/.system> <target> [keep]: <target> becomes
-# a link to it. What was at <target> is replaced; with "keep" (a file
-# of the system's, not one of ours) it is kept as <target>.bak.<date>.
+# a link to it. A link at <target> is replaced; a real file or directory
+# is first moved to root's ~/.system/state/backup (never deleted).
 root_link() {
 	if [ -L "$2" ] && [ "$(readlink "$2")" = "$1" ]; then
 		say "ok      $2 -> $1"
 		return
 	fi
 	if [ -e "$2" ] || [ -L "$2" ]; then
-		if [ "${3:-}" = keep ] && [ ! -L "$2" ]; then
+		if [ ! -L "$2" ]; then
 			b=$ROOT_SYSTEM/state/backup$2.$STAMP
 			mkdir -p "${b%/*}"
 			chmod 700 "$ROOT_SYSTEM/state"

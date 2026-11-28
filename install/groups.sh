@@ -54,6 +54,9 @@ part_info() {
 
 # The parts that only root can install
 ROOT_PARTS="slock net $APPS"
+# parts that change the system itself: only in a run of "root" or
+# --new-pc, never in plain "all"
+SYSTEM_PARTS="slock net"
 
 # expand <name>...: parts and groups -> parts, in the order given.
 # Prints nothing and fails on an unknown name.

@@ -67,7 +67,13 @@ ck_built() {
 }
 
 ck_g() {
-	git -c safe.directory="$ck_dir" -C "$ck_dir" "$@"
+	# as root, git runs as the repo's owner (root's fetch would leave
+	# root's files in the user's .git)
+	if [ "${AS_ROOT:-no}" = yes ]; then
+		su -s /bin/sh "$USER_NAME" -c 'exec git -C "$0" "$@"' "$ck_dir" "$@"
+	else
+		git -c safe.directory="$ck_dir" -C "$ck_dir" "$@"
+	fi
 }
 
 # ck_git <dir> <name>: uncommitted changes, newer commits upstream

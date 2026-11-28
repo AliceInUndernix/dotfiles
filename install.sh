@@ -19,6 +19,9 @@
 #
 #   ./install.sh               every part that needs no root (as "all"):
 #                              the configs for what is there, no questions
+#                              (as root too: never net or slock)
+#   ./install.sh root          "all with root", as root: --deps, all, and
+#                              net and slock too (no browsers: name them)
 #   ./install.sh nvim dwm      only the parts named
 #   ./install.sh desktop media whole groups of parts (--list shows them)
 #   ./install.sh pick          a menu: choose parts and groups with the
@@ -89,6 +92,7 @@ ONLY_NAMED="ksp $APPS"
 # that need root are left to a root run, and said so.
 case ${1:-} in pick|--pick)
 	shift
+	[ -t 0 ] || die "pick needs a terminal to ask on"
 	sel=$(pick) || { echo; say "nothing chosen"; exit 0; }
 	mine= rootp=
 	for p in $sel; do
@@ -125,6 +129,7 @@ set -- $args
 
 want_deps=no
 want_all=no
+withroot=no
 ask=no
 asked=
 parts=
@@ -171,7 +176,8 @@ for arg in "$@"; do
 	case $arg in
 	all) want_all=yes ;;
 	--deps|0) want_deps=yes ;;
-	--new-pc) want_deps=yes; want_all=yes; ask=yes ;;
+	--new-pc) want_deps=yes; want_all=yes; withroot=yes; ask=yes ;;
+	root) want_deps=yes; want_all=yes; withroot=yes ;;
 	[1-9]|[1-9][0-9])
 		p=$(echo $PARTS | awk -v n="$arg" '{ print $n }')
 		[ -n "$p" ] || die "there is no part $arg (see ./install.sh --list)"
@@ -202,12 +208,17 @@ if [ "$ask" = yes ] && [ -z "${INSTALL_LOG:-}" ]; then
 	esac
 fi
 named=$parts
+dropped=
 # all (or nothing named): every part but the browsers, in the usual
 # order, with any named ones after it (all icecat: everything and IceCat)
 if [ -z "$parts" ] || [ "$want_all" = yes ]; then
 	parts=
 	for p in $PARTS; do
-		case " $ONLY_NAMED " in *" $p "*) ;; *) parts="$parts $p" ;; esac
+		case " $ONLY_NAMED " in *" $p "*) continue ;; esac
+		case " $SYSTEM_PARTS " in *" $p "*)
+			[ "$withroot" = yes ] || { dropped="$dropped $p"; continue; } ;;
+		esac
+		parts="$parts $p"
 	done
 	for p in $named; do
 		case " $parts " in *" $p "*) ;; *) parts="$parts $p" ;; esac
@@ -452,8 +463,8 @@ chmod 700 "$HOME"
 n=$(find "$HOME" -xdev ! -type l ! -path "$SYSBIN/slock" -user "$USER_NAME" \
 	-perm /077 -print -exec chmod go= {} + | wc -l)
 [ "$n" -eq 0 ] || say "private $n files and directories in $HOME (only $USER_NAME and root)"
-[ -z "$skipped" ] ||
-	say "skipped $skipped (needs root): su -c '$DOTFILES/install.sh $skipped'"
+[ -z "$skipped$dropped" ] ||
+	say "not done:$dropped $skipped (system parts, only in a root run): su -c '$DOTFILES/install.sh root'"
 if [ -n "$failed" ]; then
 	warn "these parts did not finish:$failed (the messages above say why;"
 	warn "no internet? parts that download: steno, moonlander, net)"
