@@ -1,0 +1,252 @@
+.TH KSPKAN 1 2026-11-25 "kspkan 0.6.0"
+.SH NAME
+kspkan \- small mod manager for Kerbal Space Program
+.SH SYNOPSIS
+.B kspkan
+.RI [ options ]
+.RI [ command " [" args ]]
+.SH DESCRIPTION
+.B kspkan
+installs, removes and upgrades Kerbal Space Program mods using the
+CKAN module list (CKAN-meta).  It resolves dependencies (depends,
+any_of, provides, conflicts), offers recommended and suggested mods,
+checks every download against its SHA-256 or SHA-1 sum, and records
+each file it installs, so that removal deletes exactly those files.
+.PP
+With no command it opens a full screen mode; press
+.B ?
+there for the keys.
+.SH COMMANDS
+.TP
+.BI update " [file]"
+Fetch the module list.  With a
+.IR file ,
+read a CKAN-meta .tar.gz fetched some other way (over Tor, on another
+computer) instead of downloading.
+.TP
+.BI search " [query]"
+List modules.  Words are ANDed; a leading \- excludes a word.  Also:
+.IR author:x " " tag:x " " license:x " " needs:x " " dl>5k " " dl<100
+.IR after:2024-01-01 " " before:... " " size<5 " (MB) "
+.IR is:installed " " is:chosen " " is:dep " " is:needed " " is:orphan
+.IR is:update " " is:new " and "
+.IR sort:pop | new | small | big | name .
+.TP
+.BI show " id"
+Describe a module.
+.TP
+.B list
+Installed modules: those you chose, then the dependencies, each with
+the modules that need it.  A dependency nothing needs is pointed out
+(autoremove takes it).  Modules found in the game are marked (found);
+then the DLCs and the GameData directories the module list does not
+know.
+.TP
+.BI compat " [version ... | none]"
+Other game versions whose modules count as fitting this game too, as
+CKAN's compatible game versions; 1.12 stands for every 1.12.x.  Kept
+for each game; with no version, shows them.
+.TP
+.B scan
+Find the mods already in the game, put there by CKAN (from
+CKAN/registry.json) or by hand (matched by the directories and files
+their metadata would make; the version from a file name or a .version
+file, else ?), and mark them found.  This also happens on its own when
+GameData or CKAN/registry.json has changed.  Found mods can be
+upgraded and removed; their files are never moved.  DLCs and unknown
+directories are only named.
+.TP
+.BI install " id[=version] ..."
+Install modules and what they need.  Recommended and suggested modules
+are offered for choosing.  When a dependency can come from several
+modules (as Kerbalism-Config), the one named on the command line or in
+the modlist is taken; otherwise kspkan asks which on the terminal.
+.TP
+.BI remove " id ..."
+Remove modules, the modules that need them, and dependencies nothing
+needs any more.
+.TP
+.BI upgrade " [id ...]"
+Upgrade installed modules (all of them when none is named).
+.TP
+.B autoremove
+Remove dependencies nothing needs.
+.TP
+.BI keep " id ..."
+Mark installed modules as chosen by you, so that autoremove and the
+removal of what needed them leave them in.  Installing a module that is
+in as a dependency does the same.
+.TP
+.BI auto " id ..."
+Mark installed modules as dependencies: autoremove takes them when
+nothing needs them.
+.TP
+.BR modlist " [" list ]
+The saved modlists.  A modlist is a plain text file with one
+.RI \(dq id " " version \(dq
+line for each module you chose (lines starting with # are comments);
+the dependencies are worked out again when it is installed.
+.TP
+.BI "modlist save" " name"
+Save the modules you chose as a modlist.
+.TP
+.BI "modlist show" " name"
+What the modlist has, and how this game differs from it.
+.TP
+.BI "modlist install" " name"
+Install what the modlist has and the game has not, at the newest
+version that fits the game.
+.TP
+.BI "modlist pin" " name"
+The same, at the very versions the modlist names.
+.TP
+.BI "modlist sync" " name"
+Install the modlist, and remove the modules you chose that are not in
+it.
+.TP
+.BI "modlist delete" " name"
+Delete a modlist.  A
+.I name
+that is not a saved modlist is taken as a file, in the current directory
+or anywhere, for example one somebody gave you.  A file CKAN wrote (see
+.BR "modlist import" )
+is first kept as a modlist named after it.
+.TP
+.BI "modlist import" " file [name]"
+Read a list that CKAN wrote and keep it as a modlist called
+.IR name ,
+or after the file name without its extension.  It reads a .ckan
+modpack (its depends and recommends; the first choice of any_of;
+suggests is left out), CKAN/registry.json from a game folder (the mods
+CKAN did not install as dependencies), a mod list CKAN saved as plain
+text, Markdown, BBCode, CSV or TSV, and the output of
+.BR "ckan list" .
+CKAN's formats are only read, never written.
+.TP
+.B clean
+Delete downloaded archives.
+.TP
+.BI add " name [gamedir]"
+Remember a game folder (the folder that holds GameData) as an instance.
+.TP
+.BR instances ", " use " \fIname\fR, " forget " \fIname\fR"
+Find the games on the disk (Steam and its libraries, GOG, Heroic, the
+home directory a few levels down) and list them with their version,
+mods and DLCs; choose one; or forget one.  Forgetting never touches the
+game, and a forgotten game is not added back unless
+.B add
+names it.
+.TP
+.B version
+Print the version.
+.SH FULL SCREEN MODE
+The list marks each installed module
+.B i
+(chosen by you) or
+.B d
+(a dependency), and
+.B u
+when a newer version fits.
+.B i
+and
+.B I
+go through what is shown: all, installed, chosen by you,
+dependencies, unneeded dependencies, not installed, updates, marked.
+.B p
+puts the description at the bottom, on the right (with everything
+about the module: what needs it, the long description, links;
+.BR J " and " K
+scroll it), or turns it off; the choice is remembered.
+.B e
+makes an installed module your choice or a dependency.
+.BR o " or " O
+imports: a modlist, a kspkan modlist file, a .ckan modpack,
+CKAN/registry.json (or the game folder holding it) or a list CKAN
+saved; Tab completes the path.  Then
+.B a
+marks what the game lacks (add on top), and
+.B r
+also marks for removal the mods you chose that the list lacks
+(replace).  Nothing happens before Enter.
+.B w
+exports the mods you chose to a modlist name or, given a path, to a
+file.
+.B Tab
+lists the games on this computer, found on their own, with their
+version, mods and DLCs; Enter switches.
+.PP
+Marks are kept on disk for each game and survive quitting, switching
+and a failed install: a mark goes only when its module went in or out.
+.PP
+The mouse works too: the wheel scrolls the list or the right pane, a
+click picks a row, a double click, a right click or a click in the mark
+column marks it, and the keys in the bottom bar can be clicked.
+.B ?
+shows every key.
+.SH OPTIONS
+.TP
+.BI \-i " name"
+Use that instance (default: the last one used).
+.TP
+.BI \-g " dir"
+Use that game folder directly.
+.TP
+.BI \-k " version"
+The game version, when it cannot be read from the game folder.
+.TP
+.B \-a
+Ignore game version compatibility.
+.TP
+.B \-t
+Allow testing and development releases.
+.TP
+.B \-f
+Overwrite files that kspkan did not install.
+.TP
+.B \-y
+Do not ask for confirmation.
+.TP
+.BR \-R ", " \-S
+Also install recommended (\-R), or recommended and suggested (\-S)
+modules, without asking.
+.TP
+.B \-p
+List the most downloaded first.
+.TP
+.B \-m
+No colours on the screen.
+.TP
+.BI \-r " url"
+Another module list archive.
+.TP
+.BI \-s " dir"
+Keep all of kspkan's files in dir (used by the tests).
+.SH FILES
+.TP
+.I $XDG_DATA_HOME/kspkan
+(or
+.IR ~/.local/share/kspkan )
+.BR instances :
+the remembered game folders;
+.BR index ", " summary ", " provides ", " counts ", " meta/ :
+the module list;
+.BR cache/ :
+downloads;
+.BR modlists/ :
+the saved modlists;
+.BR settings :
+where the full screen mode puts the description;
+.BI inst/ name /installed :
+what was installed into each instance.  All are plain text.
+.SH ENVIRONMENT
+.TP
+.B NO_COLOR
+When set, the screen has no colours.
+.TP
+.BR ALL_PROXY ", " HTTPS_PROXY
+Passed on to curl, which does the downloading.
+.SH NOTES
+Downloads are done by running
+.BR curl (1).
+Nothing else is contacted, and kspkan sends nothing about you or your
+game anywhere.

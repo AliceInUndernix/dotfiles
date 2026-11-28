@@ -1,0 +1,140 @@
+next
+    - an upgrade is written over the old files and takes away only what
+      the new version no longer has: a failed upgrade keeps the mod
+    - remove and upgrade copy a .cfg file they take away to
+      <state>/removed/<id>/ first (settings you may have edited)
+    - modlist delete refuses a CKAN or JSON file given by path
+    - modified arrow keys no longer clear the marks; an installed
+      record that can't be read stops the run instead of being
+      written empty; a few reads past the end of a buffer fixed
+
+0.6.0  2026-11-25
+    - fixed: carrying out marks in the full screen mode cleared them
+      all first, so a clash or a missing dependency lost every mark.
+      Now a mark goes only when its mod really went in or out, what
+      fits is installed and the rest stays marked with the reasons.
+    - marks are kept on disk per game: quitting, Tab, u keep them
+    - games are found on their own (Steam and its libraries, GOG,
+      Heroic, home a few levels down) and remembered; first start asks
+      only when none is found.  instances shows each game's version,
+      mods and DLCs; forget keeps a game from being added back.
+    - Tab in the full screen mode: the games, with mods and DLCs;
+      Enter (or a double click) switches
+    - o and O: one import for every kind of list (modlist, kspkan
+      file, .ckan, registry.json or the game folder with it, CKAN's
+      txt md csv tsv), Tab completes paths and modlist names, then a
+      (add on top) or r (replace what you chose)
+    - w exports to a modlist name, a file, or a directory
+    - the mouse: wheel, click, double click, right click, column
+      headings and the keys of the bottom bar
+    - tests/tui.sh drives the full screen through a terminal
+
+0.5.0  2026-11-25
+    - find in an install stanza ignores letter case, as in CKAN
+      (kOS-SCANSat ships GameData/kOS-SCANsat)
+    - zips made on Windows, with \ between names, install (as in
+      CKAN); a name that climbs out with .. is still left out
+    - a download that fails at its own address is fetched from CKAN's
+      copy on archive.org (the checksum decides, as always)
+    - fixed: with a single download address, the other strings of the
+      metadata were tried as addresses too (so the error named
+      "netkan")
+    - compat VERSION...: other game versions whose mods count as
+      fitting, as CKAN's "compatible game versions" (1.12 is every
+      1.12.x); kept per game.  modlist import says which ones a CKAN
+      pack was made for.
+    - modlist install leaves out (and names) the mods that cannot go
+      in, and installs the rest, instead of stopping
+    - a mod that clashes with one already chosen is no choice for a
+      dependency several provide; conflicts now name both mods
+    - the cache keeps each download once, under its checksum (mods
+      that share a zip no longer download it again); clean removes
+      every archive there, old names too; a download kept under its
+      old name is taken over, not fetched again
+    - tests/modlist.sh checks them
+
+0.4.0  2026-11-25
+    - mods already in the game are found and marked "found" (f in the
+      full screen mode, (found) in list, search is:found): what CKAN
+      installed, from CKAN/registry.json, and what was put in by hand,
+      matched against the module list (version from a file name or a
+      .version file, else ?).  On its own when GameData or CKAN's
+      registry changed; kspkan scan by hand.  The DLCs and directories
+      the module list does not know (Principia) are named, never
+      touched.
+    - tests/modlist.sh checks it
+
+0.3.2  2026-11-25
+    - a dependency that several mods provide (ClassicStockResources-
+      PlayMode, Kerbalism-Config, RSSTextures) no longer stops an
+      install on a terminal: kspkan lists the choices and asks which,
+      once.  A mod in the modlist or on the command line still wins
+      without asking; with -y or no terminal it stops and names them.
+
+0.3.1  2026-11-25
+    - modlist show, install, pin and sync (and o in the full screen
+      mode) take a file when the name is not a saved modlist:
+      "kspkan modlist install spelf.ckan" in the directory of the file
+      works.  A file CKAN wrote is kept as a modlist named after it
+      first; a plain list is used as it is.
+    - tests/modlist.sh checks it
+
+0.3.0  2026-11-25
+    - modlist import FILE [NAME], and O in the full screen mode: read a
+      list CKAN wrote into a kspkan modlist.  It reads .ckan modpacks
+      (depends, recommends, the first of any_of), CKAN/registry.json
+      (without what CKAN installed as dependencies), the mod lists CKAN
+      saves (plain text, Markdown, BBCode, CSV, TSV) and the output of
+      "ckan list".  Only reading: nothing is written in CKAN's formats,
+      and no JSON is kept.
+    - modlists may name a mod without a version (newest that fits)
+    - update FILE reads a CKAN-meta .tar.gz you fetched yourself (over
+      Tor, on another computer), instead of downloading it
+    - fixed: a dependency that several mods provide (FAR, for one) was
+      refused even when only one of them fits the game; now only the
+      ones that fit count, one you name on the command line wins, and
+      the message lists the choices
+    - fixed: search cut long ids at 30 letters, so two could look the
+      same
+    - tests/modlist.sh checks every import format
+
+0.2.0  2026-11-24
+    - installed mods are told apart: chosen by you (i) or installed as a
+      dependency (d); list, show and the full screen mode say which mods
+      need each one, and point out dependencies nothing needs
+    - search: is:chosen, is:dep, is:needed, is:orphan
+    - full screen mode: i / I go through all, installed, chosen,
+      dependencies, unneeded dependencies, not installed, updates, marked
+    - full screen mode: p puts the description at the bottom, on the
+      right (everything about the mod, scrolled with J K) or off;
+      remembered in "settings"
+    - modlists: save, show, install, pin, sync, delete; w and o in the
+      full screen mode
+    - keep and auto (and e in the full screen mode) change a mod between
+      chosen and dependency
+    - fixed: a key typed right after Esc was lost
+    - help is paged when the terminal is short; S orders backwards,
+      C clears all marks, r says how many it marked
+    - tests/modlist.sh, which needs no network
+    - an upgrade that is refused (a file belongs to another module or
+      is in the way) now leaves the old version installed
+    - installing a module by name that came in as a dependency keeps
+      it as yours, so autoremove no longer deletes it
+    - reinstalling a metapackage no longer registers it twice
+    - fixed a one-byte overflow reading long names in the module list
+    - a broken line in the installed list no longer mixes up files
+
+0.1.0  2026-11-24
+    First release.
+    - module list from CKAN-meta, with download counts
+    - dependencies: depends, any_of, provides, conflicts, version limits,
+      DLC detection; recommended and suggested modules offered
+    - install rules: find, find_regexp, file, as, filter, filter_regexp,
+      include_only, find_matches_files, install_to GameRoot
+    - checks SHA-256 or SHA-1 of every download; tries every mirror
+    - remove with dependents and orphans; upgrade; pinned versions;
+      autoremove; clean
+    - remembered game instances, shared module list
+    - full screen mode: colours (habamax), search, five orders,
+      detail pane, keyboard only
+    - safe against path traversal, symlinks and zip bombs
